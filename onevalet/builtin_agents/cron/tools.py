@@ -1,7 +1,6 @@
 """Cron Tools — CRUD operations for cron job management.
 
-Matches OpenClaw's cron-tool.ts actions:
-status, list, add, update, remove, run, runs.
+Actions: status, list, add, update, remove, run, runs.
 """
 
 import json
@@ -142,7 +141,7 @@ async def cron_add(
     schedule_value: Annotated[str, "Schedule value: ISO datetime for 'at', seconds number for 'every', cron expression for 'cron' (e.g. '0 8 * * *')"],
     timezone: Annotated[str, "IANA timezone for cron expressions (e.g. 'America/Los_Angeles')"] = "",
     session_target: Annotated[str, "Execution mode: 'main' (with context) or 'isolated' (fresh)"] = "isolated",
-    delivery_mode: Annotated[str, "How to deliver results: 'none', 'announce' (notify user), or 'webhook'"] = "none",
+    delivery_mode: Annotated[str, "How to deliver results: 'announce' (notify user, default), 'none' (silent), or 'webhook'"] = "announce",
     delivery_channel: Annotated[Optional[str], "Channel for announce delivery"] = None,
     webhook_url: Annotated[Optional[str], "URL for webhook delivery"] = None,
     conditional: Annotated[bool, "If true, only notify when a condition is met. The agent will have a notify_user tool to decide when to send notifications. Use for 'alert me when X happens' type requests."] = False,
@@ -187,10 +186,10 @@ async def cron_add(
     else:
         payload = AgentTurnPayload(message=instruction)
 
-    # Build delivery
+    # Build delivery config
     delivery = None
     if delivery_mode != "none" or conditional:
-        mode = DeliveryMode(delivery_mode) if delivery_mode != "none" else DeliveryMode.ANNOUNCE
+        mode = DeliveryMode(delivery_mode if delivery_mode != "none" else "announce")
         delivery = DeliveryConfig(
             mode=mode,
             channel=delivery_channel,

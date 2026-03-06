@@ -259,6 +259,7 @@ class OneValet:
 
         # 9. Orchestrator
         from .orchestrator import Orchestrator
+        from .orchestrator.reminder_guard import reminder_guard_hook
         self._orchestrator = Orchestrator(
             momex=self._momex,
             llm_client=self._llm_client,
@@ -270,22 +271,21 @@ class OneValet:
             trigger_engine=self._trigger_engine,
             model_router=self._model_router,
             checkpoint_manager=checkpoint_manager,
+            post_process_hooks=[reminder_guard_hook],
         )
         await self._orchestrator.initialize()
 
         # CronService setup
-        from .triggers.cron.store import CronJobStore
-        from .triggers.cron.run_log import CronRunLog
+        from .triggers.cron.pg_store import PostgresCronJobStore
+        from .triggers.cron.pg_run_log import PostgresCronRunLog
         from .triggers.cron.executor import CronExecutor as CronJobExecutor
         from .triggers.cron.delivery import CronDeliveryHandler
         from .triggers.cron.service import CronService
 
-        cron_store_path = cfg.get("cron", {}).get("store", "~/.onevalet/cron/jobs.json") if isinstance(cfg.get("cron"), dict) else "~/.onevalet/cron/jobs.json"
-        cron_store = CronJobStore(store_path=cron_store_path)
+        cron_store = PostgresCronJobStore(db=self._database)
         await cron_store.load()
 
-        cron_data_dir = str(cron_store.store_path.parent)
-        cron_run_log = CronRunLog(data_dir=cron_data_dir)
+        cron_run_log = PostgresCronRunLog(db=self._database)
         cron_delivery = CronDeliveryHandler(
             notifications=self._trigger_engine._notifications,
         )
@@ -301,7 +301,7 @@ class OneValet:
             run_log=cron_run_log,
         )
         self._trigger_engine.set_cron_service(self._cron_service)
-        logger.info(f"CronService initialized (store: {cron_store_path})")
+        logger.info("CronService initialized (store: PostgreSQL)")
 
         # Register executors with TriggerEngine
         orchestrator_executor = OrchestratorExecutor(self._orchestrator)

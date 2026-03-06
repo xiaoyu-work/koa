@@ -7,6 +7,7 @@ from typing import Callable, List, Optional
 
 from .executor import CronExecutor
 from .models import (
+    AtSchedule,
     CronEvent,
     CronJob,
     CronJobCreate,
@@ -24,6 +25,9 @@ MAX_SLEEP_S = 60.0
 
 # Minimum sleep to avoid busy-spin
 MIN_SLEEP_S = 0.1
+
+# One-shot "at" jobs overdue by more than this are skipped (15 minutes)
+AT_OVERDUE_THRESHOLD_MS = 15 * 60 * 1000
 
 
 class CronService:
@@ -261,13 +265,39 @@ class CronService:
         """Find and execute all due jobs."""
         now = now_ms()
         due_jobs: List[CronJob] = []
+        missed_jobs: List[CronJob] = []
 
         for job in self._store.list(include_disabled=False):
             if job.state.running_at_ms is not None:
                 continue
             nra = job.state.next_run_at_ms
-            if nra is not None and nra <= now:
-                due_jobs.append(job)
+            if nra is None or nra > now:
+                continue
+
+            # Skip one-shot "at" jobs that are too far overdue
+            if isinstance(job.schedule, AtSchedule) and (now - nra) > AT_OVERDUE_THRESHOLD_MS:
+                missed_jobs.append(job)
+                continue
+
+            due_jobs.append(job)
+
+        # Handle missed one-shot jobs: mark as missed and auto-delete
+        for job in missed_jobs:
+            overdue_min = (now - (job.state.next_run_at_ms or 0)) / 60000
+            logger.warning(
+                f"Skipping overdue one-shot job {job.id} ({job.name}), "
+                f"{overdue_min:.0f}min past due"
+            )
+            job.state.last_run_status = "skipped"
+            job.state.last_error = "Missed: too far past scheduled time"
+            job.state.last_run_at_ms = now
+            if job.delete_after_run:
+                self._store.remove(job.id)
+            else:
+                job.enabled = False
+                self._store.update(job)
+        if missed_jobs:
+            await self._store.save()
 
         if not due_jobs:
             return
