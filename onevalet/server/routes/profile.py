@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from ..app import require_app, verify_service_key
 from ...services.profile_extraction import ProfileExtractionService
+from ...services.profile_repo import ProfileRepository
 from ...providers.email.resolver import AccountResolver
 from ...providers.email.factory import EmailProviderFactory
 
@@ -50,11 +51,13 @@ async def start_profile_extraction(request: Request, tenant_id: str):
     if not providers:
         raise HTTPException(500, "Failed to create email providers")
 
-    # Start background extraction
+    # Start background extraction (with DB persistence)
+    profile_repo = ProfileRepository(app._database)
     job_id = _service.start_extraction(
         tenant_id=tenant_id,
         providers=providers,
         llm_client=app._llm_client,
+        profile_repo=profile_repo,
     )
 
     logger.info(f"Profile extraction started: job={job_id}, tenant={tenant_id}, providers={len(providers)}")
@@ -88,3 +91,17 @@ async def get_extraction_status(request: Request, job_id: str):
         result["error"] = job.get("error")
 
     return result
+
+
+@router.get("/api/internal/profile/{tenant_id}")
+async def get_tenant_profile(request: Request, tenant_id: str):
+    """Get the stored profile for a tenant. Returns 404 if not extracted yet."""
+    verify_service_key(request)
+    app = require_app()
+    await app._ensure_initialized()
+
+    repo = ProfileRepository(app._database)
+    profile = await repo.get_profile(tenant_id)
+    if profile is None:
+        raise HTTPException(404, "No profile found for this tenant")
+    return {"tenant_id": tenant_id, "profile": profile}

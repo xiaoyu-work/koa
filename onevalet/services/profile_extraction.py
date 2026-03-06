@@ -838,7 +838,7 @@ class ProfileExtractionService:
     # Public API
     # -----------------------------------------------------------------
 
-    def start_extraction(self, tenant_id: str, providers: list, llm_client) -> str:
+    def start_extraction(self, tenant_id: str, providers: list, llm_client, profile_repo=None) -> str:
         """
         Start a background extraction job.
 
@@ -846,6 +846,7 @@ class ProfileExtractionService:
             tenant_id: The user/tenant ID
             providers: List of email provider instances (from EmailProviderFactory)
             llm_client: The OneValet LLM client (BaseLLMClient)
+            profile_repo: Optional ProfileRepository for persisting results
 
         Returns:
             job_id for status polling
@@ -862,7 +863,7 @@ class ProfileExtractionService:
             "completed_at": None,
         }
 
-        asyncio.create_task(self._run_extraction(job_id, tenant_id, providers, llm_client))
+        asyncio.create_task(self._run_extraction(job_id, tenant_id, providers, llm_client, profile_repo))
         return job_id
 
     def get_job_status(self, job_id: str) -> Optional[Dict]:
@@ -873,7 +874,7 @@ class ProfileExtractionService:
     # -----------------------------------------------------------------
 
     async def _run_extraction(
-        self, job_id: str, tenant_id: str, providers: list, llm_client,
+        self, job_id: str, tenant_id: str, providers: list, llm_client, profile_repo=None,
     ):
         start_time = datetime.now(timezone.utc)
         try:
@@ -993,6 +994,14 @@ class ProfileExtractionService:
             # Phase 7: Merge
             logger.info("Phase 7: Merging...")
             final_profile = self._merge_all(profiles)
+
+            # Persist to DB
+            if profile_repo and final_profile:
+                try:
+                    await profile_repo.upsert_profile(tenant_id, final_profile)
+                    logger.info(f"Profile saved to DB for tenant {tenant_id}")
+                except Exception as e:
+                    logger.error(f"Failed to save profile to DB: {e}", exc_info=True)
 
             total_time = (datetime.now(timezone.utc) - start_time).total_seconds()
             self._update_job(job_id, {
