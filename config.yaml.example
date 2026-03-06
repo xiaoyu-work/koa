@@ -19,9 +19,14 @@ embedding:
   # base_url: https://your-endpoint/    # Azure only
   # api_version: '2024-02-01'           # Azure only
 
-# Optional: custom persona (appended after built-in system prompt)
+# Optional: custom persona
 # system_prompt: |
 #   Your name is Jarvis. You speak in a warm, butler-like tone.
+#
+# system_prompt_mode: append    # "append" (default) or "override"
+#   append  — system_prompt is added after the built-in OneValet prompt
+#   override — system_prompt replaces the default preamble ("You are OneValet...")
+#              while keeping all functional sections (tool routing, workflow, etc.)
 
 # ---------------------------------------------------------------------------
 # Model Routing — route requests to different LLMs based on complexity

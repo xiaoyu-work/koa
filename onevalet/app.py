@@ -266,6 +266,7 @@ class OneValet:
             credential_store=self._credential_store,
             database=self._database,
             system_prompt=cfg.get("system_prompt", ""),
+            system_prompt_mode=cfg.get("system_prompt_mode", "append"),
             trigger_engine=self._trigger_engine,
             model_router=self._model_router,
             checkpoint_manager=checkpoint_manager,

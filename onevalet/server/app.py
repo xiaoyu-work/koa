@@ -121,6 +121,7 @@ def mask_config(cfg: dict) -> dict:
         },
         "database": cfg.get("database", ""),
         "system_prompt": cfg.get("system_prompt", ""),
+        "system_prompt_mode": cfg.get("system_prompt_mode", "append"),
     }
     embedding_cfg = cfg.get("embedding")
     if embedding_cfg:

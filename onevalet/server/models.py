@@ -60,6 +60,7 @@ class ConfigRequest(BaseModel):
     database: str
     embedding: EmbeddingConfigRequest
     system_prompt: Optional[str] = None
+    system_prompt_mode: Optional[str] = None  # "append" or "override"
 
 
 class TaskCreateRequest(BaseModel):

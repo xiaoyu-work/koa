@@ -263,6 +263,7 @@ def build_system_prompt(
     approved_plan: str = "",
     pending_plan: str = "",
     custom_instructions: str = "",
+    preamble: str = "",
 ) -> str:
     """Build the full system prompt from modular sections.
 
@@ -274,12 +275,14 @@ def build_system_prompt(
         approved_plan: If set, injects the approved plan for execution.
         pending_plan: If set, injects a plan awaiting user response.
         custom_instructions: Extra instructions appended at the end.
+        preamble: If set, replaces the default OneValet preamble.
+            Used by system_prompt_mode: override to inject a custom identity.
 
     Returns:
         Complete system prompt string.
     """
     sections = [
-        render_preamble(),
+        preamble if preamble else render_preamble(),
         render_complete_task_mandate(),
         render_tool_routing(agent_descriptions),
         render_routing_examples(),

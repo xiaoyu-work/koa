@@ -72,6 +72,8 @@ async def save_config(req: ConfigRequest):
         config["embedding"] = emb
     if req.system_prompt:
         config["system_prompt"] = req.system_prompt
+    if req.system_prompt_mode:
+        config["system_prompt_mode"] = req.system_prompt_mode
 
     # Shut down existing app
     if _app is not None:

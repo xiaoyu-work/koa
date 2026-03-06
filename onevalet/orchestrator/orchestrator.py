@@ -184,6 +184,7 @@ class Orchestrator:
         llm_client: Optional["LLMClientProtocol"] = None,
         agent_registry: Optional[AgentRegistry] = None,
         system_prompt: str = "",
+        system_prompt_mode: str = "append",
         react_config: Optional[ReactLoopConfig] = None,
         credential_store: Optional[Any] = None,
         database: Optional[Any] = None,
@@ -204,8 +205,12 @@ class Orchestrator:
             config: Full orchestrator configuration
             llm_client: LLM client for the ReAct loop
             agent_registry: Pre-configured agent registry
-            system_prompt: Optional user-defined persona / custom instructions appended
-                after the built-in OneValet system prompt
+            system_prompt: Optional user-defined persona / custom instructions.
+                Behavior depends on system_prompt_mode.
+            system_prompt_mode: How system_prompt is applied:
+                - "append" (default): appended after the built-in system prompt
+                - "override": replaces the default preamble ("You are OneValet...")
+                  while keeping all functional sections (tool routing, workflow, etc.)
             react_config: ReAct loop configuration (max_turns, timeouts, etc.)
             credential_store: CredentialStore for tool execution context
             trigger_engine: TriggerEngine for proactive trigger tasks
@@ -241,6 +246,7 @@ class Orchestrator:
         self.database = database
         self.trigger_engine = trigger_engine
         self.system_prompt = system_prompt
+        self.system_prompt_mode = system_prompt_mode
 
         # ReAct loop configuration
         self._react_config = react_config or ReactLoopConfig()
@@ -1673,15 +1679,20 @@ class Orchestrator:
             except Exception as e:
                 logger.warning(f"Failed to get agent descriptions: {e}")
 
-        system_prompt = build_system_prompt(
+        # Build system prompt with optional preamble override
+        build_kwargs = dict(
             agent_descriptions=agent_descriptions,
             include_planning=include_planning,
             approved_plan=approved_plan,
             pending_plan=pending_plan,
         )
+        if self.system_prompt and self.system_prompt_mode == "override":
+            build_kwargs["preamble"] = self.system_prompt
+
+        system_prompt = build_system_prompt(**build_kwargs)
 
         system_parts = [system_prompt]
-        if self.system_prompt:
+        if self.system_prompt and self.system_prompt_mode != "override":
             system_parts.append(self.system_prompt)
 
         # Runtime context
