@@ -18,6 +18,7 @@ from onevalet.orchestrator.intent_analyzer import (
     IntentAnalysis,
     SubTask,
     VALID_DOMAINS,
+    MAX_SUB_TASKS,
 )
 
 
@@ -188,6 +189,41 @@ class TestParseResult:
         result = self.analyzer._parse_result(data, "test")
 
         assert result.intent_type == "single"
+
+    def test_max_sub_tasks_truncation(self):
+        """More than MAX_SUB_TASKS sub-tasks gets truncated to MAX_SUB_TASKS."""
+        sub_tasks = [
+            {"id": i, "description": f"task {i}", "domain": "general", "depends_on": []}
+            for i in range(1, MAX_SUB_TASKS + 4)  # 3 more than the limit
+        ]
+        data = {
+            "intent_type": "multi",
+            "domains": ["general"],
+            "sub_tasks": sub_tasks,
+        }
+        result = self.analyzer._parse_result(data, "many tasks")
+
+        assert result.intent_type == "multi"
+        assert len(result.sub_tasks) == MAX_SUB_TASKS
+        # Verify we kept the first MAX_SUB_TASKS tasks
+        assert [st.id for st in result.sub_tasks] == list(range(1, MAX_SUB_TASKS + 1))
+
+    def test_sub_tasks_within_limit(self):
+        """MAX_SUB_TASKS or fewer sub-tasks are not truncated."""
+        sub_tasks = [
+            {"id": i, "description": f"task {i}", "domain": "general", "depends_on": []}
+            for i in range(1, MAX_SUB_TASKS + 1)  # exactly at the limit
+        ]
+        data = {
+            "intent_type": "multi",
+            "domains": ["general"],
+            "sub_tasks": sub_tasks,
+        }
+        result = self.analyzer._parse_result(data, "at limit")
+
+        assert result.intent_type == "multi"
+        assert len(result.sub_tasks) == MAX_SUB_TASKS
+        assert [st.id for st in result.sub_tasks] == list(range(1, MAX_SUB_TASKS + 1))
 
 
 # ── Tests: _fallback ──

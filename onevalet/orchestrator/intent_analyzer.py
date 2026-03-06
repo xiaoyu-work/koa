@@ -38,6 +38,8 @@ class IntentAnalysis:
 
 VALID_DOMAINS = {"communication", "productivity", "lifestyle", "travel", "general"}
 
+MAX_SUB_TASKS = 5
+
 INTENT_ANALYZER_SYSTEM_PROMPT = """\
 You are an intent classifier for a personal AI assistant.
 
@@ -142,8 +144,19 @@ class IntentAnalyzer:
                     domain=domain,
                     depends_on=st.get("depends_on", []),
                 ))
+            # Cap sub-tasks to MAX_SUB_TASKS
+            if len(sub_tasks) > MAX_SUB_TASKS:
+                logger.warning(
+                    f"[IntentAnalyzer] Too many sub-tasks ({len(sub_tasks)}), "
+                    f"truncating to {MAX_SUB_TASKS}"
+                )
+                sub_tasks = sub_tasks[:MAX_SUB_TASKS]
             # Downgrade to single if fewer than 2 sub-tasks
             if len(sub_tasks) < 2:
+                logger.info(
+                    "[IntentAnalyzer] Downgrading multi-intent to single: "
+                    f"only {len(sub_tasks)} sub-task(s) parsed"
+                )
                 intent_type = "single"
                 sub_tasks = []
 

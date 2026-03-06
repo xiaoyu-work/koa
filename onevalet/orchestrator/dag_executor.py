@@ -26,6 +26,48 @@ class SubTaskResult:
     token_usage: Dict[str, int] = field(default_factory=dict)
 
 
+def get_runnable_tasks(
+    level: List[SubTask],
+    prior_results: Dict[int, SubTaskResult],
+) -> tuple[List[SubTask], List[SubTask]]:
+    """Split a level into runnable and skipped tasks.
+
+    A task is skipped if any of its dependencies have status != "completed".
+
+    Returns:
+        (runnable, skipped) tuple
+    """
+    runnable: List[SubTask] = []
+    skipped: List[SubTask] = []
+    for task in level:
+        deps_ok = all(
+            prior_results.get(dep_id) is not None
+            and prior_results[dep_id].status == "completed"
+            for dep_id in task.depends_on
+        )
+        if deps_ok:
+            runnable.append(task)
+        else:
+            skipped.append(task)
+    return runnable, skipped
+
+
+def aggregate_token_usage(results: Dict[int, SubTaskResult]) -> Dict[str, int]:
+    """Aggregate token usage across all sub-task results.
+
+    Keys match the ReAct loop's EXECUTION_END format: input_tokens / output_tokens.
+    """
+    total_input = 0
+    total_output = 0
+    for result in results.values():
+        total_input += result.token_usage.get("input_tokens", 0)
+        total_output += result.token_usage.get("output_tokens", 0)
+    return {
+        "input_tokens": total_input,
+        "output_tokens": total_output,
+    }
+
+
 def topological_sort(sub_tasks: List[SubTask]) -> List[List[SubTask]]:
     """Sort sub-tasks into parallel execution levels.
 

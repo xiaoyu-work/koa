@@ -3,12 +3,19 @@
 Tests cover:
 - topological_sort() — no dependencies, linear chain, diamond, parallel, cycle detection
 - SubTaskResult dataclass
+- get_runnable_tasks() — dependency checking and skip logic
+- aggregate_token_usage() — token summation across results
 """
 
 import pytest
 
 from onevalet.orchestrator.intent_analyzer import SubTask
-from onevalet.orchestrator.dag_executor import topological_sort, SubTaskResult
+from onevalet.orchestrator.dag_executor import (
+    topological_sort,
+    SubTaskResult,
+    get_runnable_tasks,
+    aggregate_token_usage,
+)
 
 
 # ── Tests: topological_sort ──
@@ -215,3 +222,174 @@ class TestSubTaskResult:
             status="error",
         )
         assert result.status == "error"
+
+
+# ── Tests: get_runnable_tasks ──
+
+
+class TestGetRunnableTasks:
+    def test_all_deps_completed(self):
+        """All dependencies completed -> all runnable, none skipped."""
+        prior_results = {
+            1: SubTaskResult(sub_task_id=1, description="t1", response="ok", status="completed"),
+        }
+        level = [
+            SubTask(id=2, description="t2", domain="general", depends_on=[1]),
+            SubTask(id=3, description="t3", domain="general", depends_on=[1]),
+        ]
+        runnable, skipped = get_runnable_tasks(level, prior_results)
+
+        assert len(runnable) == 2
+        assert len(skipped) == 0
+        assert {t.id for t in runnable} == {2, 3}
+
+    def test_dep_failed(self):
+        """Task depends on a failed task -> skipped."""
+        prior_results = {
+            1: SubTaskResult(sub_task_id=1, description="t1", response="err", status="error"),
+        }
+        level = [
+            SubTask(id=2, description="t2", domain="general", depends_on=[1]),
+        ]
+        runnable, skipped = get_runnable_tasks(level, prior_results)
+
+        assert len(runnable) == 0
+        assert len(skipped) == 1
+        assert skipped[0].id == 2
+
+    def test_dep_skipped(self):
+        """Task depends on a skipped task (status != 'completed') -> skipped."""
+        prior_results = {
+            1: SubTaskResult(sub_task_id=1, description="t1", response="skipped", status="skipped"),
+        }
+        level = [
+            SubTask(id=2, description="t2", domain="general", depends_on=[1]),
+        ]
+        runnable, skipped = get_runnable_tasks(level, prior_results)
+
+        assert len(runnable) == 0
+        assert len(skipped) == 1
+        assert skipped[0].id == 2
+
+    def test_no_deps(self):
+        """Tasks with no dependencies -> all runnable."""
+        level = [
+            SubTask(id=1, description="t1", domain="communication"),
+            SubTask(id=2, description="t2", domain="productivity"),
+            SubTask(id=3, description="t3", domain="lifestyle"),
+        ]
+        runnable, skipped = get_runnable_tasks(level, {})
+
+        assert len(runnable) == 3
+        assert len(skipped) == 0
+
+    def test_mixed_level(self):
+        """Level with some runnable and some skipped tasks."""
+        prior_results = {
+            1: SubTaskResult(sub_task_id=1, description="t1", response="ok", status="completed"),
+            2: SubTaskResult(sub_task_id=2, description="t2", response="err", status="error"),
+        }
+        level = [
+            SubTask(id=3, description="t3", domain="general", depends_on=[1]),
+            SubTask(id=4, description="t4", domain="general", depends_on=[2]),
+            SubTask(id=5, description="t5", domain="general", depends_on=[1, 2]),
+        ]
+        runnable, skipped = get_runnable_tasks(level, prior_results)
+
+        assert len(runnable) == 1
+        assert runnable[0].id == 3
+        assert len(skipped) == 2
+        assert {t.id for t in skipped} == {4, 5}
+
+    def test_dep_missing_from_results(self):
+        """Dependency ID not in prior_results -> skipped (safe default)."""
+        prior_results = {}
+        level = [
+            SubTask(id=2, description="t2", domain="general", depends_on=[99]),
+        ]
+        runnable, skipped = get_runnable_tasks(level, prior_results)
+
+        assert len(runnable) == 0
+        assert len(skipped) == 1
+        assert skipped[0].id == 2
+
+
+# ── Tests: aggregate_token_usage ──
+
+
+class TestAggregateTokenUsage:
+    def test_empty_results(self):
+        """Empty dict -> zeros."""
+        usage = aggregate_token_usage({})
+
+        assert usage["input_tokens"] == 0
+        assert usage["output_tokens"] == 0
+
+    def test_single_result(self):
+        """Single result with token usage."""
+        results = {
+            1: SubTaskResult(
+                sub_task_id=1,
+                description="t1",
+                response="ok",
+                status="completed",
+                token_usage={"input_tokens": 100, "output_tokens": 50},
+            ),
+        }
+        usage = aggregate_token_usage(results)
+
+        assert usage["input_tokens"] == 100
+        assert usage["output_tokens"] == 50
+
+    def test_multiple_results(self):
+        """Multiple results summed correctly."""
+        results = {
+            1: SubTaskResult(
+                sub_task_id=1,
+                description="t1",
+                response="ok",
+                status="completed",
+                token_usage={"input_tokens": 100, "output_tokens": 50},
+            ),
+            2: SubTaskResult(
+                sub_task_id=2,
+                description="t2",
+                response="ok",
+                status="completed",
+                token_usage={"input_tokens": 200, "output_tokens": 75},
+            ),
+            3: SubTaskResult(
+                sub_task_id=3,
+                description="t3",
+                response="err",
+                status="error",
+                token_usage={"input_tokens": 30, "output_tokens": 10},
+            ),
+        }
+        usage = aggregate_token_usage(results)
+
+        assert usage["input_tokens"] == 330
+        assert usage["output_tokens"] == 135
+
+    def test_missing_token_usage(self):
+        """Results with empty token_usage dict -> zeros for those entries."""
+        results = {
+            1: SubTaskResult(
+                sub_task_id=1,
+                description="t1",
+                response="ok",
+                status="completed",
+                token_usage={"input_tokens": 100, "output_tokens": 50},
+            ),
+            2: SubTaskResult(
+                sub_task_id=2,
+                description="t2",
+                response="ok",
+                status="completed",
+                token_usage={},
+            ),
+        }
+        usage = aggregate_token_usage(results)
+
+        assert usage["input_tokens"] == 100
+        assert usage["output_tokens"] == 50

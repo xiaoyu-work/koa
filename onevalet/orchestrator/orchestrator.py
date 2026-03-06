@@ -500,6 +500,9 @@ class Orchestrator:
                 for a in pending_approvals
             ]
 
+        # Expose tool call records to post-process hooks
+        context["tool_calls"] = exec_data.get("tool_calls", [])
+
         # Step 8: Post-process
         return await self.post_process(result, context)
 
@@ -583,16 +586,24 @@ class Orchestrator:
         # Multi-intent → streaming DAG execution
         if intent.intent_type == "multi" and intent.sub_tasks:
             final_response = ""
+            dag_exec_data: Dict[str, Any] = {}
             async for event in self._stream_dag(intent, tenant_id, context, metadata):
                 if event.type == EventType.EXECUTION_END:
-                    final_response = event.data.get("final_response", "")
+                    dag_exec_data = event.data
+                    final_response = dag_exec_data.get("final_response", "")
                 yield event
-            # Post-process: momex save, guardrails output, hooks
+            # Post-process: extract pending_approvals for correct status
+            pending_approvals = dag_exec_data.get("pending_approvals", [])
+            if pending_approvals:
+                status = AgentStatus.WAITING_FOR_APPROVAL
+            else:
+                status = AgentStatus.COMPLETED
             result = AgentResult(
                 agent_type=self.__class__.__name__,
-                status=AgentStatus.COMPLETED,
+                status=status,
                 raw_message=final_response,
             )
+            context["tool_calls"] = dag_exec_data.get("tool_calls", [])
             await self.post_process(result, context)
             return
 
@@ -635,6 +646,7 @@ class Orchestrator:
             status=status,
             raw_message=final_response,
         )
+        context["tool_calls"] = exec_data.get("tool_calls", [])
         await self.post_process(result, context)
 
     # ==========================================================================
@@ -1931,88 +1943,33 @@ class Orchestrator:
     ) -> AgentResult:
         """Execute multi-intent sub-tasks in DAG order.
 
-        1. Topologically sort sub-tasks into execution levels
-        2. Execute each level (parallel within, sequential across)
-        3. Inject predecessor results into dependent tasks
-        4. Synthesize final response
+        Delegates to ``_stream_dag`` (the single implementation) and
+        silently consumes its events, mirroring the pattern used by
+        ``handle_message`` with ``_react_loop_events``.
         """
-        from .dag_executor import topological_sort, SubTaskResult
+        exec_data: Dict[str, Any] = {}
+        async for event in self._stream_dag(intent, tenant_id, context, metadata):
+            if event.type == EventType.EXECUTION_END:
+                exec_data = event.data
 
-        start_time = time.monotonic()
-        levels = topological_sort(intent.sub_tasks)
-        all_results: Dict[int, SubTaskResult] = {}
+        final_response = exec_data.get("final_response", "")
+        pending_approvals = exec_data.get("pending_approvals", [])
 
-        logger.info(
-            f"[DAG] Starting execution: {len(intent.sub_tasks)} sub-tasks, "
-            f"{len(levels)} levels"
-        )
-
-        for level_idx, level in enumerate(levels):
-            logger.info(
-                f"[DAG] Level {level_idx}: executing {len(level)} sub-task(s) "
-                f"[{', '.join(st.description[:40] for st in level)}]"
-            )
-
-            async def _run_sub_task(sub_task):
-                augmented_message = self._build_dag_augmented_message(
-                    sub_task, all_results,
-                )
-                tool_schemas = await self._build_tool_schemas(
-                    tenant_id, domains=[sub_task.domain],
-                )
-                messages = await self._build_llm_messages(context, augmented_message)
-
-                exec_data: Dict[str, Any] = {}
-                async for event in self._react_loop_events(
-                    messages, tool_schemas, tenant_id,
-                    context=context, user_message=augmented_message,
-                ):
-                    if event.type == EventType.EXECUTION_END:
-                        exec_data = event.data
-
-                return SubTaskResult(
-                    sub_task_id=sub_task.id,
-                    description=sub_task.description,
-                    response=exec_data.get("final_response", ""),
-                    status="completed",
-                    duration_ms=exec_data.get("duration_ms", 0),
-                    token_usage=exec_data.get("token_usage", {}),
-                )
-
-            level_results = await asyncio.gather(
-                *[_run_sub_task(st) for st in level],
-                return_exceptions=True,
-            )
-
-            for st, result in zip(level, level_results):
-                if isinstance(result, BaseException):
-                    logger.warning(f"[DAG] Sub-task {st.id} failed: {result}")
-                    all_results[st.id] = SubTaskResult(
-                        sub_task_id=st.id,
-                        description=st.description,
-                        response=f"Error: {result}",
-                        status="error",
-                    )
-                else:
-                    all_results[st.id] = result
-
-        # Synthesize results into a unified response
-        final_response = await self._synthesize_dag_results(
-            intent.raw_message, all_results, context,
-        )
-        duration_ms = int((time.monotonic() - start_time) * 1000)
-
-        logger.info(f"[DAG] Completed in {duration_ms}ms")
+        status = AgentStatus.COMPLETED
+        if pending_approvals:
+            status = AgentStatus.WAITING_FOR_APPROVAL
 
         return AgentResult(
             agent_type=self.__class__.__name__,
-            status=AgentStatus.COMPLETED,
+            status=status,
             raw_message=final_response,
             metadata={
                 "dag_execution": True,
                 "sub_tasks": len(intent.sub_tasks),
-                "levels": len(levels),
-                "duration_ms": duration_ms,
+                "levels": exec_data.get("levels", 0),
+                "duration_ms": exec_data.get("duration_ms", 0),
+                "token_usage": exec_data.get("token_usage", {}),
+                "pending_approvals": pending_approvals,
             },
         )
 
@@ -2023,12 +1980,38 @@ class Orchestrator:
         context: Dict[str, Any],
         metadata: Optional[Dict[str, Any]] = None,
     ) -> AsyncIterator[AgentEvent]:
-        """Stream events during DAG execution."""
-        from .dag_executor import topological_sort, SubTaskResult
+        """Stream events during DAG execution.
+
+        This is the single DAG implementation.  ``_execute_dag`` consumes
+        this generator silently, so all fixes live here only.
+
+        Fixes applied:
+        - Skip sub-tasks whose dependencies failed (get_runnable_tasks)
+        - Propagate pending_approvals from sub-task ReAct loops
+        - Aggregate token usage, turns, and tool_calls across sub-tasks
+        - DAG-level timeout guard
+        - Collect and yield events from parallel sub-tasks
+        """
+        from .dag_executor import (
+            topological_sort,
+            SubTaskResult,
+            get_runnable_tasks,
+            aggregate_token_usage,
+        )
 
         start_time = time.monotonic()
         levels = topological_sort(intent.sub_tasks)
         all_results: Dict[int, SubTaskResult] = {}
+        all_pending_approvals: list = []
+        total_turns = 0
+        total_tool_calls = 0
+
+        # Fix 5: DAG-level timeout (generous but bounded)
+        dag_timeout_seconds = (
+            self._react_config.max_turns
+            * self._react_config.agent_tool_execution_timeout
+        )
+        deadline = start_time + dag_timeout_seconds
 
         yield AgentEvent(
             type=EventType.WORKFLOW_START,
@@ -2036,7 +2019,55 @@ class Orchestrator:
         )
 
         for level_idx, level in enumerate(levels):
-            for st in level:
+            # Fix 5: check DAG-level timeout before each level
+            if time.monotonic() > deadline:
+                logger.warning(
+                    f"[DAG] Timeout exceeded ({dag_timeout_seconds}s) at level {level_idx}"
+                )
+                for st in level:
+                    all_results[st.id] = SubTaskResult(
+                        sub_task_id=st.id,
+                        description=st.description,
+                        response="Skipped: DAG timeout exceeded",
+                        status="skipped",
+                    )
+                # Also mark tasks in remaining levels
+                for remaining_level in levels[level_idx + 1:]:
+                    for st in remaining_level:
+                        all_results[st.id] = SubTaskResult(
+                            sub_task_id=st.id,
+                            description=st.description,
+                            response="Skipped: DAG timeout exceeded",
+                            status="skipped",
+                        )
+                break
+
+            # Fix 1: split level into runnable / skipped tasks
+            runnable, skipped = get_runnable_tasks(level, all_results)
+            for st in skipped:
+                all_results[st.id] = SubTaskResult(
+                    sub_task_id=st.id,
+                    description=st.description,
+                    response="Skipped: dependency failed",
+                    status="skipped",
+                )
+                yield AgentEvent(
+                    type=EventType.STAGE_START,
+                    data={
+                        "sub_task_id": st.id,
+                        "description": st.description,
+                        "domain": st.domain,
+                    },
+                )
+                yield AgentEvent(
+                    type=EventType.STAGE_END,
+                    data={"sub_task_id": st.id, "status": "skipped"},
+                )
+
+            if not runnable:
+                continue
+
+            for st in runnable:
                 yield AgentEvent(
                     type=EventType.STAGE_START,
                     data={
@@ -2046,9 +2077,9 @@ class Orchestrator:
                     },
                 )
 
-            if len(level) == 1:
-                # Single task in level: stream events normally
-                st = level[0]
+            if len(runnable) == 1:
+                # Single task in level: stream events in real-time
+                st = runnable[0]
                 augmented_message = self._build_dag_augmented_message(
                     st, all_results,
                 )
@@ -2066,19 +2097,31 @@ class Orchestrator:
                         exec_data = event.data
                     yield event
 
+                # Fix 2: collect pending_approvals from sub-task
+                sub_approvals = exec_data.get("pending_approvals", [])
+                if sub_approvals:
+                    all_pending_approvals.extend(sub_approvals)
+
+                # Fix 3: accumulate turns / tool_calls
+                total_turns += exec_data.get("turns", 0)
+                total_tool_calls += exec_data.get("tool_calls_count", 0)
+
                 all_results[st.id] = SubTaskResult(
                     sub_task_id=st.id,
                     description=st.description,
                     response=exec_data.get("final_response", ""),
                     status="completed",
+                    duration_ms=exec_data.get("duration_ms", 0),
+                    token_usage=exec_data.get("token_usage", {}),
                 )
                 yield AgentEvent(
                     type=EventType.STAGE_END,
                     data={"sub_task_id": st.id},
                 )
             else:
-                # Multiple parallel tasks: execute concurrently, collect results
-                async def _run_silent(sub_task):
+                # Fix 6: Multiple parallel tasks — collect events in memory
+                # during parallel execution, then yield them after.
+                async def _run_collecting(sub_task):
                     aug_msg = self._build_dag_augmented_message(
                         sub_task, all_results,
                     )
@@ -2087,25 +2130,33 @@ class Orchestrator:
                     )
                     msgs = await self._build_llm_messages(context, aug_msg)
                     exec_d: Dict[str, Any] = {}
+                    events: list = []
                     async for ev in self._react_loop_events(
                         msgs, t_schemas, tenant_id,
                         context=context, user_message=aug_msg,
                     ):
                         if ev.type == EventType.EXECUTION_END:
                             exec_d = ev.data
-                    return SubTaskResult(
+                        else:
+                            events.append(ev)
+                    sub_result = SubTaskResult(
                         sub_task_id=sub_task.id,
                         description=sub_task.description,
                         response=exec_d.get("final_response", ""),
                         status="completed",
+                        duration_ms=exec_d.get("duration_ms", 0),
+                        token_usage=exec_d.get("token_usage", {}),
                     )
+                    return sub_result, events, exec_d
 
                 level_results = await asyncio.gather(
-                    *[_run_silent(st) for st in level],
+                    *[_run_collecting(st) for st in runnable],
                     return_exceptions=True,
                 )
-                for st, result in zip(level, level_results):
+
+                for st, result in zip(runnable, level_results):
                     if isinstance(result, BaseException):
+                        logger.warning(f"[DAG] Sub-task {st.id} failed: {result}")
                         all_results[st.id] = SubTaskResult(
                             sub_task_id=st.id,
                             description=st.description,
@@ -2113,7 +2164,18 @@ class Orchestrator:
                             status="error",
                         )
                     else:
-                        all_results[st.id] = result
+                        sub_result, events, exec_d = result
+                        # Fix 6: yield collected events
+                        for ev in events:
+                            yield ev
+                        # Fix 2: collect pending_approvals
+                        sub_approvals = exec_d.get("pending_approvals", [])
+                        if sub_approvals:
+                            all_pending_approvals.extend(sub_approvals)
+                        # Fix 3: accumulate turns / tool_calls
+                        total_turns += exec_d.get("turns", 0)
+                        total_tool_calls += exec_d.get("tool_calls_count", 0)
+                        all_results[st.id] = sub_result
                     yield AgentEvent(
                         type=EventType.STAGE_END,
                         data={"sub_task_id": st.id},
@@ -2140,6 +2202,9 @@ class Orchestrator:
             data={"sub_tasks_completed": len(all_results)},
         )
 
+        # Fix 3: aggregate token usage across all sub-tasks
+        aggregated_usage = aggregate_token_usage(all_results)
+
         duration_ms = int((time.monotonic() - start_time) * 1000)
         yield AgentEvent(
             type=EventType.EXECUTION_END,
@@ -2147,11 +2212,13 @@ class Orchestrator:
                 "final_response": final_response,
                 "dag_execution": True,
                 "sub_tasks": len(intent.sub_tasks),
-                "pending_approvals": [],
+                "levels": len(levels),
+                "pending_approvals": all_pending_approvals,
                 "result_status": None,
-                "turns": 0,
-                "token_usage": {"input_tokens": 0, "output_tokens": 0},
+                "turns": total_turns,
+                "token_usage": aggregated_usage,
                 "duration_ms": duration_ms,
+                "tool_calls_count": total_tool_calls,
                 "tool_calls": [],
             },
         )
