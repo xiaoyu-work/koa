@@ -175,14 +175,16 @@ def render_constraints() -> str:
 
 
 def render_memory_usage() -> str:
-    """Instructions for using the recall_memory tool."""
+    """Instructions for using auto-injected profile and memories."""
     return """
-# Memory
+# Memory & Personalization
 
-You have access to the user's long-term memory via the `recall_memory` tool.
-- Use it when the user refers to past conversations, preferences, or personal context (e.g. "my usual hotel", "that restaurant from last time").
-- Use it proactively when personalization would improve the response (e.g. dietary preferences for restaurant suggestions, preferred airlines for flights).
-- Do NOT over-use it for every request. Only recall memory when it is clearly relevant.
+Your system prompt may include **[User Profile]** and **[Relevant Memories]** sections.
+These are automatically injected — no tool call needed.
+
+- Use them naturally to personalize responses.
+- Do not ask the user for information already present in their profile or memories.
+- If the sections are absent, the user has no profile or no relevant memories — that is normal.
 """.strip()
 
 

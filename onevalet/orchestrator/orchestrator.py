@@ -322,6 +322,10 @@ class Orchestrator:
         if self.config.session.enabled and self.config.session.auto_backup_interval_seconds > 0:
             await self.agent_pool.start_auto_backup()
 
+        # Start cleanup loop for timed-out WAITING agents
+        if self.config.session.enabled:
+            await self.agent_pool.start_cleanup_loop()
+
         # Start trigger engine if configured
         if self.trigger_engine:
             await self.trigger_engine.start()
@@ -1721,6 +1725,28 @@ class Orchestrator:
 
         system_parts.append("\n[Context]\n" + "\n".join(context_lines))
 
+        # User profile (extracted from email, passed by app layer)
+        profile_text = self._format_user_profile(meta.get("user_profile"))
+        if profile_text:
+            system_parts.append("\n[User Profile]\n" + profile_text)
+
+        # Relevant memories from Momex (auto-recall based on user message)
+        if self.momex:
+            try:
+                recalled = await self.momex.search(
+                    tenant_id=context.get("tenant_id", ""),
+                    query=user_message,
+                    limit=10,
+                )
+                if recalled:
+                    memory_lines = [f"- {r['text']}" for r in recalled]
+                    system_parts.append(
+                        "\n[Relevant Memories]\n"
+                        + "\n".join(memory_lines)
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to auto-recall memories: {e}")
+
         messages.append({
             "role": "system",
             "content": "\n\n".join(system_parts),
@@ -1741,6 +1767,81 @@ class Orchestrator:
         })
 
         return messages
+
+    @staticmethod
+    def _format_user_profile(profile: Optional[Dict[str, Any]]) -> str:
+        """Format user_profiles JSONB into concise text for system prompt.
+
+        Returns empty string if profile is None or has no useful data.
+        """
+        if not profile:
+            return ""
+
+        lines: List[str] = []
+
+        identity = profile.get("identity") or {}
+        if identity.get("full_name"):
+            lines.append(f"Name: {identity['full_name']}")
+        if identity.get("birthday"):
+            lines.append(f"Birthday: {identity['birthday']}")
+
+        for addr in (profile.get("addresses") or []):
+            parts = [addr.get("street"), addr.get("city"), addr.get("state")]
+            loc = ", ".join(p for p in parts if p)
+            if loc:
+                lines.append(f"{addr.get('label', 'Address').title()}: {loc}")
+
+        work = profile.get("work") or {}
+        for job in (work.get("jobs") or []):
+            if job.get("is_current"):
+                parts = [job.get("title", ""), job.get("employer", "")]
+                desc = " at ".join(p for p in parts if p)
+                if desc:
+                    lines.append(f"Work: {desc}")
+
+        education = profile.get("education") or {}
+        for school in (education.get("schools") or []):
+            parts = [school.get("degree"), school.get("major")]
+            desc = " in ".join(p for p in parts if p)
+            name = school.get("name", "")
+            if name:
+                line = f"Education: {name}"
+                if desc:
+                    line += f" ({desc})"
+                lines.append(line)
+
+        relationships = profile.get("relationships") or {}
+        for person in (relationships.get("family") or []):
+            line = f"{person.get('relationship', 'Family')}: {person.get('name', '')}"
+            if person.get("birthday"):
+                line += f" (birthday: {person['birthday']})"
+            lines.append(line)
+        so = relationships.get("significant_other")
+        if so and so.get("name"):
+            line = f"Partner: {so['name']}"
+            if so.get("birthday"):
+                line += f" (birthday: {so['birthday']})"
+            lines.append(line)
+
+        lifestyle = profile.get("lifestyle") or {}
+        for pet in (lifestyle.get("pets") or []):
+            if pet.get("name"):
+                lines.append(f"Pet: {pet['name']} ({pet.get('type', '')})")
+        for vehicle in (lifestyle.get("vehicles") or []):
+            if vehicle.get("is_current") and vehicle.get("make"):
+                parts = [str(vehicle.get("year", "")), vehicle.get("make", ""), vehicle.get("model", "")]
+                lines.append(f"Vehicle: {' '.join(p for p in parts if p)}")
+
+        travel = profile.get("travel") or {}
+        for prog in (travel.get("loyalty_programs") or []):
+            name = prog.get("program", "")
+            if name:
+                line = f"Loyalty: {name}"
+                if prog.get("status"):
+                    line += f" ({prog['status']})"
+                lines.append(line)
+
+        return "\n".join(lines)
 
     # Domain-based routing is now driven by @valet(domain=...) on each agent.
     # See AgentRegistry.get_domain_agent_tool_schemas() for the filtering logic.
@@ -2417,45 +2518,6 @@ class Orchestrator:
             category="location",
         ))
 
-        # Recall memory (only if momex is available)
-        if self.momex:
-            momex = self.momex
-
-            async def recall_memory_executor(args: dict, context: AgentToolContext = None) -> str:
-                query = args.get("query", "")
-                if not query:
-                    return "Error: query is required"
-                tenant_id = context.tenant_id if context else "default"
-                results = await momex.search(tenant_id=tenant_id, query=query, limit=5)
-                if not results:
-                    return "No relevant memories found."
-                lines = []
-                for r in results:
-                    text = r.get("memory", r.get("text", str(r)))
-                    lines.append(f"- {text}")
-                return "\n".join(lines)
-
-            tools.append(AgentTool(
-                name="recall_memory",
-                description=(
-                    "Search the user's long-term memory for past preferences, facts, or context. "
-                    "Use when the user refers to something from a previous conversation, or when "
-                    "personalization would improve the response (e.g. dietary preferences, travel habits)."
-                ),
-                parameters={
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "What to search for in the user's memory",
-                        }
-                    },
-                    "required": ["query"],
-                },
-                executor=recall_memory_executor,
-                category="user",
-            ))
-
         return tools
 
     def _build_notify_user_tool(self, context: Dict[str, Any]):
@@ -2662,7 +2724,8 @@ class Orchestrator:
             if len(active) >= self.config.max_agents_per_user:
                 logger.warning(
                     f"Max agents per user ({self.config.max_agents_per_user}) "
-                    f"reached for tenant {tenant_id}"
+                    f"reached for tenant {tenant_id} "
+                    f"(active: {[a.agent_type if hasattr(a, 'agent_type') else str(a) for a in active]})"
                 )
                 return None
 
@@ -2676,7 +2739,11 @@ class Orchestrator:
             )
 
             if not agent:
-                logger.error(f"Agent type not found: {agent_type}")
+                available = self._agent_registry.get_all_agent_names()
+                logger.error(
+                    f"Agent type not found in registry: {agent_type}. "
+                    f"Available agents ({len(available)}): {available}"
+                )
                 return None
 
             # Fallback: if agent has no LLM, use orchestrator's
@@ -2690,7 +2757,7 @@ class Orchestrator:
             return agent
 
         except Exception as e:
-            logger.error(f"Failed to create agent {agent_type}: {e}")
+            logger.error(f"Failed to create agent {agent_type}: {e}", exc_info=True)
             return None
 
     async def post_process(
