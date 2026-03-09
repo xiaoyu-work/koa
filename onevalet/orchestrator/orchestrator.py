@@ -501,7 +501,11 @@ class Orchestrator:
             ]
 
         # Expose tool call records to post-process hooks
-        context["tool_calls"] = exec_data.get("tool_calls", [])
+        tool_calls = exec_data.get("tool_calls", [])
+        context["tool_calls"] = tool_calls
+
+        # Persist tool call history
+        await self._save_tool_call_history(tenant_id, tool_calls)
 
         # Step 8: Post-process
         return await self.post_process(result, context)
@@ -603,7 +607,9 @@ class Orchestrator:
                 status=status,
                 raw_message=final_response,
             )
-            context["tool_calls"] = dag_exec_data.get("tool_calls", [])
+            tool_calls = dag_exec_data.get("tool_calls", [])
+            context["tool_calls"] = tool_calls
+            await self._save_tool_call_history(tenant_id, tool_calls)
             await self.post_process(result, context)
             return
 
@@ -646,7 +652,9 @@ class Orchestrator:
             status=status,
             raw_message=final_response,
         )
-        context["tool_calls"] = exec_data.get("tool_calls", [])
+        tool_calls = exec_data.get("tool_calls", [])
+        context["tool_calls"] = tool_calls
+        await self._save_tool_call_history(tenant_id, tool_calls)
         await self.post_process(result, context)
 
     # ==========================================================================
@@ -1214,6 +1222,18 @@ class Orchestrator:
             },
         )
 
+    async def _save_tool_call_history(
+        self, tenant_id: str, tool_calls: list,
+    ) -> None:
+        """Persist tool call records to the database (fire-and-forget)."""
+        if not self.database or not tool_calls:
+            return
+        try:
+            from ..builtin_agents.tools.action_history import save_tool_call_history
+            await save_tool_call_history(self.database, tenant_id, tool_calls)
+        except Exception as e:
+            logger.warning(f"Failed to save tool call history: {e}")
+
     # ==========================================================================
     # REACT LOOP HELPERS
     # ==========================================================================
@@ -1462,6 +1482,7 @@ class Orchestrator:
         if self.database:
             from onevalet.builtin_agents.digest.important_dates_repo import ImportantDatesRepository
             meta["important_dates_store"] = ImportantDatesRepository(self.database)
+            meta["database"] = self.database
         return meta
 
     HARD_MAX_TOOL_RESULT_CHARS = 400_000
@@ -2590,6 +2611,18 @@ class Orchestrator:
 
         # Weather (reuses the @tool-decorated AgentTool from trip_planner)
         tools.append(get_weather)
+
+        # Action history - lets LLM recall recent user actions
+        from ..builtin_agents.tools.action_history import (
+            recall_recent_actions_executor, RECALL_RECENT_ACTIONS_SCHEMA,
+        )
+        tools.append(AgentTool(
+            name="recall_recent_actions",
+            description="Look up the user's recent actions and tool executions. Use this when the user asks about what they did recently, past activity, or references a previous action (e.g. 'what did I do yesterday?', 'did my email send?', 'what was that flight I searched?').",
+            parameters=RECALL_RECENT_ACTIONS_SCHEMA,
+            executor=recall_recent_actions_executor,
+            category="user",
+        ))
 
         return tools
 

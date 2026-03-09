@@ -368,6 +368,11 @@ class OneValet:
                 logger.debug(f"Loaded credential {env_var} from config")
 
     @property
+    def database(self):
+        """Access the database instance (may be None before initialization)."""
+        return self._database
+
+    @property
     def config(self) -> dict:
         """Return a copy of the raw configuration dict."""
         return dict(self._config)

@@ -153,3 +153,49 @@ async def clear_session(tenant_id: str = "default"):
     app = require_app()
     await app.clear_session(tenant_id)
     return {"status": "ok", "message": "Session history cleared"}
+
+
+@router.get("/api/actions", dependencies=[Depends(verify_api_key)])
+async def get_actions(tenant_id: str, limit: int = 50, offset: int = 0):
+    """Get paginated action history for a tenant."""
+    app = require_app()
+    db = app.database
+    if not db:
+        return {"actions": [], "total": 0, "has_more": False}
+
+    try:
+        count = await db.fetchval(
+            "SELECT COUNT(*) FROM tool_call_history WHERE tenant_id = $1",
+            tenant_id,
+        )
+        rows = await db.fetch(
+            """
+            SELECT id, tool_name, agent_name, summary, args_summary,
+                   success, result_status, duration_ms, created_at
+            FROM tool_call_history
+            WHERE tenant_id = $1
+            ORDER BY created_at DESC
+            LIMIT $2 OFFSET $3
+            """,
+            tenant_id, limit, offset,
+        )
+        actions = []
+        for r in rows:
+            actions.append({
+                "id": str(r["id"]),
+                "tool_name": r["tool_name"],
+                "agent_name": r["agent_name"],
+                "summary": r["summary"],
+                "args_summary": r["args_summary"],
+                "success": r["success"],
+                "result_status": r["result_status"],
+                "duration_ms": r["duration_ms"],
+                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            })
+        return {
+            "actions": actions,
+            "total": count or 0,
+            "has_more": (count or 0) > offset + limit,
+        }
+    except Exception:
+        return {"actions": [], "total": 0, "has_more": False}
