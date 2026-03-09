@@ -420,6 +420,9 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
 
         metadata = metadata or {}
 
+        # Step 0: Clean up stale/completed agents to prevent cross-request state leakage
+        await self._cleanup_stale_agents(tenant_id)
+
         # Step 1: Prepare context
         context = await self.prepare_context(tenant_id, message, metadata)
 
@@ -912,6 +915,48 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
         return "\n".join(lines)
 
     # ==================================================================
+    # DOMAIN-FILTERED TOOL LOADING WITH FALLBACK
+    # ==================================================================
+
+    async def _build_tool_schemas_with_domain_fallback(
+        self,
+        tenant_id: str,
+        domains: List[str],
+    ) -> List[Dict[str, Any]]:
+        """Build tool schemas with domain filtering, falling back to all tools.
+
+        When a sub-task has a specific domain (e.g. "travel") but no agent-tools
+        match that domain, the sub-task would get zero agent-tools and fail
+        silently.  This helper detects that case and falls back to loading ALL
+        available tools so the sub-task can still execute.
+
+        Args:
+            tenant_id: Tenant identifier for credential filtering.
+            domains: List of domains to attempt filtering by.
+
+        Returns:
+            Tool schemas list (domain-filtered, or all tools on fallback).
+        """
+        schemas = await self._build_tool_schemas(tenant_id, domains=domains)
+
+        # Count how many are actual agent-tools (not builtin tools or complete_task)
+        builtin_names = {t.name for t in getattr(self, "builtin_tools", [])}
+        builtin_names.add("complete_task")
+        agent_tool_count = sum(
+            1 for s in schemas
+            if s.get("function", {}).get("name", s.get("name", "")) not in builtin_names
+        )
+
+        if agent_tool_count == 0:
+            logger.warning(
+                f"[DAG] Domain filter {domains} yielded 0 agent-tools; "
+                f"falling back to all tools for this sub-task"
+            )
+            schemas = await self._build_tool_schemas(tenant_id, domains=None)
+
+        return schemas
+
+    # ==================================================================
     # INTENT ANALYSIS & DAG EXECUTION
     # ==================================================================
 
@@ -1086,7 +1131,7 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
                 augmented_message = self._build_dag_augmented_message(
                     st, all_results,
                 )
-                tool_schemas = await self._build_tool_schemas(
+                tool_schemas = await self._build_tool_schemas_with_domain_fallback(
                     tenant_id, domains=[st.domain],
                 )
                 task_context = copy.deepcopy(context)
@@ -1129,7 +1174,7 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
                     aug_msg = self._build_dag_augmented_message(
                         sub_task, all_results,
                     )
-                    t_schemas = await self._build_tool_schemas(
+                    t_schemas = await self._build_tool_schemas_with_domain_fallback(
                         tenant_id, domains=[sub_task.domain],
                     )
                     task_context = copy.deepcopy(context)
@@ -1675,6 +1720,74 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
             "inputs": [{"name": i.name, "type": i.type} for i in config.inputs],
             "outputs": [{"name": o.name, "type": o.type} for o in config.outputs],
         }
+
+    # ==========================================================================
+    # REQUEST-SCOPED AGENT CLEANUP
+    # ==========================================================================
+
+    # Default threshold: agents in terminal states (COMPLETED, ERROR, CANCELLED)
+    # are removed immediately; non-terminal agents older than this threshold
+    # (in seconds) are also purged to prevent cross-session state leakage.
+    STALE_AGENT_THRESHOLD_SECONDS = 3600  # 1 hour
+
+    async def _cleanup_stale_agents(self, tenant_id: str) -> None:
+        """Remove completed and stale agents for a tenant at request start.
+
+        This prevents state leakage between requests by:
+        1. Immediately removing agents in terminal states (COMPLETED, ERROR,
+           CANCELLED) — these are leftovers from previous requests.
+        2. Removing non-terminal agents that have been idle beyond the
+           stale agent threshold.
+
+        Called at the beginning of ``_execute_message`` before any processing.
+        """
+        try:
+            agents = await self.agent_pool.list_agents(tenant_id)
+            if not agents:
+                return
+
+            now = datetime.now()
+            removed_count = 0
+
+            for agent in agents:
+                should_remove = False
+                reason = ""
+
+                # 1. Remove agents in terminal states
+                if agent.status in AgentStatus.terminal_states():
+                    should_remove = True
+                    reason = f"terminal state ({agent.status.value})"
+
+                # 2. Remove non-terminal agents that are stale
+                elif hasattr(agent, "last_active") and agent.last_active:
+                    try:
+                        elapsed = (now - agent.last_active).total_seconds()
+                    except TypeError:
+                        # last_active might be timezone-aware vs naive
+                        elapsed = 0
+                    if elapsed > self.STALE_AGENT_THRESHOLD_SECONDS:
+                        should_remove = True
+                        reason = (
+                            f"stale ({elapsed:.0f}s idle, "
+                            f"threshold={self.STALE_AGENT_THRESHOLD_SECONDS}s)"
+                        )
+
+                if should_remove:
+                    logger.info(
+                        f"[Pool cleanup] Removing agent {agent.agent_id} "
+                        f"(type={agent.agent_type}, tenant={tenant_id}): {reason}"
+                    )
+                    await self.agent_pool.remove_agent(tenant_id, agent.agent_id)
+                    removed_count += 1
+
+            if removed_count:
+                logger.info(
+                    f"[Pool cleanup] Removed {removed_count} stale/completed "
+                    f"agent(s) for tenant {tenant_id}"
+                )
+        except Exception as e:
+            # Never block request processing due to cleanup failure
+            logger.warning(f"[Pool cleanup] Failed for tenant {tenant_id}: {e}")
 
     # ==========================================================================
     # SESSION RESTORATION

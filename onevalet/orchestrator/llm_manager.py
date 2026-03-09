@@ -19,7 +19,7 @@ class LLMManagerMixin:
     - ``llm_client``
     - ``_react_config``
     - ``_context_manager``
-    - ``_model_router``
+    - ``_model_router`` (optional — fallback still works via LLMRegistry singleton)
     """
 
     async def _llm_call_with_retry(
@@ -57,17 +57,28 @@ class LLMManagerMixin:
 
         # Primary failed — try fallback providers
         fallback_providers = self._react_config.fallback_providers
-        if fallback_providers and self._model_router:
-            registry = self._model_router.registry
+        if fallback_providers:
+            registry = self._get_llm_registry()
+            if registry is None:
+                logger.warning(
+                    "[LLM] fallback_providers configured but no LLMRegistry available; skipping fallback"
+                )
+                raise primary_error
             for provider_name in fallback_providers:
                 fallback_client = registry.get(provider_name)
                 if fallback_client is None or fallback_client is client:
                     continue
                 logger.warning(f"[LLM] Primary failed, trying fallback provider: {provider_name}")
-                result = await self._llm_call_single_client(
-                    fallback_client, messages, tool_schemas, tool_choice, **extra_kwargs,
-                )
+                try:
+                    result = await self._llm_call_single_client(
+                        fallback_client, messages, tool_schemas, tool_choice, **extra_kwargs,
+                    )
+                except Exception as fb_err:
+                    # Auth errors raised from _llm_call_single_client — skip this fallback
+                    logger.warning(f"[LLM] Fallback provider {provider_name} raised: {fb_err}")
+                    continue
                 if not isinstance(result, Exception):
+                    logger.info(f"[LLM] Fallback to {provider_name} succeeded")
                     return result
                 logger.warning(f"[LLM] Fallback provider {provider_name} also failed: {result}")
 
@@ -149,3 +160,22 @@ class LLMManagerMixin:
                 break  # exhausted retries, let fallback chain handle it
 
         return last_error  # type: ignore[return-value]
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _get_llm_registry(self) -> Optional[Any]:
+        """Return the LLMRegistry, preferring the model router's reference.
+
+        Falls back to the singleton ``LLMRegistry.get_instance()`` so that
+        fallback providers work even when ``ModelRouter`` is not configured.
+        """
+        if getattr(self, "_model_router", None) is not None:
+            return self._model_router.registry
+
+        try:
+            from ..llm.registry import LLMRegistry
+            return LLMRegistry.get_instance()
+        except Exception:
+            return None

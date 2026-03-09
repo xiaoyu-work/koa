@@ -9,6 +9,7 @@ import dataclasses
 import json
 import logging
 import time
+from collections import namedtuple
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 from ..streaming.models import AgentEvent, EventType
@@ -22,6 +23,8 @@ from ..constants import GENERATE_PLAN_TOOL_NAME, GENERATE_PLAN_SCHEMA
 from .transcript_repair import repair_transcript
 
 logger = logging.getLogger(__name__)
+
+TimedResult = namedtuple("TimedResult", ["result", "duration_ms"])
 
 
 class ReactLoopMixin:
@@ -229,17 +232,11 @@ class ReactLoopMixin:
             if not tool_calls:
                 max_retries = self._react_config.max_complete_task_retries
                 for retry in range(1, max_retries + 1):
-                    grace_msg = (
-                        "You must call the `complete_task` tool with your final "
-                        "response in the `result` parameter to finish. Do not "
-                        "respond with plain text. Call `complete_task` now."
-                    )
                     logger.warning(
                         f"[ReAct] turn={turn} no tool calls, "
                         f"grace retry {retry}/{max_retries}"
                     )
-                    messages.append(self._assistant_message_from_response(response))
-                    messages.append({"role": "user", "content": grace_msg})
+                    messages.append({"role": "user", "content": "Call `complete_task` now with your final answer."})
                     try:
                         response = await self._llm_call_with_retry(
                             messages, tool_schemas, tool_choice="required",
@@ -304,6 +301,7 @@ class ReactLoopMixin:
                 # Intercept complete_task: handle synchronously, skip execution
                 # ----------------------------------------------------------
                 complete_task_result: Optional[CompleteTaskResult] = None
+                _complete_task_tc_id: Optional[str] = None
                 remaining_tool_calls = []
                 for tc in tool_calls:
                     if tc.name == COMPLETE_TASK_TOOL_NAME:
@@ -314,14 +312,7 @@ class ReactLoopMixin:
                         _ct_text = _ct_args.get("result", "")
                         if _ct_text:
                             complete_task_result = CompleteTaskResult(result=_ct_text)
-                            messages.append(self._build_tool_result_message(tc.id, "Task completed."))
-                            all_tool_records.append(ToolCallRecord(
-                                name=COMPLETE_TASK_TOOL_NAME,
-                                args_summary={"result": _ct_text[:100]},
-                                duration_ms=0, success=True,
-                                result_status="COMPLETED",
-                                result_chars=len(_ct_text),
-                            ))
+                            _complete_task_tc_id = tc.id
                             logger.info(f"[ReAct] turn={turn} complete_task called ({len(_ct_text)} chars)")
                         else:
                             # Missing result -- append error, let LLM retry
@@ -336,6 +327,14 @@ class ReactLoopMixin:
 
                 # Pure complete_task with no other tools -- break immediately
                 if complete_task_result and not remaining_tool_calls:
+                    messages.append(self._build_tool_result_message(_complete_task_tc_id, "Task completed."))
+                    all_tool_records.append(ToolCallRecord(
+                        name=COMPLETE_TASK_TOOL_NAME,
+                        args_summary={"result": complete_task_result.result[:100]},
+                        duration_ms=0, success=True,
+                        result_status="COMPLETED",
+                        result_chars=len(complete_task_result.result),
+                    ))
                     final_response = complete_task_result.result
                     self._audit.log_react_turn(
                         turn=turn, tool_calls=[COMPLETE_TASK_TOOL_NAME],
@@ -359,13 +358,19 @@ class ReactLoopMixin:
                         data={"tool_name": tc.name, "call_id": tc.id},
                     )
 
-                # Execute all tool calls concurrently
-                tc_batch_start = time.monotonic()
-                results = await asyncio.gather(
-                    *[self._execute_with_timeout(tc, tenant_id, metadata=metadata, request_tools=request_tools, request_context=context) for tc in tool_calls],
+                # Execute all tool calls concurrently with per-tool timing
+                async def _timed_execute(tc):
+                    t0 = time.monotonic()
+                    try:
+                        r = await self._execute_with_timeout(tc, tenant_id, metadata=metadata, request_tools=request_tools, request_context=context)
+                    except BaseException as exc:
+                        return TimedResult(result=exc, duration_ms=int((time.monotonic() - t0) * 1000))
+                    return TimedResult(result=r, duration_ms=int((time.monotonic() - t0) * 1000))
+
+                timed_results = await asyncio.gather(
+                    *[_timed_execute(tc) for tc in tool_calls],
                     return_exceptions=True,
                 )
-                tc_batch_duration = int((time.monotonic() - tc_batch_start) * 1000)
 
                 # Token attribution for this turn
                 turn_tokens = None
@@ -378,10 +383,17 @@ class ReactLoopMixin:
                 loop_broken = False
                 loop_broken_text = None
 
-                for tc, result in zip(tool_calls, results):
+                for tc, timed in zip(tool_calls, timed_results):
                     tc_name = tc.name
                     is_agent = self._is_agent_tool(tc_name)
                     kind = "agent" if is_agent else "tool"
+                    # Unwrap TimedResult
+                    if isinstance(timed, TimedResult):
+                        result = timed.result
+                        tc_duration = timed.duration_ms
+                    else:
+                        result = timed
+                        tc_duration = 0
 
                     try:
                         args_summary = tc.arguments if isinstance(tc.arguments, dict) else json.loads(tc.arguments)
@@ -395,7 +407,7 @@ class ReactLoopMixin:
                         messages.append(self._build_tool_result_message(tc.id, error_text, is_error=True))
                         all_tool_records.append(ToolCallRecord(
                             name=tc_name, args_summary=args_summary,
-                            duration_ms=tc_batch_duration, success=False,
+                            duration_ms=tc_duration, success=False,
                             result_chars=len(error_text), token_attribution=turn_tokens,
                         ))
                         yield AgentEvent(
@@ -409,7 +421,7 @@ class ReactLoopMixin:
                         )
                         self._audit.log_tool_execution(
                             tool_name=tc_name, args_summary=args_summary,
-                            success=False, duration_ms=tc_batch_duration,
+                            success=False, duration_ms=tc_duration,
                             error=str(result), tenant_id=tenant_id,
                         )
 
@@ -427,7 +439,7 @@ class ReactLoopMixin:
                         )
                         all_tool_records.append(ToolCallRecord(
                             name=tc_name, args_summary=args_summary,
-                            duration_ms=tc_batch_duration, success=True,
+                            duration_ms=tc_duration, success=True,
                             result_status=waiting_status,
                             result_chars=len(waiting_text), token_attribution=turn_tokens,
                         ))
@@ -450,7 +462,7 @@ class ReactLoopMixin:
                         )
                         self._audit.log_tool_execution(
                             tool_name=tc_name, args_summary=args_summary,
-                            success=True, duration_ms=tc_batch_duration,
+                            success=True, duration_ms=tc_duration,
                             tenant_id=tenant_id,
                         )
                         loop_broken = True
@@ -465,17 +477,19 @@ class ReactLoopMixin:
                             result_text = str(result) if result is not None else ""
                             tool_trace = []
                         result_chars_original = len(result_text)
+                        original_len = len(result_text)
                         # Hard cap on tool result size
                         result_text = self._cap_tool_result(result_text)
                         result_text = self._context_manager.truncate_tool_result(result_text)
-                        # Context isolation for agent-tools
                         if is_agent and len(result_text) > 2000:
-                            result_text = result_text[:1500] + "\n...[full result available in agent context]"
+                            result_text = result_text[:1500] + f"\n...[truncated from {original_len} to 1500 chars]"
+                        elif len(result_text) < original_len:
+                            result_text += f"\n...[truncated from {original_len} to {len(result_text)} chars]"
                         logger.info(f"[ReAct]   {kind}={tc_name} OK ({len(result_text)} chars)")
                         messages.append(self._build_tool_result_message(tc.id, result_text))
                         all_tool_records.append(ToolCallRecord(
                             name=tc_name, args_summary=args_summary,
-                            duration_ms=tc_batch_duration, success=True,
+                            duration_ms=tc_duration, success=True,
                             result_status="COMPLETED" if isinstance(result, AgentToolResult) else None,
                             result_chars=result_chars_original, token_attribution=turn_tokens,
                         ))
@@ -490,12 +504,21 @@ class ReactLoopMixin:
                         )
                         self._audit.log_tool_execution(
                             tool_name=tc_name, args_summary=args_summary,
-                            success=True, duration_ms=tc_batch_duration,
+                            success=True, duration_ms=tc_duration,
                             tenant_id=tenant_id,
                         )
 
-                # complete_task was called alongside other tools -- use its result
+                # complete_task was called alongside other tools -- add its result
+                # AFTER all other tools' results have been appended to messages
                 if complete_task_result:
+                    messages.append(self._build_tool_result_message(_complete_task_tc_id, "Task completed."))
+                    all_tool_records.append(ToolCallRecord(
+                        name=COMPLETE_TASK_TOOL_NAME,
+                        args_summary={"result": complete_task_result.result[:100]},
+                        duration_ms=0, success=True,
+                        result_status="COMPLETED",
+                        result_chars=len(complete_task_result.result),
+                    ))
                     final_response = complete_task_result.result
                     self._audit.log_react_turn(
                         turn=turn, tool_calls=tool_names + [COMPLETE_TASK_TOOL_NAME],
@@ -506,29 +529,17 @@ class ReactLoopMixin:
                     yield AgentEvent(type=EventType.MESSAGE_END, data={})
                     break
 
-                # Watchdog: detect loops (same tool 3x OR cycle pattern)
+                # Watchdog: detect loops
                 for tn in tool_names:
                     _recent_tool_names.append(tn)
-                if len(_recent_tool_names) >= 3:
-                    last_3 = _recent_tool_names[-3:]
-                    # Same tool 3x in a row
-                    if len(set(last_3)) == 1:
-                        logger.warning(f"[ReAct] Loop detected: {last_3[0]} called 3 times consecutively")
-                        final_response = "I noticed I was repeating the same action without making progress. Let me provide what I have so far."
-                        yield AgentEvent(type=EventType.MESSAGE_START, data={"turn": turn})
-                        yield AgentEvent(type=EventType.MESSAGE_CHUNK, data={"chunk": final_response})
-                        yield AgentEvent(type=EventType.MESSAGE_END, data={})
-                        break
-                if len(_recent_tool_names) >= 6:
-                    last_6 = _recent_tool_names[-6:]
-                    # A->B->A->B->A->B pattern (3 cycles of 2)
-                    if last_6[0::2] == last_6[0::2][:1] * 3 and last_6[1::2] == last_6[1::2][:1] * 3:
-                        logger.warning(f"[ReAct] Oscillation detected: {last_6[0]}↔{last_6[1]}")
-                        final_response = "I noticed I was going back and forth between actions without making progress. Let me provide what I have so far."
-                        yield AgentEvent(type=EventType.MESSAGE_START, data={"turn": turn})
-                        yield AgentEvent(type=EventType.MESSAGE_CHUNK, data={"chunk": final_response})
-                        yield AgentEvent(type=EventType.MESSAGE_END, data={})
-                        break
+                loop_desc = self._detect_loop(_recent_tool_names)
+                if loop_desc:
+                    logger.warning(f"[ReAct] {loop_desc}")
+                    final_response = "I noticed I was repeating the same actions without making progress. Let me provide what I have so far."
+                    yield AgentEvent(type=EventType.MESSAGE_START, data={"turn": turn})
+                    yield AgentEvent(type=EventType.MESSAGE_CHUNK, data={"chunk": final_response})
+                    yield AgentEvent(type=EventType.MESSAGE_END, data={})
+                    break
 
                 # Audit: log turn summary
                 self._audit.log_react_turn(
@@ -550,13 +561,14 @@ class ReactLoopMixin:
                     break
 
                 # Agent passthrough: single completed agent-tool skips LLM re-summary
+                _first_result = timed_results[0].result if isinstance(timed_results[0], TimedResult) else timed_results[0]
                 if (
                     len(tool_calls) == 1
                     and self._is_agent_tool(tool_calls[0].name)
-                    and isinstance(results[0], AgentToolResult)
-                    and results[0].completed
+                    and isinstance(_first_result, AgentToolResult)
+                    and _first_result.completed
                 ):
-                    agent_text = results[0].result_text
+                    agent_text = _first_result.result_text
                     logger.info(
                         f"[ReAct] turn={turn} agent_passthrough "
                         f"({len(agent_text)} chars from {tool_calls[0].name})"
@@ -664,9 +676,11 @@ class ReactLoopMixin:
                     {
                         "role": "system",
                         "content": (
-                            "Summarize the following conversation excerpt in 2-4 sentences. "
-                            "Preserve key facts, decisions, entities, and user preferences. "
-                            "Be concise but retain actionable context."
+                            "Summarize the following conversation excerpt. Preserve:\n"
+                            "- All specific data values (names, dates, numbers, IDs, URLs)\n"
+                            "- Tool call results and their key findings\n"
+                            "- Decisions made and actions taken\n"
+                            "Keep the summary concise but factual. Use bullet points for structured data."
                         ),
                     },
                     {"role": "user", "content": old_text},
@@ -722,3 +736,18 @@ class ReactLoopMixin:
                 for tc in tool_calls
             ]
         return msg
+
+    @staticmethod
+    def _detect_loop(tool_history: list) -> Optional[str]:
+        if len(tool_history) >= 3 and len(set(tool_history[-3:])) == 1:
+            return f"Loop detected: {tool_history[-1]} called 3 times consecutively"
+        for cycle_len in range(2, 5):
+            needed = cycle_len * 2
+            if len(tool_history) < needed:
+                continue
+            tail = tool_history[-needed:]
+            cycle = tail[:cycle_len]
+            if all(tail[i] == cycle[i % cycle_len] for i in range(needed)):
+                pattern = "↔".join(cycle)
+                return f"Cycle detected: {pattern} repeated {needed // cycle_len} times"
+        return None

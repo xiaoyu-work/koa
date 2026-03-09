@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 
 from ..models import AgentTool, AgentToolContext
 from .agent_tool import execute_agent_tool
+from .constants import TOOL_RESULT_HARD_CAP_CHARS
 from .react_config import COMPLETE_TASK_SCHEMA
 
 logger = logging.getLogger(__name__)
@@ -271,13 +272,11 @@ class ToolManagerMixin:
             return False
         return self._agent_registry.get_agent_class(tool_name) is not None
 
-    HARD_MAX_TOOL_RESULT_CHARS = 400_000
-
     def _cap_tool_result(self, result_text: str) -> str:
         """Hard cap on tool result size to prevent context window overflow."""
-        if len(result_text) <= self.HARD_MAX_TOOL_RESULT_CHARS:
+        if len(result_text) <= TOOL_RESULT_HARD_CAP_CHARS:
             return result_text
-        cut = self.HARD_MAX_TOOL_RESULT_CHARS
+        cut = TOOL_RESULT_HARD_CAP_CHARS
         newline_pos = result_text.rfind("\n", int(cut * 0.8), cut)
         if newline_pos > 0:
             cut = newline_pos

@@ -9,6 +9,15 @@ Defense 3 -- Force trim to safe range (after a context overflow error).
 import logging
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from .constants import (
+    IMAGE_TOKEN_ESTIMATE,
+    JSON_CHARS_PER_TOKEN,
+    JSON_DETECTION_RATIO,
+    JSON_DETECTION_SAMPLE_SIZE,
+    TEXT_CHARS_PER_TOKEN,
+    TOKENS_PER_MESSAGE_OVERHEAD,
+    TOOL_CALL_STRUCTURE_OVERHEAD_TOKENS,
+)
 from .react_config import ReactLoopConfig
 
 logger = logging.getLogger(__name__)
@@ -32,7 +41,7 @@ class ContextManager:
         """
         total = 0
         for msg in messages:
-            total += 4  # per-message overhead (role, separators)
+            total += TOKENS_PER_MESSAGE_OVERHEAD
             content = msg.get("content")
             if content is None:
                 continue
@@ -41,6 +50,10 @@ class ContextManager:
             elif isinstance(content, list):
                 for part in content:
                     if isinstance(part, dict):
+                        part_type = part.get("type", "")
+                        if part_type in ("image_url", "image"):
+                            total += IMAGE_TOKEN_ESTIMATE
+                            continue
                         text = part.get("text") or part.get("content", "")
                         if isinstance(text, str):
                             total += self._estimate_string_tokens(text)
@@ -50,13 +63,13 @@ class ContextManager:
             tool_calls = msg.get("tool_calls")
             if tool_calls:
                 for tc in tool_calls:
-                    total += 20  # function name + structure overhead
+                    total += TOOL_CALL_STRUCTURE_OVERHEAD_TOKENS
                     args = tc.get("arguments") or tc.get("function", {}).get("arguments", "")
                     if isinstance(args, str):
-                        total += len(args) // 3  # JSON is denser
+                        total += len(args) // JSON_CHARS_PER_TOKEN
                     elif isinstance(args, dict):
                         import json
-                        total += len(json.dumps(args)) // 3
+                        total += len(json.dumps(args)) // JSON_CHARS_PER_TOKEN
         return total
 
     @staticmethod
@@ -65,10 +78,11 @@ class ContextManager:
         natural language ~4 chars/token."""
         if not text:
             return 0
-        # Heuristic: if >20% of chars are {, [, ", :, it's likely JSON/code
-        special = sum(1 for c in text[:500] if c in '{}[]":,')
-        ratio = special / min(len(text), 500) if text else 0
-        chars_per_token = 3 if ratio > 0.15 else 4
+        # Heuristic: if special-char fraction exceeds threshold, treat as JSON/code
+        sample_len = min(len(text), JSON_DETECTION_SAMPLE_SIZE)
+        special = sum(1 for c in text[:sample_len] if c in '{}[]":,')
+        ratio = special / sample_len if text else 0
+        chars_per_token = JSON_CHARS_PER_TOKEN if ratio > JSON_DETECTION_RATIO else TEXT_CHARS_PER_TOKEN
         return len(text) // chars_per_token
 
     # ------------------------------------------------------------------
