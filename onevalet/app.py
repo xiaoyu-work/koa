@@ -38,21 +38,25 @@ def _load_config(path: str) -> dict:
     with open(path, "r", encoding="utf-8") as f:
         raw = f.read()
 
-    # Replace ${VAR} with environment variable values (skip comment lines)
+    # Replace ${VAR} or ${VAR:-default} with environment variable values
+    # (skip comment lines)
     def _resolve_line(line: str) -> str:
         stripped = line.lstrip()
         if stripped.startswith("#"):
             return line  # skip comment lines — they may reference unused vars
         def _replace_env(match):
             var_name = match.group(1)
+            default = match.group(2)  # None if no :- syntax
             value = os.environ.get(var_name)
             if value is None:
+                if default is not None:
+                    return default
                 raise ValueError(
                     f"Environment variable '{var_name}' not set "
                     f"(referenced in config file '{path}')"
                 )
             return value
-        return re.sub(r"\$\{(\w+)\}", _replace_env, line)
+        return re.sub(r"\$\{(\w+)(?::-([^}]*))?\}", _replace_env, line)
 
     resolved = "\n".join(_resolve_line(line) for line in raw.split("\n"))
     return yaml.safe_load(resolved)
