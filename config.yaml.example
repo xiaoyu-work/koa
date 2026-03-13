@@ -63,6 +63,33 @@ embedding:
 #     - score_range: [71, 100]         # complex: multi-agent, trip planning
 #       provider: strong
 
+# ---------------------------------------------------------------------------
+# MCP Servers — Model Context Protocol server connections
+#
+# Each entry defines an MCP server whose tools become available to agents.
+# Tools are auto-discovered and named "mcp__{server}__{tool}".
+# Supported transports: stdio, sse
+# ---------------------------------------------------------------------------
+# mcp_servers:
+#   filesystem:
+#     transport: stdio
+#     command: npx
+#     args: ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/dir"]
+#
+#   my-api:
+#     transport: sse
+#     url: http://localhost:8080/sse
+#     headers:
+#       Authorization: "Bearer ${MCP_API_TOKEN:-}"
+#     timeout: 60
+#
+#   local-tool:
+#     transport: stdio
+#     command: python
+#     args: ["my_mcp_server.py"]
+#     env:
+#       MY_VAR: some-value
+
 # Callbacks — OneValet POSTs notifications here (e.g. important emails, trigger results)
 # callbacks:
 #   notify_url: http://localhost:8001/webhook/onevalet/callback

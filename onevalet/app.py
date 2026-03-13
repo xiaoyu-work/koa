@@ -105,6 +105,7 @@ class OneValet:
         self._model_router = None
         self._cron_service = None
         self._shipment_poller = None
+        self._mcp_manager = None
 
     async def _ensure_initialized(self) -> None:
         """Lazy initialization — runs once on first chat()/stream() call."""
@@ -280,6 +281,54 @@ class OneValet:
         )
         await self._orchestrator.initialize()
 
+        # 9b. MCP Servers (optional)
+        mcp_servers_cfg = cfg.get("mcp_servers", {})
+        if mcp_servers_cfg:
+            try:
+                from .mcp.models import MCPServerConfig, MCPTransportType
+                from .mcp.provider import MCPManager
+                from .mcp.sdk_client import MCPSDKClient
+
+                # Verify mcp SDK is available before connecting servers
+                try:
+                    import mcp  # noqa: F401
+                except ImportError:
+                    raise ImportError("mcp")
+
+                self._mcp_manager = MCPManager()
+                for server_name, server_cfg in mcp_servers_cfg.items():
+                    try:
+                        transport = MCPTransportType(server_cfg.get("transport", "stdio"))
+                        mcp_config = MCPServerConfig(
+                            name=server_name,
+                            transport=transport,
+                            command=server_cfg.get("command"),
+                            args=server_cfg.get("args", []),
+                            url=server_cfg.get("url"),
+                            env=server_cfg.get("env", {}),
+                            headers=server_cfg.get("headers", {}),
+                            timeout=float(server_cfg.get("timeout", 30.0)),
+                        )
+                        client = MCPSDKClient(mcp_config)
+                        provider = await self._mcp_manager.add_server(client)
+                        logger.info(
+                            f"MCP server '{server_name}': "
+                            f"{len(provider.get_tools())} tools registered"
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to connect MCP server '{server_name}': {e}")
+
+                # Inject MCP tools into orchestrator
+                mcp_tools = self._mcp_manager.get_all_tools()
+                if mcp_tools:
+                    self._orchestrator.builtin_tools.extend(mcp_tools)
+                    logger.info(f"Injected {len(mcp_tools)} MCP tools into orchestrator")
+            except ImportError:
+                logger.warning(
+                    "mcp_servers configured but 'mcp' package not installed. "
+                    "Install with: pip install mcp"
+                )
+
         # CronService setup
         from .triggers.cron.pg_store import PostgresCronJobStore
         from .triggers.cron.pg_run_log import PostgresCronRunLog
@@ -390,6 +439,8 @@ class OneValet:
                 await self._shipment_poller.stop()
             if self._cron_service:
                 await self._cron_service.stop()
+            if self._mcp_manager:
+                await self._mcp_manager.disconnect_all()
             if self._orchestrator:
                 await self._orchestrator.shutdown()
             if self._event_bus:
@@ -412,6 +463,7 @@ class OneValet:
             self._model_router = None
             self._cron_service = None
             self._shipment_poller = None
+            self._mcp_manager = None
             logger.info("OneValet shut down")
 
     # ── Public API methods (issue #12) ──
