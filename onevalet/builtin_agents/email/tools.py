@@ -60,9 +60,7 @@ async def _resolve_all_providers(tenant_id: str, account_specs=None):
     for account in accounts:
         provider = EmailProviderFactory.create_provider(account)
         if not provider:
-            prov = account.get("provider", "missing")
-            svc = account.get("service", "unknown")
-            errors.append(f"{account.get('account_name', 'unknown')}: unsupported provider (provider={prov}, service={svc})")
+            errors.append(f"{account.get('account_name', 'unknown')}: unsupported provider")
             continue
         if not await provider.ensure_valid_token():
             errors.append(f"{account.get('account_identifier', 'unknown')}: token expired, reconnect in settings")
