@@ -12,6 +12,19 @@ from .base import BaseEmailProvider
 
 logger = logging.getLogger(__name__)
 
+# Fallback: infer provider from service when credentials lack 'provider' field.
+_SERVICE_TO_PROVIDER = {
+    "gmail": "google",
+    "google_calendar": "google",
+    "google_tasks": "google",
+    "google_drive": "google",
+    "google_mail": "google",
+    "outlook": "microsoft",
+    "outlook_calendar": "microsoft",
+    "microsoft_todo": "microsoft",
+    "onedrive": "microsoft",
+}
+
 
 class EmailProviderFactory:
     """Factory for creating email provider instances."""
@@ -51,9 +64,18 @@ class EmailProviderFactory:
         """
         provider_name = credentials.get("provider", "").lower()
 
+        # Infer provider from service field when provider is missing
         if not provider_name:
-            logger.error("Credentials missing 'provider' field")
-            return None
+            service = credentials.get("service", "").lower()
+            provider_name = _SERVICE_TO_PROVIDER.get(service, "")
+            if provider_name:
+                logger.info(f"Inferred provider '{provider_name}' from service '{service}'")
+            else:
+                logger.error(
+                    "Credentials missing 'provider' field and could not infer from service=%s",
+                    service,
+                )
+                return None
 
         provider_class = cls._providers.get(provider_name)
         if not provider_class:
@@ -80,6 +102,7 @@ def _register_providers():
     try:
         from .gmail import GmailProvider
         EmailProviderFactory.register_provider("google", GmailProvider)
+        EmailProviderFactory.register_provider("gmail", GmailProvider)
     except ImportError as e:
         logger.warning(f"Google provider not available: {e}")
 
