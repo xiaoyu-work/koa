@@ -30,9 +30,6 @@ class GoogleCalendarProvider(BaseCalendarProvider, OAuthHTTPMixin):
     def _get_headers(self) -> Dict[str, str]:
         return {"Authorization": f"Bearer {self.access_token}"}
 
-    async def refresh_access_token(self) -> Dict[str, Any]:
-        return await OAuthHTTPMixin.refresh_access_token(self)
-
     async def list_events(
         self,
         time_min: Optional[datetime] = None,

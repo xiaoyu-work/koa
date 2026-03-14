@@ -108,7 +108,6 @@ class BaseCalendarProvider(ABC):
         """Delete a calendar event."""
         pass
 
-    @abstractmethod
     async def refresh_access_token(self) -> Dict[str, Any]:
         """Refresh expired OAuth access token."""
         pass

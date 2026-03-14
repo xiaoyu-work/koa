@@ -95,7 +95,6 @@ class BaseEmailProvider(ABC):
         """Delete or trash emails."""
         pass
 
-    @abstractmethod
     async def refresh_access_token(self) -> Dict[str, Any]:
         """
         Refresh expired OAuth access token.

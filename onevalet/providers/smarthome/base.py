@@ -49,7 +49,6 @@ class BaseSmartHomeProvider(ABC):
         self.token_expiry = credentials.get("token_expiry")
         self._on_token_refreshed = on_token_refreshed
 
-    @abstractmethod
     async def refresh_access_token(self) -> Dict[str, Any]:
         """
         Refresh expired OAuth access token.

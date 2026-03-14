@@ -152,7 +152,6 @@ class BaseCloudStorageProvider(ABC):
         """
         pass
 
-    @abstractmethod
     async def refresh_access_token(self) -> Dict[str, Any]:
         """Refresh OAuth access token."""
         pass
