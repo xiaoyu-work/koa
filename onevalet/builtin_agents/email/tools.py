@@ -90,7 +90,7 @@ async def search_emails(
     days_back: Annotated[int, "Days to search back (default: 7)"] = 7,
     date_range: Annotated[Optional[str], "Date range like 'today', 'yesterday', 'last week'"] = None,
     accounts: Annotated[Optional[str], "Account to search: 'all', 'primary', or account name"] = None,
-    max_results: Annotated[int, "Max results to return (default: 15)"] = 15,
+    max_results: Annotated[int, "Max results to return (default: 10)"] = 10,
     category: Annotated[Optional[str], "Inbox category filter: 'primary' (default), 'social', 'promotions', 'updates', or 'all'"] = "primary",
     *,
     context: AgentToolContext,

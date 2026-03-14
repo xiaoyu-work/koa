@@ -25,7 +25,7 @@ from .tools import (
 class EmailAgent(StandardAgent):
     """Read, send, reply, delete, and archive emails. Use when the user mentions email, inbox, messages, or wants to send/check/reply to any email."""
 
-    max_turns = 6
+    max_turns = 8
 
     _SYSTEM_PROMPT_TEMPLATE = """\
 Email management tools are available for this task. Today is {today} ({weekday}).
@@ -47,7 +47,8 @@ Guidelines:
 6. Only write what the user asked. Do not guess email content from prior context.
 7. Always use message_id and account from search_emails results.
 8. Be concise.
-9. Do NOT ask for confirmation before calling a tool. Call the tool directly once you have enough information."""
+9. Do NOT ask for confirmation before calling a tool. Call the tool directly once you have enough information.
+10. After searching emails, synthesize results immediately in a single response. Do not make additional searches unless the user asks."""
 
     def get_system_prompt(self) -> str:
         now = datetime.now()
