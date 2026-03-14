@@ -9,7 +9,8 @@ The internal LLM decides which tools to call (query_tasks, create_task, update_t
 delete_task, set_reminder, manage_reminders) based on the user's request.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from onevalet import valet
 from onevalet.constants import TODO_SERVICES
@@ -58,7 +59,14 @@ in your text response WITHOUT calling any tools.
 8. After getting tool results, provide a clear summary to the user."""
 
     def get_system_prompt(self) -> str:
-        now = datetime.now()
+        user_tz = self.metadata.get("timezone") if self.metadata else None
+        tz = timezone.utc
+        if user_tz and user_tz != "UTC":
+            try:
+                tz = ZoneInfo(user_tz)
+            except Exception:
+                pass
+        now = datetime.now(tz)
         return self._SYSTEM_PROMPT_TEMPLATE.format(
             today=now.strftime('%Y-%m-%d'),
             weekday=now.strftime('%A'),

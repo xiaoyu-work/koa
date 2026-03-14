@@ -32,12 +32,12 @@ class PostgresCronJobStore:
         """
         self._db = db
         self._jobs: Dict[str, CronJob] = {}
-        self._pending_deletes: List[str] = []
+        self._pending_soft_deletes: List[str] = []
 
     async def load(self) -> None:
-        """Load all jobs from database into memory cache."""
+        """Load all active (non-deleted) jobs from database into memory cache."""
         rows = await self._db.fetch(
-            "SELECT id, data FROM cron_jobs"
+            "SELECT id, data FROM cron_jobs WHERE deleted_at IS NULL"
         )
         self._jobs = {}
         for row in rows:
@@ -75,14 +75,17 @@ class PostgresCronJobStore:
         )
 
     async def save(self) -> None:
-        """Persist all jobs to database and flush pending deletes."""
-        # Flush deletes
-        for job_id in self._pending_deletes:
+        """Persist all jobs to database and flush pending soft-deletes."""
+        # Flush soft-deletes
+        for job_id in self._pending_soft_deletes:
             try:
-                await self._db.execute("DELETE FROM cron_jobs WHERE id = $1", job_id)
+                await self._db.execute(
+                    "UPDATE cron_jobs SET enabled = false, deleted_at = now(), updated_at = now() WHERE id = $1",
+                    job_id,
+                )
             except Exception as e:
-                logger.error(f"Failed to delete cron job {job_id}: {e}")
-        self._pending_deletes.clear()
+                logger.error(f"Failed to soft-delete cron job {job_id}: {e}")
+        self._pending_soft_deletes.clear()
 
         # Upsert all current jobs
         for job in self._jobs.values():
@@ -117,7 +120,7 @@ class PostgresCronJobStore:
     def remove(self, job_id: str) -> bool:
         removed = self._jobs.pop(job_id, None) is not None
         if removed:
-            self._pending_deletes.append(job_id)
+            self._pending_soft_deletes.append(job_id)
         return removed
 
     def get_next_due_time(self) -> Optional[int]:
