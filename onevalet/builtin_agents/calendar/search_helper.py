@@ -9,7 +9,7 @@ This module provides shared search functionality used by:
 import logging
 import re
 from typing import Dict, Any, List, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -20,13 +20,13 @@ def parse_time_range(time_range_str: str, now: datetime = None) -> Tuple[datetim
 
     Args:
         time_range_str: Human-readable time range ("today", "tomorrow", "this week", etc.)
-        now: Current datetime (defaults to datetime.now())
+        now: Current datetime (defaults to datetime.now(timezone.utc))
 
     Returns:
-        Tuple of (time_min, time_max)
+        Tuple of (time_min, time_max) — always timezone-aware (UTC)
     """
     if now is None:
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
 
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
