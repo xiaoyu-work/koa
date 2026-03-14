@@ -13,6 +13,7 @@ from collections import namedtuple
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 from ..streaming.models import AgentEvent, EventType
+from ..models import ToolOutput
 from .agent_tool import AgentToolResult
 from .approval import collect_batch_approvals
 from .react_config import (
@@ -92,6 +93,7 @@ class ReactLoopMixin:
         final_response = ""
         result_status = None
         _recent_tool_names: List[str] = []  # watchdog loop detection
+        _response_media: List[Dict[str, Any]] = []  # images for client storage
 
         logger.info(f"[ReAct] tenant={tenant_id}")
 
@@ -469,7 +471,13 @@ class ReactLoopMixin:
                         loop_broken_text = waiting_text
 
                     else:
-                        if isinstance(result, AgentToolResult):
+                        # Extract text and optional media from the result
+                        result_media = []
+                        if isinstance(result, ToolOutput):
+                            result_text = result.text
+                            result_media = result.media or []
+                            tool_trace = []
+                        elif isinstance(result, AgentToolResult):
                             result_text = result.result_text
                             r_meta = result.metadata if isinstance(result.metadata, dict) else {}
                             tool_trace = r_meta.get("tool_trace") or []
@@ -485,8 +493,17 @@ class ReactLoopMixin:
                             result_text = result_text[:1500] + f"\n...[truncated from {original_len} to 1500 chars]"
                         elif len(result_text) < original_len:
                             result_text += f"\n...[truncated from {original_len} to {len(result_text)} chars]"
-                        logger.info(f"[ReAct]   {kind}={tc_name} OK ({len(result_text)} chars)")
-                        messages.append(self._build_tool_result_message(tc.id, result_text))
+                        logger.info(f"[ReAct]   {kind}={tc_name} OK ({len(result_text)} chars, media={len(result_media)})")
+                        messages.append(self._build_tool_result_message(
+                            tc.id, result_text, media=result_media,
+                        ))
+
+                        # Collect media marked for_storage for the final response
+                        for m in result_media:
+                            meta = m.get("metadata", {})
+                            if meta.get("for_storage"):
+                                _response_media.append(m)
+
                         all_tool_records.append(ToolCallRecord(
                             name=tc_name, args_summary=args_summary,
                             duration_ms=tc_duration, success=True,
@@ -617,6 +634,7 @@ class ReactLoopMixin:
                 "final_response": final_response,
                 "result_status": result_status,
                 "pending_approvals": pending_approvals,
+                "media": _response_media or None,
                 "token_usage": {
                     "input_tokens": total_usage.input_tokens,
                     "output_tokens": total_usage.output_tokens,
@@ -705,14 +723,37 @@ class ReactLoopMixin:
         tool_call_id: str,
         content: str,
         is_error: bool = False,
+        media: list = None,
     ) -> Dict[str, Any]:
-        """Build a tool result message for the LLM messages list."""
+        """Build a tool result message for the LLM messages list.
+
+        When *media* is provided (e.g. thumbnail images from an image search),
+        the content is formatted as a multimodal content array so that
+        vision-capable LLMs can inspect the images.
+        """
         if is_error:
             content = f"[ERROR] {content}"
+
+        if not media:
+            return {
+                "role": "tool",
+                "tool_call_id": tool_call_id,
+                "content": content,
+            }
+
+        # Build multimodal content: text + image_url blocks
+        parts: list = [{"type": "text", "text": content}]
+        for item in media:
+            if item.get("type") == "image":
+                data = item.get("data", "")
+                parts.append({
+                    "type": "image_url",
+                    "image_url": {"url": data, "detail": "low"},
+                })
         return {
             "role": "tool",
             "tool_call_id": tool_call_id,
-            "content": content,
+            "content": parts,
         }
 
     @staticmethod

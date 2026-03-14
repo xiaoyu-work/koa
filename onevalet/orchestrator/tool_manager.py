@@ -89,6 +89,9 @@ class ToolManagerMixin:
         from ..builtin_agents.tools.web_fetch import (
             web_fetch_executor, WEB_FETCH_SCHEMA,
         )
+        from ..builtin_agents.tools.download_image import (
+            download_image_executor, DOWNLOAD_IMAGE_SCHEMA,
+        )
         from ..builtin_agents.tools.important_dates import IMPORTANT_DATES_TOOL_DEFS
         from ..builtin_agents.tools.user_tools import (
             get_user_accounts_executor, get_user_profile_executor,
@@ -107,7 +110,7 @@ class ToolManagerMixin:
         # Google search
         tools.append(AgentTool(
             name="google_search",
-            description="Search the web using Google. Returns titles, URLs, and snippets of top results.",
+            description="Search the web using Google. Returns titles, URLs, and snippets of top results. Set search_type to 'image' to search for images — thumbnails will be shown for you to review and pick the best one.",
             parameters=GOOGLE_SEARCH_SCHEMA,
             executor=google_search_executor,
             category="web",
@@ -119,6 +122,15 @@ class ToolManagerMixin:
             description="Fetch a URL and extract its readable content as text. Use this to read articles, documentation, or any web page. Returns the main content with boilerplate removed.",
             parameters=WEB_FETCH_SCHEMA,
             executor=web_fetch_executor,
+            category="web",
+        ))
+
+        # Download image (for storing selected images locally)
+        tools.append(AgentTool(
+            name="download_image",
+            description="Download a full-resolution image from a URL and return it as base64 data for local storage. Use this AFTER selecting the best image from search results to deliver the actual image data to the user's device.",
+            parameters=DOWNLOAD_IMAGE_SCHEMA,
+            executor=download_image_executor,
             category="web",
         ))
 

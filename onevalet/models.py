@@ -96,3 +96,25 @@ class AgentTool:
                 "parameters": self.parameters,
             },
         }
+
+
+@dataclass
+class ToolOutput:
+    """Structured return type for tools that produce media alongside text.
+
+    Tools that need to return images (or other media) to the LLM for review
+    should return a ``ToolOutput`` instead of a plain string.
+
+    Attributes:
+        text: Human/LLM-readable text description of the result.
+        media: List of media dicts, each with:
+            - ``type``: ``"image"``
+            - ``data``: base64-encoded image data **or** an HTTPS URL
+            - ``media_type``: MIME type (default ``"image/jpeg"``)
+            - ``metadata``: optional dict of extra info (e.g. source URL,
+              title, dimensions) that should be preserved but not shown
+              to the LLM.
+    """
+
+    text: str
+    media: List[Dict[str, Any]] = field(default_factory=list)
