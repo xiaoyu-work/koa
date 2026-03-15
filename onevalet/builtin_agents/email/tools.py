@@ -4,12 +4,13 @@ Email tools for EmailAgent.
 Extracted from legacy email agents (SendEmailAgent, ReadEmailAgent,
 ReplyEmailAgent, DeleteEmailAgent, ArchiveEmailAgent, MarkReadEmailAgent).
 """
+import json
 import logging
 import html
 from typing import Annotated, Any, Dict, List, Optional
 
 from onevalet.tool_decorator import tool
-from onevalet.models import AgentToolContext
+from onevalet.models import AgentToolContext, ToolOutput
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +163,34 @@ async def search_emails(
     if errors:
         lines.append(f"\nWarnings: {'; '.join(errors)}")
 
-    return "\n".join(lines)
+    text_result = "\n".join(lines)
+
+    # Build inline cards for frontend rendering
+    email_cards = []
+    for email_item in all_emails[:max_results]:
+        sender_name = _format_sender(email_item.get("sender", "Unknown"))
+        subject = html.unescape(email_item.get("subject", "No subject"))
+        snippet = html.unescape(email_item.get("snippet", ""))[:100]
+        card = {
+            "card_type": "email_result",
+            "sender": sender_name,
+            "subject": subject,
+            "snippet": snippet,
+            "unread": bool(email_item.get("unread")),
+            "messageId": email_item.get("message_id", ""),
+        }
+        email_cards.append(card)
+
+    media = []
+    if email_cards:
+        media.append({
+            "type": "inline_cards",
+            "data": json.dumps(email_cards),
+            "media_type": "application/json",
+            "metadata": {"for_storage": False},
+        })
+
+    return ToolOutput(text=text_result, media=media)
 
 
 # ============================================================

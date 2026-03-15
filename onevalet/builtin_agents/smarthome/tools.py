@@ -5,10 +5,11 @@ Extracted from LightControlAgent and SpeakerControlAgent.
 Each function takes (args: dict, context: AgentToolContext) -> str.
 """
 
+import json
 import logging
 from typing import Annotated, Any, Dict, Optional, Tuple
 
-from onevalet.models import AgentToolContext
+from onevalet.models import AgentToolContext, ToolOutput
 from onevalet.tool_decorator import tool
 
 logger = logging.getLogger(__name__)
@@ -148,7 +149,29 @@ async def control_lights(
                     line += f", {brightness}% brightness"
                 lines.append(line)
 
-            return "\n".join(lines)
+            text_result = "\n".join(lines)
+
+            # Build inline card for frontend rendering
+            light_cards_data = []
+            for lt in light_list:
+                light_cards_data.append({
+                    "name": lt.get("name", "Unknown"),
+                    "room": lt.get("room", ""),
+                    "state": "on" if lt.get("on") else "off",
+                    "brightness": lt.get("brightness"),
+                })
+            card = {
+                "card_type": "light_status",
+                "lights": light_cards_data,
+            }
+            media = [{
+                "type": "inline_cards",
+                "data": json.dumps([card]),
+                "media_type": "application/json",
+                "metadata": {"for_storage": False},
+            }]
+
+            return ToolOutput(text=text_result, media=media)
 
         # --- on / off ---
         elif action in ("on", "off"):
@@ -410,7 +433,36 @@ async def control_speaker(
             if volume is not None:
                 parts.append(f"Volume: {volume}%")
 
-            return "\n".join(parts)
+            text_result = "\n".join(parts)
+
+            # Build inline card for frontend rendering
+            display_state = "Playing" if playback_state == "PLAYBACK_STATE_PLAYING" else (
+                "Paused" if playback_state == "PLAYBACK_STATE_PAUSED" else (
+                    "Idle" if playback_state == "PLAYBACK_STATE_IDLE" else playback_state
+                )
+            )
+            card = {
+                "card_type": "speaker_status",
+                "name": group_name,
+                "state": display_state,
+            }
+            if title:
+                card["track"] = title
+            if artist:
+                card["artist"] = artist
+            if album:
+                card["album"] = album
+            if volume is not None:
+                card["volume"] = volume
+
+            media = [{
+                "type": "inline_cards",
+                "data": json.dumps([card]),
+                "media_type": "application/json",
+                "metadata": {"for_storage": False},
+            }]
+
+            return ToolOutput(text=text_result, media=media)
 
         # --- play_favorite ---
         elif action == "play_favorite":

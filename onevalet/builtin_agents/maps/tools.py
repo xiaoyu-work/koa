@@ -13,7 +13,7 @@ from typing import Annotated, Any, Dict, Optional
 
 import httpx
 
-from onevalet.models import AgentToolContext
+from onevalet.models import AgentToolContext, ToolOutput
 from onevalet.tool_decorator import tool
 
 logger = logging.getLogger(__name__)
@@ -104,6 +104,8 @@ async def search_places(
             return f"No results found for \"{query}\" in \"{location}\"."
 
         result_lines = [f"Found {len(places)} results for \"{query}\" in \"{location}\":\n"]
+        place_cards = []
+
         for i, place in enumerate(places, 1):
             name = place.get("displayName", {}).get("text", "Unknown")
             address = place.get("formattedAddress", "")
@@ -133,7 +135,42 @@ async def search_places(
                 result_lines.append(f"   Website: {website}")
             result_lines.append("")
 
-        return "\n".join(result_lines).strip()
+            # Build structured card for frontend rendering
+            card: Dict[str, Any] = {
+                "card_type": "place",
+                "name": name,
+            }
+            if rating:
+                card["rating"] = str(rating)
+            if rating_count:
+                card["reviews"] = str(rating_count)
+            if address:
+                card["address"] = address
+            if price_level:
+                card["price"] = price_level
+            if phone:
+                card["phone"] = phone
+            if hours_text:
+                card["hours"] = hours_text
+            if maps_uri:
+                card["mapUrl"] = maps_uri
+            if website:
+                card["websiteUrl"] = website
+            place_cards.append(card)
+
+        text_result = "\n".join(result_lines).strip()
+
+        # Return ToolOutput with inline_cards media for frontend rendering
+        media = []
+        if place_cards:
+            media.append({
+                "type": "inline_cards",
+                "data": json.dumps(place_cards),
+                "media_type": "application/json",
+                "metadata": {"for_storage": False},
+            })
+
+        return ToolOutput(text=text_result, media=media)
 
     except httpx.HTTPStatusError as e:
         logger.error(f"Google Places API HTTP error: {e.response.status_code}")
@@ -236,7 +273,25 @@ async def get_directions(
             result_lines.append(f"{i}. {clean}")
         result_lines.append(f"\nGoogle Maps: {maps_link}")
 
-        return "\n".join(result_lines)
+        text_result = "\n".join(result_lines)
+
+        # Build inline card for frontend rendering
+        card = {
+            "card_type": "directions",
+            "origin": start_address,
+            "destination": end_address,
+            "distance": distance,
+            "duration": duration,
+            "mapUrl": maps_link,
+        }
+        media = [{
+            "type": "inline_cards",
+            "data": json.dumps([card]),
+            "media_type": "application/json",
+            "metadata": {"for_storage": False},
+        }]
+
+        return ToolOutput(text=text_result, media=media)
 
     except httpx.HTTPStatusError as e:
         logger.error(f"Directions API HTTP error: {e.response.status_code}")
@@ -321,7 +376,25 @@ async def check_air_quality(
             f"Health Advice: {general_population}",
         ]
 
-        return "\n".join(result_lines)
+        text_result = "\n".join(result_lines)
+
+        # Build inline card for frontend rendering
+        card = {
+            "card_type": "air_quality",
+            "location": formatted_location,
+            "aqi": aqi_value,
+            "category": category,
+            "pollutant": dominant_pollutant,
+            "healthAdvice": general_population,
+        }
+        media = [{
+            "type": "inline_cards",
+            "data": json.dumps([card]),
+            "media_type": "application/json",
+            "metadata": {"for_storage": False},
+        }]
+
+        return ToolOutput(text=text_result, media=media)
 
     except httpx.HTTPStatusError as e:
         logger.error(f"Air Quality API HTTP error: {e.response.status_code}")

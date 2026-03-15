@@ -10,7 +10,7 @@ import json
 import logging
 from typing import Annotated, Any, Dict, List, Optional
 
-from onevalet.models import AgentToolContext
+from onevalet.models import AgentToolContext, ToolOutput
 from onevalet.tool_decorator import tool
 
 from .shipment_repo import ShipmentRepository
@@ -125,6 +125,26 @@ def _find_matching_shipments(
     return matches
 
 
+def _build_shipment_card(data: Dict) -> Dict:
+    """Build a shipment card dict from raw shipment data."""
+    card = {"card_type": "shipment"}
+    if data.get("carrier"):
+        card["carrier"] = data["carrier"].upper() if isinstance(data["carrier"], str) else str(data["carrier"])
+    if data.get("tracking_number"):
+        card["trackingNumber"] = data["tracking_number"]
+    if data.get("status"):
+        card["status"] = data["status"].replace("_", " ").title() if isinstance(data["status"], str) else str(data["status"])
+    if data.get("last_update"):
+        card["lastUpdate"] = data["last_update"]
+    if data.get("estimated_delivery"):
+        card["eta"] = data["estimated_delivery"]
+    if data.get("tracking_url"):
+        card["trackingUrl"] = data["tracking_url"]
+    if data.get("description"):
+        card["description"] = data["description"]
+    return card
+
+
 # =============================================================================
 # track_shipment
 # =============================================================================
@@ -136,24 +156,27 @@ async def _query_one(
     provider,
     repo: Optional[ShipmentRepository],
     tenant_id: str,
-) -> str:
-    """Query a specific shipment by tracking number."""
+) -> tuple:
+    """Query a specific shipment by tracking number.
+    
+    Returns (formatted_text, raw_result_dict_or_None).
+    """
     if not tracking_number:
-        return "No tracking number provided."
+        return "No tracking number provided.", None
 
     if not provider:
-        return "Shipment tracking is not available right now."
+        return "Shipment tracking is not available right now.", None
 
     if not carrier:
         carrier = _detect_carrier(tracking_number)
 
     if not carrier:
-        return f"Could not identify carrier for {tracking_number}. Please specify the carrier."
+        return f"Could not identify carrier for {tracking_number}. Please specify the carrier.", None
 
     result = await provider.track(tracking_number, carrier)
 
     if not result.get("success"):
-        return f"Failed to track {tracking_number}: {result.get('error')}"
+        return f"Failed to track {tracking_number}: {result.get('error')}", None
 
     status = result.get("status", "unknown")
 
@@ -176,7 +199,8 @@ async def _query_one(
             await repo.archive_shipment_by_tracking(tenant_id, tracking_number)
             logger.info(f"Archived {tracking_number} after delivery")
 
-    return _format_shipment_status(result, description)
+    raw_data = {**result, "description": description}
+    return _format_shipment_status(result, description), raw_data
 
 
 @tool
@@ -201,13 +225,16 @@ async def track_shipment(
         if isinstance(tracking_number, list):
             results = []
             errors = []
+            shipment_cards = []
             for tn in tracking_number:
                 try:
-                    text = await _query_one(tn, carrier, description, provider, repo, tenant_id)
+                    text, raw = await _query_one(tn, carrier, description, provider, repo, tenant_id)
                     if "Failed" in text:
                         errors.append(f"{tn}: {text}")
                     else:
                         results.append(f"{tn}:\n{text}")
+                        if raw:
+                            shipment_cards.append(_build_shipment_card(raw))
                 except Exception as e:
                     errors.append(f"{tn}: {e}")
 
@@ -218,9 +245,29 @@ async def track_shipment(
             if errors:
                 parts.append(f"\nFailed to track {len(errors)} package(s):\n")
                 parts.extend(f"{i}. {e}\n" for i, e in enumerate(errors, 1))
-            return "".join(parts).strip() if parts else "No results."
+            text_result = "".join(parts).strip() if parts else "No results."
 
-        return await _query_one(tracking_number, carrier, description, provider, repo, tenant_id)
+            if shipment_cards:
+                media = [{
+                    "type": "inline_cards",
+                    "data": json.dumps(shipment_cards),
+                    "media_type": "application/json",
+                    "metadata": {"for_storage": False},
+                }]
+                return ToolOutput(text=text_result, media=media)
+            return text_result
+
+        text, raw = await _query_one(tracking_number, carrier, description, provider, repo, tenant_id)
+        if raw:
+            card = _build_shipment_card(raw)
+            media = [{
+                "type": "inline_cards",
+                "data": json.dumps([card]),
+                "media_type": "application/json",
+                "metadata": {"for_storage": False},
+            }]
+            return ToolOutput(text=text, media=media)
+        return text
 
     # ----- query_all -----
     if action == "query_all":
@@ -281,7 +328,19 @@ async def track_shipment(
                 }
 
         updated = await asyncio.gather(*[fetch_and_update(s) for s in shipments])
-        return _format_all_shipments(updated)
+        text_result = _format_all_shipments(updated)
+
+        # Build inline cards for frontend rendering
+        shipment_cards = [_build_shipment_card(s) for s in updated if s]
+        if shipment_cards:
+            media = [{
+                "type": "inline_cards",
+                "data": json.dumps(shipment_cards),
+                "media_type": "application/json",
+                "metadata": {"for_storage": False},
+            }]
+            return ToolOutput(text=text_result, media=media)
+        return text_result
 
     # ----- update -----
     if action == "update":

@@ -6,11 +6,12 @@ and handling receipt images.
 """
 
 import base64
+import json
 import logging
 from datetime import date, datetime, timedelta
 from typing import Annotated, Optional
 
-from onevalet.models import AgentToolContext
+from onevalet.models import AgentToolContext, ToolOutput
 from onevalet.tool_decorator import tool
 
 logger = logging.getLogger(__name__)
@@ -264,7 +265,23 @@ async def log_expense(
         if warning:
             result += f" {warning}"
 
-    return result
+    # Build inline card for frontend rendering
+    card = {
+        "card_type": "expense_logged",
+        "description": description or category_lower,
+        "amount": float(amount),
+        "category": category_lower,
+        "date": parsed_date.isoformat(),
+        "currency": currency.upper(),
+    }
+    media = [{
+        "type": "inline_cards",
+        "data": json.dumps([card]),
+        "media_type": "application/json",
+        "metadata": {"for_storage": False},
+    }]
+
+    return ToolOutput(text=result, media=media)
 
 
 # =============================================================================
@@ -316,10 +333,38 @@ async def query_expenses(
     table = _format_expense_table(expenses, currency)
     period_label = period if period else "this month"
 
-    return (
+    text_result = (
         f"Expenses for {period_label} ({len(expenses)} entries, "
         f"total: {_format_amount(total, currency)}):\n\n{table}"
     )
+
+    # Build inline cards for frontend rendering
+    expense_cards = []
+    for exp in expenses:
+        d = exp.get("date", "")
+        if isinstance(d, date):
+            d = d.isoformat()
+        card = {
+            "card_type": "expense_item",
+            "description": exp.get("description", ""),
+            "amount": float(exp.get("amount", 0)),
+            "category": exp.get("category", ""),
+            "date": d,
+            "currency": exp.get("currency", currency),
+            "merchant": exp.get("merchant", ""),
+        }
+        expense_cards.append(card)
+
+    media = []
+    if expense_cards:
+        media.append({
+            "type": "inline_cards",
+            "data": json.dumps(expense_cards),
+            "media_type": "application/json",
+            "metadata": {"for_storage": False},
+        })
+
+    return ToolOutput(text=text_result, media=media)
 
 
 # =============================================================================
@@ -528,6 +573,7 @@ async def spending_summary(
     lines.append("-" * 52)
 
     grand_total = 0.0
+    category_cards = []
     for row in summary:
         cat = row.get("category", "other")[:14]
         total = float(row.get("total_amount", 0))
@@ -535,12 +581,14 @@ async def spending_summary(
         grand_total += total
 
         budget_str = ""
+        budget_pct = None
         if budget_repo:
             budget = await budget_repo.get_budget(context.tenant_id, cat.strip())
             if budget:
                 limit = budget.get("monthly_limit", 0)
                 if limit > 0:
                     pct = (total / limit) * 100
+                    budget_pct = round(pct, 1)
                     budget_str = f"{pct:.0f}% of {_format_amount(limit, currency)}"
                     if total > limit:
                         budget_str += " OVER"
@@ -548,6 +596,15 @@ async def spending_summary(
         lines.append(
             f"{cat:<14} {_format_amount(total, currency):>10}  {count:>5}  {budget_str}"
         )
+
+        cat_card = {
+            "name": cat.strip(),
+            "amount": round(total, 2),
+            "count": count,
+        }
+        if budget_pct is not None:
+            cat_card["budgetPercent"] = budget_pct
+        category_cards.append(cat_card)
 
     lines.append("-" * 52)
 
@@ -567,7 +624,23 @@ async def spending_summary(
         f"{'TOTAL':<14} {_format_amount(grand_total, currency):>10}  {'':>5}  {total_budget_str}"
     )
 
-    return "\n".join(lines)
+    text_result = "\n".join(lines)
+
+    # Build inline card for frontend rendering
+    card = {
+        "card_type": "spending_summary",
+        "period": period_label,
+        "total": round(grand_total, 2),
+        "categories": category_cards,
+    }
+    media = [{
+        "type": "inline_cards",
+        "data": json.dumps([card]),
+        "media_type": "application/json",
+        "metadata": {"for_storage": False},
+    }]
+
+    return ToolOutput(text=text_result, media=media)
 
 
 # =============================================================================
@@ -645,6 +718,7 @@ async def budget_status(
     lines.append(f"{'Category':<14} {'Budget':>10}  {'Spent':>10}  {'Remaining':>10}  {'% Used':>7}")
     lines.append("-" * 62)
 
+    budget_cards_categories = []
     for budget in budgets:
         cat = budget.get("category", "")
         limit = budget.get("monthly_limit", 0)
@@ -676,7 +750,30 @@ async def budget_status(
             f"{pct:>5.0f}%{status_marker}"
         )
 
-    return "\n".join(lines)
+        budget_cards_categories.append({
+            "name": display_cat.strip(),
+            "budget": round(limit, 2),
+            "spent": round(spent, 2),
+            "remaining": round(remaining, 2),
+            "percentUsed": round(pct, 1),
+        })
+
+    text_result = "\n".join(lines)
+
+    # Build inline card for frontend rendering
+    card = {
+        "card_type": "budget_status",
+        "month": today.strftime("%B %Y"),
+        "categories": budget_cards_categories,
+    }
+    media = [{
+        "type": "inline_cards",
+        "data": json.dumps([card]),
+        "media_type": "application/json",
+        "metadata": {"for_storage": False},
+    }]
+
+    return ToolOutput(text=text_result, media=media)
 
 
 # =============================================================================

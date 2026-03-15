@@ -5,13 +5,14 @@ Extracted from CalendarAgent, CreateEventAgent, UpdateEventAgent, and DeleteEven
 """
 
 import html
+import json
 import logging
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Dict, Optional
 
 from onevalet.tool_decorator import tool
-from onevalet.models import AgentToolContext
+from onevalet.models import AgentToolContext, ToolOutput
 
 logger = logging.getLogger(__name__)
 
@@ -150,7 +151,33 @@ async def query_events(
         if len(events) > 10:
             parts.append(f"\n... and {len(events) - 10} more event(s).")
 
-        return "\n".join(parts)
+        text_result = "\n".join(parts)
+
+        # Build inline cards for frontend rendering
+        event_cards = []
+        for event in events[:10]:
+            summary = html.unescape(event.get("summary", "No title"))
+            start_str = _format_event_time(event.get("start"))
+            card = {
+                "card_type": "event",
+                "name": summary,
+                "date": start_str,
+            }
+            location = event.get("location", "")
+            if location:
+                card["location"] = location
+            event_cards.append(card)
+
+        media = []
+        if event_cards:
+            media.append({
+                "type": "inline_cards",
+                "data": json.dumps(event_cards),
+                "media_type": "application/json",
+                "metadata": {"for_storage": False},
+            })
+
+        return ToolOutput(text=text_result, media=media)
 
     except Exception as e:
         logger.error(f"Calendar query failed: {e}", exc_info=True)

@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from typing import Annotated, Any, Dict, List, Optional
 
 from onevalet.tool_decorator import tool
-from onevalet.models import AgentToolContext
+from onevalet.models import AgentToolContext, ToolOutput
 
 logger = logging.getLogger(__name__)
 
@@ -149,7 +149,35 @@ async def query_tasks(
         for failed in failed_accounts:
             parts.append(f"\nCouldn't access {failed}. Please reconnect in settings.")
 
-        return "\n".join(parts)
+        text_result = "\n".join(parts)
+
+        # Build inline cards for frontend rendering
+        if all_tasks:
+            task_cards = []
+            for task in all_tasks:
+                card = {
+                    "card_type": "task_item",
+                    "title": task.get("title", "Untitled"),
+                    "completed": bool(task.get("completed", False)),
+                    "provider": task.get("_account_name", task.get("_provider", "")),
+                }
+                due = task.get("due")
+                if due:
+                    card["dueDate"] = _format_due_date(due)
+                priority = task.get("priority")
+                if priority and priority.lower() not in ("none", "normal", "medium"):
+                    card["priority"] = priority
+                task_cards.append(card)
+
+            media = [{
+                "type": "inline_cards",
+                "data": json.dumps(task_cards),
+                "media_type": "application/json",
+                "metadata": {"for_storage": False},
+            }]
+            return ToolOutput(text=text_result, media=media)
+
+        return text_result
 
     except Exception as e:
         logger.error(f"Task search failed: {e}", exc_info=True)
