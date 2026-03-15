@@ -133,6 +133,12 @@ async def web_fetch_executor(args: dict, context: AgentToolContext = None) -> st
             )
 
         if not text or len(text.strip()) < 30:
+            # Fallback to Jina Reader for JS-rendered pages
+            from .jina_reader import jina_fetch
+            jina_content = await jina_fetch(url)
+            if jina_content:
+                _cache_set(url, jina_content)
+                return jina_content
             return (
                 f"Fetched {url} but could not extract meaningful content. "
                 "The page may require JavaScript or be behind a login."

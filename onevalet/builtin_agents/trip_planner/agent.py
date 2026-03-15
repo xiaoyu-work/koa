@@ -12,7 +12,7 @@ from datetime import datetime
 from onevalet import InputField, valet
 from onevalet.standard_agent import StandardAgent
 
-from .travel_tools import search_flights, search_hotels, get_weather, search_booking_links
+from .travel_tools import search_flights, search_hotels, get_weather
 from onevalet.builtin_agents.maps.tools import search_places, get_directions
 from onevalet.builtin_agents.calendar.tools import query_events, create_event
 from onevalet.builtin_agents.todo.tools import create_task
@@ -52,11 +52,8 @@ Never generate a plan from your training data alone.
 On your FIRST turn, call these tools in parallel:
 1. get_weather — destination weather forecast
 2. search_places — attractions, restaurants, points of interest
-3. search_hotels — accommodation options
-4. search_flights — ONLY if the user provided an origin city. Otherwise skip.
-
-On your SECOND turn (after receiving flight results):
-- If search_flights returned results, call search_booking_links with the same origin/destination/date to get booking page URLs from Google, Expedia, Kayak, etc.
+3. search_hotels — accommodation options (returns real Google Hotels data with prices)
+4. search_flights — ONLY if the user provided an origin city. Returns real Google Flights data with prices and airlines.
 
 You may also use:
 - get_directions — verify travel times between locations. If it returns an error, skip it and estimate travel times yourself. Do NOT retry more than once.
@@ -66,19 +63,25 @@ You may also use:
 Do NOT produce a text-only answer without calling tools first.
 If a tool call fails or returns an error, do NOT retry more than once — proceed with the data you have and note what was unavailable.
 
+## IMPORTANT: Use ONLY real data from tools
+- Flight prices, airlines, and schedules come from Google Flights via search_flights. Present them exactly as returned.
+- Hotel names, prices, and ratings come from Google Hotels via search_hotels. Present them exactly as returned.
+- Do NOT fabricate or estimate prices. If a tool returns no data, say so honestly.
+- Include the Google Flights / Google Hotels source URL so the user can book directly.
+
 ## Plan Format — USE TOOL DATA
 Your itinerary MUST reference the actual data returned by tools. Include:
 - **Weather**: temperature, conditions, what to wear
 - **Places**: name, address, rating, opening hours, estimated visit time
-- **Hotels**: name, price per night, location
-- **Flights**: airline, departure/arrival times, price, and booking links from search_booking_links
+- **Hotels**: name, price per night, location — from search_hotels results
+- **Flights**: airline, departure/arrival times, price — from search_flights results, with source link
 
 Structure:
 - **Weather & Clothing** (from get_weather)
 - **Day 1..N** with morning / afternoon / evening blocks — each POI with address, rating, and hours
 - **Accommodation Options** (from search_hotels, if available)
-- **Flight Options** (from search_flights, only if origin was provided) with booking links (from search_booking_links)
-- **Estimated Budget**
+- **Flight Options** (from search_flights, only if origin was provided) with Google Flights link
+- **Estimated Budget** based on actual tool data
 
 Keep routing realistic: avoid long zig-zag travel within a day.
 Only execute write actions (calendar/todo) after explicit user consent.
@@ -107,7 +110,6 @@ Only execute write actions (calendar/todo) after explicit user consent.
         search_places,
         get_directions,
         search_flights,
-        search_booking_links,
         search_hotels,
         query_events,
         create_event,

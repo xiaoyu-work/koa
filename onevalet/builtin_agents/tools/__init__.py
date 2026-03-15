@@ -10,6 +10,7 @@ Provides executor functions and schemas for orchestrator-level tools:
 
 from .google_search import google_search_executor, GOOGLE_SEARCH_SCHEMA
 from .web_fetch import web_fetch_executor, WEB_FETCH_SCHEMA
+from .jina_reader import jina_fetch
 from .important_dates import IMPORTANT_DATES_TOOL_DEFS
 from .user_tools import (
     get_user_accounts_executor,
@@ -23,6 +24,7 @@ __all__ = [
     "GOOGLE_SEARCH_SCHEMA",
     "web_fetch_executor",
     "WEB_FETCH_SCHEMA",
+    "jina_fetch",
     "IMPORTANT_DATES_TOOL_DEFS",
     "get_user_accounts_executor",
     "get_user_profile_executor",

@@ -1,16 +1,19 @@
 """
 Travel Tools — Standalone API functions for TravelAgent's mini ReAct loop.
 
-Extracted from FlightSearchAgent, HotelSearchAgent, and WeatherAgent.
+Uses Jina Reader to fetch real-time data from Google Flights and Google Hotels.
+Weather data via WeatherAPI.
 """
 
 import logging
 import os
-from datetime import datetime, timedelta
-from typing import Annotated, Any, Dict, Optional
+import re
+import urllib.parse
+from typing import Annotated, Any, Optional
 
 import httpx
 
+from onevalet.builtin_agents.tools.jina_reader import jina_fetch
 from onevalet.models import AgentToolContext
 from onevalet.tool_decorator import tool
 
@@ -18,231 +21,84 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# Shared Helpers
+# search_flights  (via Jina Reader + Google Flights)
 # =============================================================================
 
-async def _get_amadeus_token() -> Optional[str]:
-    """Get Amadeus API OAuth2 access token."""
-    api_key = os.getenv("AMADEUS_API_KEY", "")
-    api_secret = os.getenv("AMADEUS_API_SECRET", "")
-    if not api_key or not api_secret:
-        return None
-
-    try:
-        url = "https://test.api.amadeus.com/v1/security/oauth2/token"
-        data = {
-            "grant_type": "client_credentials",
-            "client_id": api_key,
-            "client_secret": api_secret,
-        }
-        async with httpx.AsyncClient() as client:
-            response = await client.post(url, data=data, timeout=10.0)
-            response.raise_for_status()
-            result = response.json()
-        return result.get("access_token")
-    except Exception as e:
-        logger.error(f"Failed to get Amadeus token: {e}")
-        return None
-
-
-_COMMON_IATA = {
-    "seattle": "SEA", "new york": "JFK", "nyc": "JFK",
-    "los angeles": "LAX", "la": "LAX", "san francisco": "SFO",
-    "chicago": "ORD", "boston": "BOS", "miami": "MIA",
-    "atlanta": "ATL", "dallas": "DFW", "denver": "DEN",
-    "las vegas": "LAS", "portland": "PDX", "london": "LHR",
-    "paris": "CDG", "tokyo": "NRT", "beijing": "PEK",
-    "shanghai": "PVG", "hong kong": "HKG", "singapore": "SIN",
-    "dubai": "DXB", "sydney": "SYD", "toronto": "YYZ",
-}
-
-
-async def _convert_to_iata(location: str, llm_client: Any) -> str:
-    """Convert city name to 3-letter IATA airport code."""
-    if not location:
-        return ""
-
-    location_lower = location.lower().strip()
-
-    # Already an IATA code
-    if len(location) == 3 and location.isalpha():
-        return location.upper()
-
-    # Common lookup
-    if location_lower in _COMMON_IATA:
-        return _COMMON_IATA[location_lower]
-
-    # LLM fallback
-    if llm_client:
-        try:
-            result = await llm_client.chat_completion(
-                messages=[
-                    {"role": "system", "content": "You convert locations to IATA airport codes."},
-                    {"role": "user", "content": (
-                        f'Convert this location to IATA airport code.\n'
-                        f'Location: "{location}"\n'
-                        f'Return ONLY the 3-letter IATA code, nothing else.\n'
-                        f'If you don\'t know, return "UNKNOWN".\nIATA code:'
-                    )},
-                ],
-                enable_thinking=False,
-            )
-            code = result.content.strip().upper()
-            if code != "UNKNOWN" and len(code) == 3:
-                return code
-        except Exception as e:
-            logger.error(f"LLM IATA conversion failed: {e}")
-
-    return location.upper()[:3]
-
-
-def _build_google_flights_url(
-    origin: str, destination: str, date: str, return_date: str = ""
-) -> str:
-    """Build a Google Flights search URL."""
-    # Google Flights URL format: /flights/SEA/LAX/2026-03-16
-    base = f"https://www.google.com/travel/flights?q=Flights+from+{origin}+to+{destination}+on+{date}"
+def _build_google_flights_query_url(origin: str, destination: str, date: str, return_date: str = "") -> str:
+    """Build a Google Flights search URL using natural language query."""
+    query = f"flights from {origin} to {destination} on {date}"
     if return_date:
-        base += f"+returning+{return_date}"
-    return base
+        query += f" return {return_date}"
+    return f"https://www.google.com/travel/flights?q={urllib.parse.quote(query)}"
 
-
-# =============================================================================
-# search_flights
-# =============================================================================
 
 @tool
 async def search_flights(
-    origin: Annotated[str, "Origin city or IATA code"],
-    destination: Annotated[str, "Destination city or IATA code"],
+    origin: Annotated[str, "Origin city or airport code"],
+    destination: Annotated[str, "Destination city or airport code"],
     date: Annotated[str, "Departure date YYYY-MM-DD"],
     return_date: Annotated[str, "Return date YYYY-MM-DD"] = "",
     *,
     context: AgentToolContext,
 ) -> str:
-    """Find flight options with prices and schedules."""
+    """Find real-time flight options with prices from Google Flights."""
 
     if not origin or not destination or not date:
         return "Error: origin, destination, and date are all required."
 
-    if not os.getenv("AMADEUS_API_KEY") or not os.getenv("AMADEUS_API_SECRET"):
-        return "Flight search unavailable: AMADEUS_API_KEY and AMADEUS_API_SECRET not set. Please configure them in Settings > API Keys."
+    url = _build_google_flights_query_url(origin, destination, date, return_date)
+    logger.info("Flight search via Jina Reader: %s -> %s on %s | URL: %s", origin, destination, date, url)
 
-    token = await _get_amadeus_token()
-    if not token:
-        return "Couldn't connect to flight search service. Try again later?"
+    content = await jina_fetch(url, max_chars=20000)
+    if not content:
+        return (
+            f"Could not retrieve flight data for {origin} → {destination} on {date}. "
+            f"You can search manually: {url}"
+        )
 
-    try:
-        origin_code = await _convert_to_iata(origin, context.llm_client)
-        dest_code = await _convert_to_iata(destination, context.llm_client)
+    # Extract just the flight results section to save tokens
+    lines = content.split("\n")
+    result_lines = []
+    in_results = False
+    for line in lines:
+        stripped = line.strip()
+        if any(kw in stripped.lower() for kw in ["departing flight", "top departing", "search results", "sorted by"]):
+            in_results = True
+        if in_results:
+            result_lines.append(line)
+        # Also capture price/cheapest indicators before results section
+        if not in_results and ("$" in stripped or "round trip" in stripped.lower()):
+            if any(c.isdigit() for c in stripped):
+                result_lines.append(line)
 
-        logger.info(f"Flight search: {origin}({origin_code}) -> {destination}({dest_code}) on {date}")
+    if result_lines:
+        extracted = "\n".join(result_lines)
+    else:
+        extracted = content
 
-        url = "https://test.api.amadeus.com/v2/shopping/flight-offers"
-        params = {
-            "originLocationCode": origin_code,
-            "destinationLocationCode": dest_code,
-            "departureDate": date,
-            "adults": "1",
-            "max": "5",
-            "currencyCode": "USD",
-        }
-        if return_date:
-            params["returnDate"] = return_date
+    # Truncate to reasonable size for LLM
+    if len(extracted) > 8000:
+        extracted = extracted[:8000] + "\n\n[Results truncated]"
 
-        headers = {"Authorization": f"Bearer {token}"}
-
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url, params=params, headers=headers, timeout=20.0)
-            response.raise_for_status()
-            data = response.json()
-
-        offers = data.get("data", [])
-        if not offers:
-            return f"No flights found from {origin} to {destination} on {date}. Try different dates?"
-
-        trip_type = f"return {return_date}" if return_date else "one-way"
-        lines = [f"Flights {origin_code} → {dest_code} on {date} ({trip_type}):\n"]
-
-        for i, offer in enumerate(offers[:5], 1):
-            price = offer.get("price", {}).get("total", "N/A")
-            currency = offer.get("price", {}).get("currency", "USD")
-            itineraries = offer.get("itineraries", [])
-            if not itineraries:
-                continue
-            outbound = itineraries[0]
-            segments = outbound.get("segments", [])
-            if not segments:
-                continue
-            first_seg = segments[0]
-            last_seg = segments[-1]
-            carrier = first_seg.get("carrierCode", "")
-            flight_num = first_seg.get("number", "")
-            dep_time = first_seg.get("departure", {}).get("at", "")
-            arr_time = last_seg.get("arrival", {}).get("at", "")
-            stops = len(segments) - 1
-            stops_text = "Direct" if stops == 0 else f"{stops} stop{'s' if stops > 1 else ''}"
-            lines.append(f"{i}. {carrier}{flight_num} | {currency} {price} | {stops_text}")
-            lines.append(f"   Departs: {dep_time}")
-            lines.append(f"   Arrives: {arr_time}")
-            if len(itineraries) > 1:
-                ret = itineraries[1]
-                ret_segs = ret.get("segments", [])
-                if ret_segs:
-                    r_first = ret_segs[0]
-                    r_last = ret_segs[-1]
-                    r_stops = len(ret_segs) - 1
-                    r_stops_text = "Direct" if r_stops == 0 else f"{r_stops} stop{'s' if r_stops > 1 else ''}"
-                    lines.append(
-                        f"   Return: {r_first.get('carrierCode', '')}{r_first.get('number', '')} | "
-                        f"{r_first.get('departure', {}).get('at', '')} → "
-                        f"{r_last.get('arrival', {}).get('at', '')} | {r_stops_text}"
-                    )
-            lines.append("")
-
-        # Google Flights booking link
-        gf_url = _build_google_flights_url(origin_code, dest_code, date, return_date)
-        lines.append(f"🔗 Book on Google Flights: {gf_url}")
-
-        return "\n".join(lines).strip()
-
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 400:
-            return "Invalid search: please check your dates and locations."
-        elif e.response.status_code == 401:
-            return "Flight search authentication failed. Please contact support."
-        return "Couldn't search flights. Try again later?"
-    except Exception as e:
-        logger.error(f"Flight search failed: {e}", exc_info=True)
-        return "Couldn't search flights. Try again later?"
+    return (
+        f"Google Flights results for {origin} → {destination} on {date}"
+        + (f" (return {return_date})" if return_date else "")
+        + f"\nSource: {url}\n\n{extracted}"
+    )
 
 
 # =============================================================================
-# search_hotels
+# search_hotels  (via Jina Reader + Google Hotels)
 # =============================================================================
 
-async def _geocode_location(location: str) -> Optional[Dict[str, float]]:
-    """Convert location name to lat/lng via Google Geocoding API."""
-    google_api_key = os.getenv("GOOGLE_MAPS_API_KEY", "")
-    if not google_api_key:
-        return None
-
-    try:
-        url = "https://maps.googleapis.com/maps/api/geocode/json"
-        params = {"address": location, "key": google_api_key}
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url, params=params, timeout=10.0)
-            response.raise_for_status()
-            data = response.json()
-
-        if data["status"] != "OK" or not data.get("results"):
-            return None
-
-        coords = data["results"][0]["geometry"]["location"]
-        return {"latitude": coords["lat"], "longitude": coords["lng"]}
-    except Exception as e:
-        logger.error(f"Geocoding failed: {e}")
-        return None
+def _build_google_hotels_url(location: str, check_in: str, check_out: str = "") -> str:
+    """Build a Google Hotels search URL."""
+    query = f"hotels in {location}"
+    if check_in:
+        query += f" {check_in}"
+    if check_out:
+        query += f" to {check_out}"
+    return f"https://www.google.com/travel/hotels?q={urllib.parse.quote(query)}"
 
 
 @tool
@@ -253,101 +109,34 @@ async def search_hotels(
     *,
     context: AgentToolContext,
 ) -> str:
-    """Find hotel options with nightly prices."""
+    """Find real-time hotel options with prices from Google Hotels."""
 
     if not location or not check_in:
         return "Error: location and check_in date are required."
 
-    # Default to 1 night if check_out not specified
-    if not check_out and check_in:
-        try:
-            check_in_date = datetime.strptime(check_in, "%Y-%m-%d")
-            check_out = (check_in_date + timedelta(days=1)).strftime("%Y-%m-%d")
-        except ValueError:
-            return f"Invalid date format: {check_in}. Use YYYY-MM-DD."
+    url = _build_google_hotels_url(location, check_in, check_out)
+    logger.info("Hotel search via Jina Reader: %s (%s to %s) | URL: %s", location, check_in, check_out, url)
 
-    if not os.getenv("AMADEUS_API_KEY") or not os.getenv("AMADEUS_API_SECRET"):
-        return "Hotel search unavailable: AMADEUS_API_KEY and AMADEUS_API_SECRET not set. Please configure them in Settings > API Keys."
+    content = await jina_fetch(url, max_chars=20000)
+    if not content:
+        return (
+            f"Could not retrieve hotel data for {location} on {check_in}. "
+            f"You can search manually: {url}"
+        )
 
-    token = await _get_amadeus_token()
-    if not token:
-        return "Couldn't connect to hotel search service. Try again later?"
+    # Truncate to reasonable size for LLM
+    if len(content) > 8000:
+        content = content[:8000] + "\n\n[Results truncated]"
 
-    try:
-        coords = await _geocode_location(location)
-        if not coords:
-            return f"Couldn't find location: {location}. Please be more specific?"
-
-        logger.info(f"Hotel search: {location} ({check_in} to {check_out})")
-
-        headers = {"Authorization": f"Bearer {token}"}
-
-        # Step 1: Find hotels by geocode
-        url = "https://test.api.amadeus.com/v1/reference-data/locations/hotels/by-geocode"
-        params = {
-            "latitude": coords["latitude"],
-            "longitude": coords["longitude"],
-            "radius": 5,
-            "radiusUnit": "KM",
-        }
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url, params=params, headers=headers, timeout=15.0)
-            response.raise_for_status()
-            hotels_data = response.json()
-
-        hotel_ids = [h.get("hotelId") for h in hotels_data.get("data", [])[:10]]
-        if not hotel_ids:
-            return f"No hotels found in {location}. Try a different area?"
-
-        # Step 2: Get offers for those hotels
-        offers_url = "https://test.api.amadeus.com/v3/shopping/hotel-offers"
-        offers_params = {
-            "hotelIds": ",".join(hotel_ids[:5]),
-            "checkInDate": check_in,
-            "checkOutDate": check_out,
-            "adults": "1",
-            "currency": "USD",
-        }
-        async with httpx.AsyncClient() as client:
-            response = await client.get(offers_url, params=offers_params, headers=headers, timeout=20.0)
-            response.raise_for_status()
-            offers_data = response.json()
-
-        offers = offers_data.get("data", [])
-        if not offers:
-            return f"No available hotels in {location} for {check_in} to {check_out}. Try different dates?"
-
-        lines = [f"Hotels in {location} ({check_in} to {check_out}):\n"]
-        for i, offer in enumerate(offers[:5], 1):
-            hotel = offer.get("hotel", {})
-            hotel_offers = offer.get("offers", [])
-            if not hotel_offers:
-                continue
-            best = hotel_offers[0]
-            name = hotel.get("name", "Unknown Hotel")
-            price = best.get("price", {}).get("total", "N/A")
-            currency = best.get("price", {}).get("currency", "USD")
-            rating = hotel.get("rating", "N/A")
-            lines.append(f"{i}. {name}")
-            lines.append(f"   Price: {currency} {price}/night")
-            lines.append(f"   Rating: {rating}/5")
-            lines.append("")
-
-        return "\n".join(lines).strip()
-
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 400:
-            return "Invalid search: please check your dates."
-        elif e.response.status_code == 401:
-            return "Hotel search authentication failed. Please contact support."
-        return "Couldn't search hotels. Try again later?"
-    except Exception as e:
-        logger.error(f"Hotel search failed: {e}", exc_info=True)
-        return "Couldn't search hotels. Try again later?"
+    return (
+        f"Google Hotels results for {location} ({check_in}"
+        + (f" to {check_out}" if check_out else "")
+        + f")\nSource: {url}\n\n{content}"
+    )
 
 
 # =============================================================================
-# check_weather
+# get_weather  (unchanged — WeatherAPI works fine)
 # =============================================================================
 
 @tool
@@ -420,27 +209,3 @@ async def get_weather(
     except Exception as e:
         logger.error(f"Weather API failed: {e}", exc_info=True)
         return "Couldn't get the weather. Try again later?"
-
-
-# =============================================================================
-# search_booking_links  (uses Google Search to find bookable flight pages)
-# =============================================================================
-
-@tool
-async def search_booking_links(
-    origin: Annotated[str, "Origin city or airport code"],
-    destination: Annotated[str, "Destination city or airport code"],
-    date: Annotated[str, "Departure date YYYY-MM-DD"],
-    *,
-    context: AgentToolContext,
-) -> str:
-    """Search Google for flight booking pages and return links from Expedia, Kayak, Google Flights, etc."""
-
-    from onevalet.builtin_agents.tools.google_search import google_search_executor
-
-    query = f"book flights from {origin} to {destination} on {date}"
-    result = await google_search_executor(
-        {"query": query, "num_results": 5, "search_type": "web"},
-        context=context,
-    )
-    return result
