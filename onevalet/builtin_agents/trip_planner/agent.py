@@ -12,7 +12,7 @@ from datetime import datetime
 from onevalet import InputField, valet
 from onevalet.standard_agent import StandardAgent
 
-from .travel_tools import search_flights, search_hotels, get_weather
+from .travel_tools import search_flights, search_hotels, get_weather, search_booking_links
 from onevalet.builtin_agents.maps.tools import search_places, get_directions
 from onevalet.builtin_agents.calendar.tools import query_events, create_event
 from onevalet.builtin_agents.todo.tools import create_task
@@ -55,6 +55,9 @@ On your FIRST turn, call these tools in parallel:
 3. search_hotels — accommodation options
 4. search_flights — ONLY if the user provided an origin city. Otherwise skip.
 
+On your SECOND turn (after receiving flight results):
+- If search_flights returned results, call search_booking_links with the same origin/destination/date to get booking page URLs from Google, Expedia, Kayak, etc.
+
 You may also use:
 - get_directions — verify travel times between locations
 - query_events — check calendar for conflicts
@@ -67,13 +70,13 @@ Your itinerary MUST reference the actual data returned by tools. Include:
 - **Weather**: temperature, conditions, what to wear
 - **Places**: name, address, rating, opening hours, estimated visit time
 - **Hotels**: name, price per night, location
-- **Flights**: airline, departure/arrival times, price
+- **Flights**: airline, departure/arrival times, price, and booking links from search_booking_links
 
 Structure:
 - **Weather & Clothing** (from get_weather)
 - **Day 1..N** with morning / afternoon / evening blocks — each POI with address, rating, and hours
 - **Accommodation Options** (from search_hotels, if available)
-- **Flight Options** (from search_flights, only if origin was provided)
+- **Flight Options** (from search_flights, only if origin was provided) with booking links (from search_booking_links)
 - **Estimated Budget**
 
 Keep routing realistic: avoid long zig-zag travel within a day.
@@ -103,6 +106,7 @@ Only execute write actions (calendar/todo) after explicit user consent.
         search_places,
         get_directions,
         search_flights,
+        search_booking_links,
         search_hotels,
         query_events,
         create_event,

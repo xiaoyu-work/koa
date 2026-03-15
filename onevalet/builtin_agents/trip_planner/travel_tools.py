@@ -96,6 +96,17 @@ async def _convert_to_iata(location: str, llm_client: Any) -> str:
     return location.upper()[:3]
 
 
+def _build_google_flights_url(
+    origin: str, destination: str, date: str, return_date: str = ""
+) -> str:
+    """Build a Google Flights search URL."""
+    # Google Flights URL format: /flights/SEA/LAX/2026-03-16
+    base = f"https://www.google.com/travel/flights?q=Flights+from+{origin}+to+{destination}+on+{date}"
+    if return_date:
+        base += f"+returning+{return_date}"
+    return base
+
+
 # =============================================================================
 # search_flights
 # =============================================================================
@@ -188,6 +199,10 @@ async def search_flights(
                         f"{r_last.get('arrival', {}).get('at', '')} | {r_stops_text}"
                     )
             lines.append("")
+
+        # Google Flights booking link
+        gf_url = _build_google_flights_url(origin_code, dest_code, date, return_date)
+        lines.append(f"🔗 Book on Google Flights: {gf_url}")
 
         return "\n".join(lines).strip()
 
@@ -405,3 +420,27 @@ async def get_weather(
     except Exception as e:
         logger.error(f"Weather API failed: {e}", exc_info=True)
         return "Couldn't get the weather. Try again later?"
+
+
+# =============================================================================
+# search_booking_links  (uses Google Search to find bookable flight pages)
+# =============================================================================
+
+@tool
+async def search_booking_links(
+    origin: Annotated[str, "Origin city or airport code"],
+    destination: Annotated[str, "Destination city or airport code"],
+    date: Annotated[str, "Departure date YYYY-MM-DD"],
+    *,
+    context: AgentToolContext,
+) -> str:
+    """Search Google for flight booking pages and return links from Expedia, Kayak, Google Flights, etc."""
+
+    from onevalet.builtin_agents.tools.google_search import google_search_executor
+
+    query = f"book flights from {origin} to {destination} on {date}"
+    result = await google_search_executor(
+        {"query": query, "num_results": 5, "search_type": "web"},
+        context=context,
+    )
+    return result
