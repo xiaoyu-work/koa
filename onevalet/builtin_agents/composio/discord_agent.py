@@ -7,7 +7,7 @@ using the Composio OAuth proxy platform.
 
 import os
 import logging
-from typing import Annotated
+from typing import Annotated, Optional
 
 from onevalet import valet
 from onevalet.models import AgentToolContext
@@ -22,10 +22,13 @@ logger = logging.getLogger(__name__)
 _ACTION_CREATE_MESSAGE = "DISCORDBOT_CREATE_MESSAGE"
 _ACTION_LIST_GUILD_CHANNELS = "DISCORDBOT_LIST_GUILD_CHANNELS"
 _ACTION_LIST_MY_GUILDS = "DISCORD_LIST_MY_GUILDS"
+_ACTION_GET_MY_USER = "DISCORD_GET_MY_USER"
+_ACTION_LIST_CONNECTIONS = "DISCORD_LIST_MY_CONNECTIONS"
+_ACTION_GET_GUILD_MEMBER = "DISCORD_GET_MY_GUILD_MEMBER"
 _APP_NAME = "discord"
 
 
-def _check_api_key() -> str | None:
+def _check_api_key() -> Optional[str]:
     """Return error message if Composio API key is not configured, else None."""
     if not os.getenv("COMPOSIO_API_KEY"):
         return "Error: Composio API key not configured. Please add it in Settings."

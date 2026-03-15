@@ -1343,15 +1343,43 @@ Return JSON only."""
             if result is not None:
                 return result
 
-        return self.make_result(
-            status=AgentStatus.COMPLETED,
-            raw_message=(
+        # Exhausted max_turns — ask LLM to summarize whatever data it
+        # collected so far instead of returning a generic failure.
+        logger.warning(
+            f"[{self.__class__.__name__}:{self.name}] exhausted {self.max_turns} turns, "
+            f"asking LLM to summarize partial results"
+        )
+        messages.append({
+            "role": "user",
+            "content": (
+                "You have run out of allowed steps. Summarize whatever information "
+                "you have gathered so far and present it to the user. "
+                "If some tool calls failed, briefly note what didn't work. "
+                "Do NOT say you failed — give the user what you have."
+            ),
+        })
+        try:
+            summary_resp = await self.llm_client.chat_completion(
+                messages=messages,
+                tools=None,
+            )
+            summary_msg = summary_resp.content or (
                 "I wasn't able to complete the task within the allowed steps. "
                 "Please try again with more specific information."
-            ),
+            )
+        except Exception:
+            summary_msg = (
+                "I wasn't able to complete the task within the allowed steps. "
+                "Please try again with more specific information."
+            )
+
+        return self.make_result(
+            status=AgentStatus.COMPLETED,
+            raw_message=summary_msg,
             metadata={
                 "tool_trace": list(self._tool_trace),
                 "tool_calls_count": len(self._tool_trace),
+                "partial_result": True,
             },
         )
 

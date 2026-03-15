@@ -1,13 +1,15 @@
 """
 TwitterComposioAgent - Agent for Twitter/X operations via Composio.
 
-Provides post tweets, view timeline, search tweets, and look up users
+Provides post tweets, delete tweets, view timeline, search tweets,
+look up users, like/unlike, retweet, follow, followers/following,
+bookmarks, direct messages, and user tweet history
 using the Composio OAuth proxy platform.
 """
 
 import os
 import logging
-from typing import Annotated
+from typing import Annotated, List, Optional
 
 from onevalet import valet
 from onevalet.models import AgentToolContext
@@ -20,13 +22,25 @@ logger = logging.getLogger(__name__)
 
 # Composio action ID constants for Twitter/X
 _ACTION_CREATE_POST = "TWITTER_CREATION_OF_A_POST"
+_ACTION_DELETE_POST = "TWITTER_DELETION_OF_A_POST"
 _ACTION_HOME_TIMELINE = "TWITTER_USER_HOME_TIMELINE_BY_USER_ID"
 _ACTION_RECENT_SEARCH = "TWITTER_RECENT_SEARCH"
 _ACTION_USER_LOOKUP = "TWITTER_USER_LOOKUP_BY_USERNAME"
+_ACTION_LIKE_POST = "TWITTER_LIKES_A_POST"
+_ACTION_UNLIKE_POST = "TWITTER_UNLIKE_A_POST"
+_ACTION_RETWEET = "TWITTER_CREATION_OF_A_RETWEET"
+_ACTION_FOLLOWERS = "TWITTER_FOLLOWERS_BY_USER_ID"
+_ACTION_FOLLOWING = "TWITTER_FOLLOWING_BY_USER_ID"
+_ACTION_FOLLOW = "TWITTER_FOLLOW_USER"
+_ACTION_BOOKMARKS = "TWITTER_BOOKMARKS_BY_USER"
+_ACTION_ADD_BOOKMARK = "TWITTER_ADD_POST_TO_BOOKMARKS"
+_ACTION_SEND_DM = "TWITTER_CREATE_A_NEW_DM_CONVERSATION"
+_ACTION_GET_DM_EVENTS = "TWITTER_GET_RECENT_DM_EVENTS"
+_ACTION_USER_TWEETS = "TWITTER_USER_TWEETS"
 _APP_NAME = "twitter"
 
 
-def _check_api_key() -> str | None:
+def _check_api_key() -> Optional[str]:
     """Return error message if Composio API key is not configured, else None."""
     if not os.getenv("COMPOSIO_API_KEY"):
         return "Error: Composio API key not configured. Please add it in Settings."

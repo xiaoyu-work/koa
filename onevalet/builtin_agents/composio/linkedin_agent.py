@@ -7,7 +7,7 @@ using the Composio OAuth proxy platform.
 
 import os
 import logging
-from typing import Annotated
+from typing import Annotated, Optional
 
 from onevalet import valet
 from onevalet.models import AgentToolContext
@@ -21,10 +21,12 @@ logger = logging.getLogger(__name__)
 # Composio action ID constants for LinkedIn
 _ACTION_CREATE_POST = "LINKEDIN_CREATE_LINKED_IN_POST"
 _ACTION_GET_MY_INFO = "LINKEDIN_GET_MY_INFO"
+_ACTION_DELETE_POST = "LINKEDIN_DELETE_LINKED_IN_POST"
+_ACTION_GET_COMPANY = "LINKEDIN_GET_COMPANY_INFO"
 _APP_NAME = "linkedin"
 
 
-def _check_api_key() -> str | None:
+def _check_api_key() -> Optional[str]:
     """Return error message if Composio API key is not configured, else None."""
     if not os.getenv("COMPOSIO_API_KEY"):
         return "Error: Composio API key not configured. Please add it in Settings."
