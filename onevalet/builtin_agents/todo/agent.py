@@ -43,7 +43,7 @@ Available tools:
 - set_reminder: Create a time-based reminder (one-time or recurring).
 - manage_reminders: List, update, pause, resume, or delete scheduled reminders and automations.
 
-Today's date: {today} ({weekday})
+Today: {today} ({weekday}), current time: {current_time}, timezone: {timezone}
 
 Instructions:
 1. For task queries (list, search), call query_tasks.
@@ -59,17 +59,21 @@ in your text response WITHOUT calling any tools.
 8. After getting tool results, provide a clear summary to the user."""
 
     def get_system_prompt(self) -> str:
-        user_tz = self.metadata.get("timezone") if self.metadata else None
+        user_tz_str = self.context_hints.get("timezone", "")
         tz = timezone.utc
-        if user_tz and user_tz != "UTC":
+        tz_name = "UTC"
+        if user_tz_str and user_tz_str != "UTC":
             try:
-                tz = ZoneInfo(user_tz)
+                tz = ZoneInfo(user_tz_str)
+                tz_name = user_tz_str
             except Exception:
                 pass
         now = datetime.now(tz)
         return self._SYSTEM_PROMPT_TEMPLATE.format(
             today=now.strftime('%Y-%m-%d'),
             weekday=now.strftime('%A'),
+            current_time=now.strftime('%H:%M'),
+            timezone=tz_name,
         )
 
     tools = (query_tasks, create_task, update_task, delete_task, set_reminder, manage_reminders)
