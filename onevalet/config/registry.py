@@ -227,16 +227,25 @@ class AgentRegistry:
         domain_set = set(domains)
 
         schemas = []
+        matched = []
+        skipped = []
         for name, metadata in self._get_agent_registry().items():
             if not getattr(metadata, "expose_as_tool", True):
                 continue
             # Filter by domain declared on the agent
             agent_domain = getattr(metadata, "domain", None)
             if agent_domain not in domain_set:
+                skipped.append(f"{name}(domain={agent_domain})")
                 continue
+            matched.append(name)
             schema = generate_tool_schema(metadata.agent_class)
             schema = enhance_agent_tool_schema(metadata.agent_class, schema)
             schemas.append(schema)
+
+        logger.info(
+            "[AgentRegistry] domain_filter=%s matched=%s skipped=%s",
+            domains, matched, skipped,
+        )
         return schemas
 
     def get_schema_version(self, agent_type: str) -> Optional[int]:
