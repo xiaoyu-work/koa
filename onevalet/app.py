@@ -347,7 +347,8 @@ class OneValet:
             run_log=cron_run_log,
         )
         self._trigger_engine.set_cron_service(self._cron_service)
-        logger.info("CronService initialized (store: PostgreSQL)")
+        await self._cron_service.start()
+        logger.info("CronService initialized and started (store: PostgreSQL)")
 
         # ShipmentPoller — hourly background refresh with change notifications
         from .services.shipment_poller import ShipmentPoller
