@@ -69,6 +69,9 @@ These examples show how to map user intent to the correct agent:
 - "What's on my schedule today" → CalendarAgent
 - "Create a meeting at 3pm" → CalendarAgent
 - "Plan a trip to Tokyo" → TripPlannerAgent
+- "Find flights from Seattle to New York" → TripPlannerAgent (has real-time flight search with prices)
+- "How much is a flight to LA?" → TripPlannerAgent
+- "Find hotels in Paris" → TripPlannerAgent (has real-time hotel search with prices)
 - "Track my package" → ShippingAgent
 - "Remind me to call mom" → TodoAgent
 - "Find nearby coffee shops" → MapsAgent
