@@ -98,6 +98,27 @@ class ComposioClient:
 
     # ── Connected Accounts ──
 
+    async def _resolve_integration_id(self, app_name: str) -> str:
+        """Resolve an app name (e.g. 'youtube') to its Composio integration UUID.
+
+        The v1 API now requires UUIDs instead of plain app names.
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{BASE_URL}/v1/integrations",
+                headers=self._headers,
+                timeout=15.0,
+            )
+            resp.raise_for_status()
+            items = resp.json().get("items", [])
+
+        for item in items:
+            if item.get("appName", "").lower() == app_name.lower():
+                return item["id"]
+
+        raise ValueError(f"No Composio integration found for '{app_name}'. "
+                         f"Create one at https://app.composio.dev")
+
     async def initiate_connection(
         self,
         app_name: str,
@@ -112,9 +133,12 @@ class ComposioClient:
             entity_id: Entity ID representing the user.
             redirect_url: Optional redirect URL after OAuth completes.
         """
+        integration_id = await self._resolve_integration_id(app_name)
+
         body: Dict[str, Any] = {
-            "integrationId": app_name,
+            "integrationId": integration_id,
             "entityId": entity_id,
+            "data": {},
         }
         if redirect_url:
             body["redirectUrl"] = redirect_url
