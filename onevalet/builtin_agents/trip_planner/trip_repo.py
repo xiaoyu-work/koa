@@ -39,16 +39,12 @@ class TripRepository(Repository):
     ) -> Optional[Dict[str, Any]]:
         """Insert a new trip. Returns the created row."""
         insert_data = {"tenant_id": tenant_id, **data}
-        if "raw_data" in insert_data and isinstance(insert_data["raw_data"], dict):
-            insert_data["raw_data"] = json.dumps(insert_data["raw_data"])
         return await self._insert(insert_data)
 
     async def update_trip(
         self, trip_id: str, data: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
         """Update a trip by id. Returns the updated row."""
-        if "raw_data" in data and isinstance(data["raw_data"], dict):
-            data["raw_data"] = json.dumps(data["raw_data"])
         return await self._update("id", trip_id, data)
 
     async def delete_trip(self, trip_id: str) -> bool:

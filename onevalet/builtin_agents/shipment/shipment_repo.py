@@ -2,7 +2,6 @@
 Shipment Repository - Data access for shipments table.
 """
 
-import json
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -56,10 +55,6 @@ class ShipmentRepository(Repository):
             if key in allowed and value is not None:
                 data[key] = value
 
-        # Serialize tracking_history to JSON string for JSONB column
-        if "tracking_history" in data:
-            data["tracking_history"] = json.dumps(data["tracking_history"])
-
         columns = list(data.keys())
         placeholders = [f"${i + 1}" for i in range(len(columns))]
         values = list(data.values())
@@ -85,8 +80,6 @@ class ShipmentRepository(Repository):
         self, shipment_id: str, data: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
         """Update a shipment by its id."""
-        if "tracking_history" in data:
-            data["tracking_history"] = json.dumps(data["tracking_history"])
         data["updated_at"] = "NOW()"
         # Use _update helper but handle updated_at specially
         # Build manually so we can use NOW() as a SQL expression

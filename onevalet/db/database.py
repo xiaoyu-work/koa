@@ -16,6 +16,7 @@ Usage:
     await db.close()
 """
 
+import json
 import logging
 from typing import Any, List, Optional
 
@@ -52,6 +53,22 @@ class Database:
             )
         return self._pool
 
+    @staticmethod
+    async def _init_connection(conn):
+        """Register JSON codecs so JSONB columns return Python objects."""
+        await conn.set_type_codec(
+            'jsonb',
+            encoder=json.dumps,
+            decoder=json.loads,
+            schema='pg_catalog',
+        )
+        await conn.set_type_codec(
+            'json',
+            encoder=json.dumps,
+            decoder=json.loads,
+            schema='pg_catalog',
+        )
+
     async def initialize(self) -> None:
         """Create the asyncpg connection pool."""
         if self._initialized:
@@ -68,6 +85,7 @@ class Database:
             min_size=self._min_size,
             max_size=self._max_size,
             statement_cache_size=0,
+            init=self._init_connection,
         )
         self._initialized = True
         logger.info("Database pool initialized")
