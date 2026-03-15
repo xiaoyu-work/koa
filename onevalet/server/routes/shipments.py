@@ -41,6 +41,13 @@ class ArchiveByTrackingRequest(BaseModel):
     tracking_number: str
 
 
+class TrackShipmentRequest(BaseModel):
+    tenant_id: str
+    tracking_number: str
+    description: Optional[str] = None
+    carrier: Optional[str] = None
+
+
 # --- Internal Shipment APIs (service-to-service) ---
 
 
@@ -241,3 +248,59 @@ async def internal_refresh_shipments(
     updated = await asyncio.gather(*[refresh_one(s) for s in shipments])
     # Filter out archived (delivered) ones
     return [s for s in updated if s.get("is_active", True)]
+
+
+@router.post("/api/internal/shipments/track")
+async def internal_track_shipment(
+    request: Request,
+    body: TrackShipmentRequest,
+):
+    """Register a tracking number with 17TRACK and save to database. Internal use only."""
+    verify_service_key(request)
+    repo = await _get_repo()
+    provider = TrackingProvider()
+
+    tracking_number = body.tracking_number.strip().upper()
+    carrier = (body.carrier or "").strip().lower()
+    description = body.description or ""
+
+    # Call 17TRACK to register and get initial tracking info
+    if provider.api_key:
+        try:
+            result = await provider.track(tracking_number, carrier)
+            if result.get("success"):
+                carrier = carrier or result.get("carrier", "")
+                shipment = await repo.upsert_shipment(
+                    tenant_id=body.tenant_id,
+                    tracking_number=tracking_number,
+                    carrier=carrier,
+                    tracking_url=result.get("tracking_url"),
+                    status=result.get("status", "unknown"),
+                    description=description,
+                    last_update=result.get("last_update"),
+                    estimated_delivery=result.get("estimated_delivery"),
+                    tracking_history=result.get("events", []),
+                )
+                return shipment or {"tracking_number": tracking_number, "status": "registered"}
+            else:
+                # 17TRACK couldn't find it yet, still save to DB for future polling
+                shipment = await repo.upsert_shipment(
+                    tenant_id=body.tenant_id,
+                    tracking_number=tracking_number,
+                    carrier=carrier,
+                    status="not_found",
+                    description=description,
+                )
+                return shipment or {"tracking_number": tracking_number, "status": "not_found"}
+        except Exception as e:
+            logger.warning(f"17TRACK registration failed for {tracking_number}: {e}")
+
+    # No API key or 17TRACK failed — just save to DB
+    shipment = await repo.upsert_shipment(
+        tenant_id=body.tenant_id,
+        tracking_number=tracking_number,
+        carrier=carrier,
+        status="unknown",
+        description=description,
+    )
+    return shipment or {"tracking_number": tracking_number, "status": "saved"}
