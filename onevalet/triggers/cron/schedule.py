@@ -176,7 +176,11 @@ def compute_job_next_run_at_ms(job: CronJob, now_ms_val: int) -> Optional[int]:
     if isinstance(schedule, AtSchedule):
         if job.state.last_run_status == "ok" and job.state.last_run_at_ms:
             return None
-        return compute_next_run_at_ms(schedule, now_ms_val)
+        # Always return the scheduled time for unexecuted at-jobs, even if
+        # past due.  _fire_due_jobs handles the overdue / missed logic;
+        # returning None here would leave the job stuck forever.
+        at_ms = _parse_iso_to_ms(schedule.at)
+        return at_ms  # may be None only if parsing fails
 
     # "cron" — use stagger
     if isinstance(schedule, CronScheduleSpec):

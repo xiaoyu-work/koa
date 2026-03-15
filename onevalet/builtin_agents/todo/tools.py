@@ -483,7 +483,7 @@ async def set_reminder(
     from onevalet.triggers.cron.models import (
         AtSchedule, CronScheduleSpec,
         SessionTarget, WakeMode,
-        AgentTurnPayload, DeliveryConfig, DeliveryMode,
+        SystemEventPayload, AgentTurnPayload, DeliveryConfig, DeliveryMode,
         CronJobCreate,
     )
 
@@ -512,7 +512,7 @@ async def set_reminder(
             schedule=schedule,
             session_target=SessionTarget.MAIN,
             wake_mode=WakeMode.NOW,
-            payload=AgentTurnPayload(message=f"Reminder: {reminder_message}"),
+            payload=SystemEventPayload(text=f"Reminder: {reminder_message}"),
             delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
             delete_after_run=isinstance(schedule, AtSchedule),
         ))

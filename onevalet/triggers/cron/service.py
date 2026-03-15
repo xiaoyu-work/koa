@@ -281,13 +281,29 @@ class CronService:
 
             due_jobs.append(job)
 
-        # Handle missed one-shot jobs: mark as missed and auto-delete
+        # Handle missed one-shot jobs: notify user and clean up
         for job in missed_jobs:
             overdue_min = (now - (job.state.next_run_at_ms or 0)) / 60000
             logger.warning(
                 f"Skipping overdue one-shot job {job.id} ({job.name}), "
                 f"{overdue_min:.0f}min past due"
             )
+
+            # Still deliver the reminder so the user knows it was missed
+            if job.delivery and job.delivery.mode != "none":
+                try:
+                    missed_text = job.description or job.name
+                    await self._executor._delivery.deliver(
+                        job, missed_text,
+                        CronRunEntry(
+                            ts=now, job_id=job.id, status="missed",
+                            summary=missed_text,
+                        ),
+                    )
+                    logger.info(f"Delivered missed-job notification for {job.id}")
+                except Exception as e:
+                    logger.warning(f"Failed to deliver missed notification for {job.id}: {e}")
+
             job.state.last_run_status = "skipped"
             job.state.last_error = "Missed: too far past scheduled time"
             job.state.last_run_at_ms = now

@@ -212,10 +212,13 @@ class CronExecutor:
 
     async def _execute_main(self, job: CronJob) -> Tuple[Optional[str], Optional[str]]:
         """Main mode: inject system event into main session."""
-        if not isinstance(job.payload, SystemEventPayload):
-            return None, "Main session requires systemEvent payload"
-
-        text = job.payload.text
+        if isinstance(job.payload, SystemEventPayload):
+            text = job.payload.text
+        elif isinstance(job.payload, AgentTurnPayload):
+            # Tolerate AgentTurnPayload in main mode for backwards compatibility
+            text = job.payload.message
+        else:
+            return None, f"Unsupported payload type: {type(job.payload).__name__}"
         message = f"[Cron: {job.name}] {text}"
 
         try:
