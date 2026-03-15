@@ -169,11 +169,13 @@ def oauth_success_html(provider: str, email: str, detail: str) -> HTMLResponse:
     )
 
 
-def oauth_success_redirect(redirect_after: str, provider: str, email: str):
+def oauth_success_redirect(redirect_after: str, provider: str, email: str, tenant_id: str = ""):
     """Redirect to caller-specified URL after successful OAuth."""
     from fastapi.responses import RedirectResponse
     sep = "&" if "?" in redirect_after else "?"
     url = f"{redirect_after}{sep}success=true&provider={provider}&email={email}"
+    if tenant_id:
+        url += f"&tenant_id={tenant_id}"
     return RedirectResponse(url)
 
 

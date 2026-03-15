@@ -105,7 +105,7 @@ async def google_oauth_callback(request: Request, code: str, state: str):
             )
 
         if redirect_after:
-            return oauth_success_redirect(redirect_after, "google", email)
+            return oauth_success_redirect(redirect_after, "google", email, tenant_id)
         return oauth_success_html("google", email, "Gmail, Google Calendar, Tasks, Drive")
     except Exception as e:
         logger.error(f"Google OAuth callback failed: {e}", exc_info=True)
@@ -182,7 +182,7 @@ async def microsoft_oauth_callback(request: Request, code: str, state: str):
             )
 
         if redirect_after:
-            return oauth_success_redirect(redirect_after, "microsoft", email)
+            return oauth_success_redirect(redirect_after, "microsoft", email, tenant_id)
         return oauth_success_html("microsoft", email, "Outlook, Calendar, To Do &amp; OneDrive")
     except Exception as e:
         logger.error(f"Microsoft OAuth callback failed: {e}", exc_info=True)
@@ -279,7 +279,7 @@ async def todoist_oauth_callback(request: Request, code: str, state: str):
         )
 
         if redirect_after:
-            return oauth_success_redirect(redirect_after, "todoist", email)
+            return oauth_success_redirect(redirect_after, "todoist", email, tenant_id)
         return oauth_success_html("todoist", email, "Todoist")
     except Exception as e:
         logger.error(f"Todoist OAuth callback failed: {e}", exc_info=True)
@@ -352,7 +352,7 @@ async def hue_oauth_callback(request: Request, code: str, state: str):
         )
 
         if redirect_after:
-            return oauth_success_redirect(redirect_after, "hue", "")
+            return oauth_success_redirect(redirect_after, "hue", "", tenant_id)
         return oauth_success_html("hue", "", "Philips Hue")
     except Exception as e:
         logger.error(f"Hue OAuth callback failed: {e}", exc_info=True)
@@ -425,7 +425,7 @@ async def sonos_oauth_callback(request: Request, code: str, state: str):
         )
 
         if redirect_after:
-            return oauth_success_redirect(redirect_after, "sonos", "")
+            return oauth_success_redirect(redirect_after, "sonos", "", tenant_id)
         return oauth_success_html("sonos", "", "Sonos")
     except Exception as e:
         logger.error(f"Sonos OAuth callback failed: {e}", exc_info=True)
@@ -500,7 +500,7 @@ async def dropbox_oauth_callback(request: Request, code: str, state: str):
         )
 
         if redirect_after:
-            return oauth_success_redirect(redirect_after, "dropbox", email)
+            return oauth_success_redirect(redirect_after, "dropbox", email, tenant_id)
         return oauth_success_html("dropbox", email, "Dropbox")
     except Exception as e:
         logger.error(f"Dropbox OAuth callback failed: {e}", exc_info=True)
@@ -576,7 +576,7 @@ async def notion_oauth_callback(request: Request, code: str, state: str):
         )
 
         if redirect_after:
-            return oauth_success_redirect(redirect_after, "notion", workspace)
+            return oauth_success_redirect(redirect_after, "notion", workspace, tenant_id)
         return oauth_success_html("notion", workspace, "Notion")
     except Exception as e:
         logger.error(f"Notion OAuth callback failed: {e}", exc_info=True)
@@ -672,7 +672,7 @@ async def composio_oauth_callback(
         )
 
         if redirect_after:
-            return oauth_success_redirect(redirect_after, composio_app, "")
+            return oauth_success_redirect(redirect_after, composio_app, "", tenant_id)
         return oauth_success_html(composio_app, "", label)
     except Exception as e:
         logger.error(f"Composio callback failed for {composio_app}: {e}", exc_info=True)
