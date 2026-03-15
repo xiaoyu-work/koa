@@ -83,6 +83,8 @@ These examples show how to map user intent to the correct agent:
 - "Post on LinkedIn" → LinkedInComposioAgent
 - "Connect my LinkedIn account" → LinkedInComposioAgent
 - "Connect my Discord account" → DiscordComposioAgent
+- "Show my YouTube playlists" → YouTubeComposioAgent
+- "Search YouTube for cooking videos" → YouTubeComposioAgent
 - "Schedule a cron job" → CronAgent
 - "Track my package" → ShippingAgent
 - "Search my cloud storage" / "files in Dropbox" → CloudStorageAgent
