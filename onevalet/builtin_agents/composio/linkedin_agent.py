@@ -100,6 +100,61 @@ async def get_my_profile(
         return f"Error getting LinkedIn profile: {e}"
 
 
+@tool(needs_approval=True, risk_level="write")
+async def delete_post(
+    share_id: Annotated[str, "The ID of the LinkedIn post/share to delete"],
+    *,
+    context: AgentToolContext,
+) -> str:
+    """Delete a LinkedIn post by its share ID."""
+
+    if not share_id:
+        return "Error: share_id is required."
+    if err := _check_api_key():
+        return err
+
+    try:
+        client = ComposioClient()
+        data = await client.execute_action(
+            _ACTION_DELETE_POST,
+            params={"share_id": share_id},
+            entity_id=context.tenant_id or "default",
+        )
+        result = ComposioClient.format_action_result(data)
+        if data.get("successfull") or data.get("successful"):
+            return f"LinkedIn post {share_id} deleted.\n\n{result}"
+        return f"Failed to delete post: {result}"
+    except Exception as e:
+        logger.error(f"LinkedIn delete_post failed: {e}", exc_info=True)
+        return f"Error deleting LinkedIn post: {e}"
+
+
+@tool
+async def get_company_info(
+    *,
+    context: AgentToolContext,
+) -> str:
+    """Get information about organizations where the authenticated user has admin roles."""
+
+    if err := _check_api_key():
+        return err
+
+    try:
+        client = ComposioClient()
+        data = await client.execute_action(
+            _ACTION_GET_COMPANY,
+            params={},
+            entity_id=context.tenant_id or "default",
+        )
+        result = ComposioClient.format_action_result(data)
+        if data.get("successfull") or data.get("successful"):
+            return f"LinkedIn company info:\n\n{result}"
+        return f"Failed to get company info: {result}"
+    except Exception as e:
+        logger.error(f"LinkedIn get_company_info failed: {e}", exc_info=True)
+        return f"Error getting LinkedIn company info: {e}"
+
+
 @tool
 async def connect_linkedin(
     entity_id: Annotated[str, "Entity ID for multi-user setups"] = "default",
@@ -165,17 +220,23 @@ You are a LinkedIn assistant with access to LinkedIn tools via Composio.
 Available tools:
 - create_post: Create a new post on LinkedIn with specified visibility.
 - get_my_profile: Get your LinkedIn profile information (name, headline, etc.).
+- delete_post: Delete a LinkedIn post by its share ID.
+- get_company_info: Get info about organizations where you have admin roles.
 - connect_linkedin: Connect your LinkedIn account (OAuth).
 
 Instructions:
 1. If the user wants to create a post, use create_post with the text and optional visibility (PUBLIC or CONNECTIONS).
 2. If the user wants to see their profile info, use get_my_profile.
-3. If LinkedIn is not yet connected, use connect_linkedin first.
-4. If the user's request is ambiguous, ask for clarification WITHOUT calling any tools.
-5. After getting tool results, provide a clear summary to the user."""
+3. If the user wants to delete a post, use delete_post with the share ID.
+4. If the user wants to see their company/organization info, use get_company_info.
+5. If LinkedIn is not yet connected, use connect_linkedin first.
+6. If the user's request is ambiguous, ask for clarification WITHOUT calling any tools.
+7. After getting tool results, provide a clear summary to the user."""
 
     tools = (
         create_post,
         get_my_profile,
+        delete_post,
+        get_company_info,
         connect_linkedin,
     )

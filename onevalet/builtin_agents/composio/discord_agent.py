@@ -132,6 +132,87 @@ async def list_servers(
 
 
 @tool
+async def get_my_profile(
+    *,
+    context: AgentToolContext,
+) -> str:
+    """Get the authenticated Discord user's profile information."""
+
+    if err := _check_api_key():
+        return err
+
+    try:
+        client = ComposioClient()
+        data = await client.execute_action(
+            _ACTION_GET_MY_USER,
+            params={},
+            entity_id=context.tenant_id or "default",
+        )
+        result = ComposioClient.format_action_result(data)
+        if data.get("successfull") or data.get("successful"):
+            return f"Discord profile:\n\n{result}"
+        return f"Failed to get profile: {result}"
+    except Exception as e:
+        logger.error(f"Discord get_my_profile failed: {e}", exc_info=True)
+        return f"Error getting Discord profile: {e}"
+
+
+@tool
+async def list_connections(
+    *,
+    context: AgentToolContext,
+) -> str:
+    """List connected accounts (integrations) linked to the authenticated Discord user."""
+
+    if err := _check_api_key():
+        return err
+
+    try:
+        client = ComposioClient()
+        data = await client.execute_action(
+            _ACTION_LIST_CONNECTIONS,
+            params={},
+            entity_id=context.tenant_id or "default",
+        )
+        result = ComposioClient.format_action_result(data)
+        if data.get("successfull") or data.get("successful"):
+            return f"Discord connections:\n\n{result}"
+        return f"Failed to list connections: {result}"
+    except Exception as e:
+        logger.error(f"Discord list_connections failed: {e}", exc_info=True)
+        return f"Error listing Discord connections: {e}"
+
+
+@tool
+async def get_guild_member(
+    guild_id: Annotated[str, "Discord guild/server ID to get member info for"],
+    *,
+    context: AgentToolContext,
+) -> str:
+    """Get the authenticated user's member information in a specific Discord guild."""
+
+    if not guild_id:
+        return "Error: guild_id is required."
+    if err := _check_api_key():
+        return err
+
+    try:
+        client = ComposioClient()
+        data = await client.execute_action(
+            _ACTION_GET_GUILD_MEMBER,
+            params={"guild_id": guild_id},
+            entity_id=context.tenant_id or "default",
+        )
+        result = ComposioClient.format_action_result(data)
+        if data.get("successfull") or data.get("successful"):
+            return f"Guild member info for guild {guild_id}:\n\n{result}"
+        return f"Failed to get guild member info: {result}"
+    except Exception as e:
+        logger.error(f"Discord get_guild_member failed: {e}", exc_info=True)
+        return f"Error getting Discord guild member info: {e}"
+
+
+@tool
 async def connect_discord(
     entity_id: Annotated[str, "Entity ID for multi-user setups"] = "default",
     *,
@@ -198,19 +279,28 @@ Available tools:
 - send_message: Send a message to a Discord channel.
 - list_channels: List all channels in a Discord guild/server.
 - list_servers: List all Discord guilds/servers you belong to.
+- get_my_profile: Get your Discord user profile information.
+- list_connections: List connected accounts linked to your Discord user.
+- get_guild_member: Get your member information in a specific guild/server.
 - connect_discord: Connect your Discord account (OAuth).
 
 Instructions:
 1. If the user wants to send a message, use send_message with the channel ID and content.
 2. If the user wants to see channels in a server, use list_channels with the guild/server ID.
 3. If the user wants to see what servers they are in, use list_servers.
-4. If Discord is not yet connected, use connect_discord first.
-5. If the user's request is ambiguous or missing required IDs, ask for clarification WITHOUT calling any tools.
-6. After getting tool results, provide a clear summary to the user."""
+4. If the user wants their Discord profile info, use get_my_profile.
+5. If the user wants to see linked accounts/connections, use list_connections.
+6. If the user wants their member details in a server, use get_guild_member with the guild ID.
+7. If Discord is not yet connected, use connect_discord first.
+8. If the user's request is ambiguous or missing required IDs, ask for clarification WITHOUT calling any tools.
+9. After getting tool results, provide a clear summary to the user."""
 
     tools = (
         send_message,
         list_channels,
         list_servers,
+        get_my_profile,
+        list_connections,
+        get_guild_member,
         connect_discord,
     )

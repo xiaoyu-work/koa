@@ -7,6 +7,20 @@ Tests tool selection, argument extraction, and response quality for:
 - get_playlists: List the current user's Spotify playlists
 - add_to_playlist: Add items to a Spotify playlist
 - now_playing: Get the currently playing track
+- skip_to_next: Skip to the next track
+- skip_to_previous: Skip to the previous track
+- get_recently_played: Get recently played tracks
+- get_top_artists: Get user's top artists
+- get_top_tracks: Get user's top tracks
+- get_queue: Get the current playback queue
+- toggle_shuffle: Toggle shuffle mode
+- set_repeat: Set repeat mode
+- set_volume: Set playback volume
+- save_tracks: Save tracks to library
+- get_recommendations: Get track recommendations
+- get_available_devices: List available devices
+- create_playlist: Create a new playlist
+- get_saved_tracks: Get saved/liked tracks
 - connect_spotify: Connect Spotify account via OAuth
 """
 
@@ -25,6 +39,20 @@ TOOL_SELECTION_CASES = [
     ("Search Spotify for Bohemian Rhapsody by Queen", ["search_music"]),
     ("Show me my Spotify playlists", ["get_playlists"]),
     ("What song is currently playing on Spotify?", ["now_playing"]),
+    ("Skip to the next song on Spotify", ["skip_to_next"]),
+    ("Go back to the previous track", ["skip_to_previous"]),
+    ("What have I been listening to recently?", ["get_recently_played"]),
+    ("Who are my top artists on Spotify?", ["get_top_artists"]),
+    ("Show me my most played tracks", ["get_top_tracks"]),
+    ("What's in my Spotify queue?", ["get_queue"]),
+    ("Turn on shuffle on Spotify", ["toggle_shuffle"]),
+    ("Set Spotify to repeat this track", ["set_repeat"]),
+    ("Set the Spotify volume to 50%", ["set_volume"]),
+    ("Save this song to my Spotify library", ["save_tracks"]),
+    ("Recommend me songs similar to what I listen to", ["get_recommendations"]),
+    ("What Spotify devices are available?", ["get_available_devices"]),
+    ("Create a new Spotify playlist called Road Trip", ["create_playlist"]),
+    ("Show me my liked songs on Spotify", ["get_saved_tracks"]),
 ]
 
 

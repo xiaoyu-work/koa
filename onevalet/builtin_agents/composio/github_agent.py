@@ -7,7 +7,7 @@ using the Composio OAuth proxy platform.
 
 import os
 import logging
-from typing import Annotated, Any, Dict, List
+from typing import Annotated, Any, Dict, List, Optional
 
 from onevalet import valet
 from onevalet.models import AgentToolContext
@@ -245,6 +245,271 @@ async def search_repositories(
 
 
 @tool
+async def get_repository(
+    owner: Annotated[str, "Repository owner (user or organization)"],
+    repo: Annotated[str, "Repository name"],
+    *,
+    context: AgentToolContext,
+) -> str:
+    """Get details about a GitHub repository."""
+
+    if not owner or not repo:
+        return "Error: owner and repo are required."
+    if err := _check_api_key():
+        return err
+
+    try:
+        client = ComposioClient()
+        data = await client.execute_action(
+            _ACTION_GET_REPO,
+            params={"owner": owner, "repo": repo},
+            entity_id=context.tenant_id or "default",
+        )
+        result = ComposioClient.format_action_result(data)
+        if data.get("successfull") or data.get("successful"):
+            return f"Repository {owner}/{repo}:\n\n{result}"
+        return f"Failed to get repository: {result}"
+    except Exception as e:
+        logger.error(f"GitHub get_repository failed: {e}", exc_info=True)
+        return f"Error getting GitHub repository: {e}"
+
+
+@tool
+async def list_commits(
+    owner: Annotated[str, "Repository owner (user or organization)"],
+    repo: Annotated[str, "Repository name"],
+    sha: Annotated[str, "Branch name or commit SHA to list commits from"] = "",
+    per_page: Annotated[int, "Number of commits to return"] = 10,
+    *,
+    context: AgentToolContext,
+) -> str:
+    """List recent commits in a GitHub repository."""
+
+    if not owner or not repo:
+        return "Error: owner and repo are required."
+    if err := _check_api_key():
+        return err
+
+    try:
+        client = ComposioClient()
+        params: Dict[str, Any] = {
+            "owner": owner,
+            "repo": repo,
+            "per_page": per_page,
+        }
+        if sha:
+            params["sha"] = sha
+
+        data = await client.execute_action(
+            _ACTION_LIST_COMMITS,
+            params=params,
+            entity_id=context.tenant_id or "default",
+        )
+        result = ComposioClient.format_action_result(data)
+        if data.get("successfull") or data.get("successful"):
+            return f"Commits in {owner}/{repo}:\n\n{result}"
+        return f"Failed to list commits: {result}"
+    except Exception as e:
+        logger.error(f"GitHub list_commits failed: {e}", exc_info=True)
+        return f"Error listing GitHub commits: {e}"
+
+
+@tool(needs_approval=True, risk_level="write")
+async def merge_pull_request(
+    owner: Annotated[str, "Repository owner (user or organization)"],
+    repo: Annotated[str, "Repository name"],
+    pull_number: Annotated[int, "Pull request number to merge"],
+    merge_method: Annotated[str, "Merge method: 'merge', 'squash', or 'rebase'"] = "merge",
+    *,
+    context: AgentToolContext,
+) -> str:
+    """Merge a pull request in a GitHub repository."""
+
+    if not owner or not repo:
+        return "Error: owner and repo are required."
+    if not pull_number:
+        return "Error: pull_number is required."
+    if err := _check_api_key():
+        return err
+
+    try:
+        client = ComposioClient()
+        data = await client.execute_action(
+            _ACTION_MERGE_PR,
+            params={
+                "owner": owner,
+                "repo": repo,
+                "pull_number": pull_number,
+                "merge_method": merge_method,
+            },
+            entity_id=context.tenant_id or "default",
+        )
+        result = ComposioClient.format_action_result(data)
+        if data.get("successfull") or data.get("successful"):
+            return f"Pull request #{pull_number} merged in {owner}/{repo}.\n\n{result}"
+        return f"Failed to merge pull request: {result}"
+    except Exception as e:
+        logger.error(f"GitHub merge_pull_request failed: {e}", exc_info=True)
+        return f"Error merging GitHub pull request: {e}"
+
+
+@tool
+async def list_branches(
+    owner: Annotated[str, "Repository owner (user or organization)"],
+    repo: Annotated[str, "Repository name"],
+    *,
+    context: AgentToolContext,
+) -> str:
+    """List branches in a GitHub repository."""
+
+    if not owner or not repo:
+        return "Error: owner and repo are required."
+    if err := _check_api_key():
+        return err
+
+    try:
+        client = ComposioClient()
+        data = await client.execute_action(
+            _ACTION_LIST_BRANCHES,
+            params={"owner": owner, "repo": repo},
+            entity_id=context.tenant_id or "default",
+        )
+        result = ComposioClient.format_action_result(data)
+        if data.get("successfull") or data.get("successful"):
+            return f"Branches in {owner}/{repo}:\n\n{result}"
+        return f"Failed to list branches: {result}"
+    except Exception as e:
+        logger.error(f"GitHub list_branches failed: {e}", exc_info=True)
+        return f"Error listing GitHub branches: {e}"
+
+
+@tool(needs_approval=True, risk_level="write")
+async def star_repo(
+    owner: Annotated[str, "Repository owner (user or organization)"],
+    repo: Annotated[str, "Repository name"],
+    *,
+    context: AgentToolContext,
+) -> str:
+    """Star a GitHub repository for the authenticated user."""
+
+    if not owner or not repo:
+        return "Error: owner and repo are required."
+    if err := _check_api_key():
+        return err
+
+    try:
+        client = ComposioClient()
+        data = await client.execute_action(
+            _ACTION_STAR_REPO,
+            params={"owner": owner, "repo": repo},
+            entity_id=context.tenant_id or "default",
+        )
+        result = ComposioClient.format_action_result(data)
+        if data.get("successfull") or data.get("successful"):
+            return f"Starred {owner}/{repo}.\n\n{result}"
+        return f"Failed to star repository: {result}"
+    except Exception as e:
+        logger.error(f"GitHub star_repo failed: {e}", exc_info=True)
+        return f"Error starring GitHub repository: {e}"
+
+
+@tool
+async def list_notifications(
+    all: Annotated[bool, "If True, show all notifications including read ones"] = False,
+    *,
+    context: AgentToolContext,
+) -> str:
+    """List GitHub notifications for the authenticated user."""
+
+    if err := _check_api_key():
+        return err
+
+    try:
+        client = ComposioClient()
+        data = await client.execute_action(
+            _ACTION_LIST_NOTIFICATIONS,
+            params={"all": all},
+            entity_id=context.tenant_id or "default",
+        )
+        result = ComposioClient.format_action_result(data)
+        if data.get("successfull") or data.get("successful"):
+            return f"GitHub notifications:\n\n{result}"
+        return f"Failed to list notifications: {result}"
+    except Exception as e:
+        logger.error(f"GitHub list_notifications failed: {e}", exc_info=True)
+        return f"Error listing GitHub notifications: {e}"
+
+
+@tool(needs_approval=True, risk_level="write")
+async def create_issue_comment(
+    owner: Annotated[str, "Repository owner (user or organization)"],
+    repo: Annotated[str, "Repository name"],
+    issue_number: Annotated[int, "Issue or pull request number to comment on"],
+    body: Annotated[str, "Comment text"],
+    *,
+    context: AgentToolContext,
+) -> str:
+    """Create a comment on a GitHub issue or pull request."""
+
+    if not owner or not repo:
+        return "Error: owner and repo are required."
+    if not issue_number:
+        return "Error: issue_number is required."
+    if not body:
+        return "Error: body is required."
+    if err := _check_api_key():
+        return err
+
+    try:
+        client = ComposioClient()
+        data = await client.execute_action(
+            _ACTION_CREATE_COMMENT,
+            params={
+                "owner": owner,
+                "repo": repo,
+                "issue_number": issue_number,
+                "body": body,
+            },
+            entity_id=context.tenant_id or "default",
+        )
+        result = ComposioClient.format_action_result(data)
+        if data.get("successfull") or data.get("successful"):
+            return f"Comment added to {owner}/{repo}#{issue_number}.\n\n{result}"
+        return f"Failed to create comment: {result}"
+    except Exception as e:
+        logger.error(f"GitHub create_issue_comment failed: {e}", exc_info=True)
+        return f"Error creating GitHub issue comment: {e}"
+
+
+@tool
+async def list_my_repos(
+    per_page: Annotated[int, "Number of repositories to return"] = 10,
+    sort: Annotated[str, "Sort by: 'created', 'updated', 'pushed', or 'full_name'"] = "updated",
+    *,
+    context: AgentToolContext,
+) -> str:
+    """List repositories for the authenticated GitHub user."""
+
+    if err := _check_api_key():
+        return err
+
+    try:
+        client = ComposioClient()
+        data = await client.execute_action(
+            _ACTION_LIST_USER_REPOS,
+            params={"per_page": per_page, "sort": sort},
+            entity_id=context.tenant_id or "default",
+        )
+        result = ComposioClient.format_action_result(data)
+        if data.get("successfull") or data.get("successful"):
+            return f"Your GitHub repositories:\n\n{result}"
+        return f"Failed to list repositories: {result}"
+    except Exception as e:
+        logger.error(f"GitHub list_my_repos failed: {e}", exc_info=True)
+        return f"Error listing GitHub repositories: {e}"
+
+
+@tool
 async def connect_github(
     entity_id: Annotated[str, "Entity ID for multi-user setups"] = "default",
     *,
@@ -313,6 +578,14 @@ Available tools:
 - create_pull_request: Create a new pull request.
 - list_pull_requests: List pull requests in a repository.
 - search_repositories: Search GitHub repositories by keyword.
+- get_repository: Get details about a specific repository.
+- list_commits: List recent commits in a repository.
+- merge_pull_request: Merge a pull request (merge, squash, or rebase).
+- list_branches: List branches in a repository.
+- star_repo: Star a repository for the authenticated user.
+- list_notifications: List GitHub notifications.
+- create_issue_comment: Comment on an issue or pull request.
+- list_my_repos: List the authenticated user's repositories.
 - connect_github: Connect your GitHub account (OAuth).
 
 Instructions:
@@ -321,9 +594,17 @@ Instructions:
 3. If the user wants to create a PR, use create_pull_request with owner, repo, title, head, and base.
 4. If the user wants to see PRs, use list_pull_requests with owner, repo, and optional state filter.
 5. If the user wants to find repositories, use search_repositories with a keyword query.
-6. If GitHub is not yet connected, use connect_github first.
-7. If the user's request is ambiguous or missing repository info, ask for clarification WITHOUT calling any tools.
-8. After getting tool results, provide a clear summary to the user."""
+6. If the user wants details about a repo, use get_repository with owner and repo.
+7. If the user wants to see recent commits, use list_commits with owner and repo.
+8. If the user wants to merge a PR, use merge_pull_request with owner, repo, pull_number, and optional merge_method.
+9. If the user wants to see branches, use list_branches with owner and repo.
+10. If the user wants to star a repo, use star_repo with owner and repo.
+11. If the user wants to check notifications, use list_notifications.
+12. If the user wants to comment on an issue/PR, use create_issue_comment with owner, repo, issue_number, and body.
+13. If the user wants to see their own repos, use list_my_repos.
+14. If GitHub is not yet connected, use connect_github first.
+15. If the user's request is ambiguous or missing repository info, ask for clarification WITHOUT calling any tools.
+16. After getting tool results, provide a clear summary to the user."""
 
     tools = (
         create_issue,
@@ -331,5 +612,13 @@ Instructions:
         create_pull_request,
         list_pull_requests,
         search_repositories,
+        get_repository,
+        list_commits,
+        merge_pull_request,
+        list_branches,
+        star_repo,
+        list_notifications,
+        create_issue_comment,
+        list_my_repos,
         connect_github,
     )
