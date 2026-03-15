@@ -617,10 +617,11 @@ async def composio_oauth_authorize(
             redirect_url=callback_url,
         )
         redirect = data.get("redirectUrl", data.get("redirect_url", ""))
+        connected_account_id = data.get("connectedAccountId", "")
         if not redirect:
             # Connection may already be active — no redirect needed
-            return {"authorize_url": callback_url}
-        return {"authorize_url": redirect}
+            return {"authorize_url": callback_url, "connected_account_id": connected_account_id}
+        return {"authorize_url": redirect, "connected_account_id": connected_account_id}
     except Exception as e:
         logger.error(f"Composio authorize failed for {composio_app}: {e}", exc_info=True)
         raise OneValetError(E.OAUTH_FAILED, f"Failed to initiate {composio_app} connection",
@@ -677,3 +678,50 @@ async def composio_oauth_callback(
     except Exception as e:
         logger.error(f"Composio callback failed for {composio_app}: {e}", exc_info=True)
         return HTMLResponse("<h2>OAuth Error</h2><p>Something went wrong. Please try again.</p>", status_code=500)
+
+
+@router.get("/api/oauth/{composio_app}/verify")
+async def composio_oauth_verify(
+    composio_app: str,
+    connected_account_id: str,
+    tenant_id: str = "default",
+    account_name: str = "primary",
+):
+    """Poll Composio for connection status and save credential if active.
+
+    Called by the frontend after the OAuth browser is dismissed, as a fallback
+    when Composio does not redirect back to our callback URL.
+    """
+    if composio_app not in COMPOSIO_APPS:
+        raise OneValetError(E.PROVIDER_NOT_SUPPORTED, f"Unknown provider: {composio_app}",
+                            details={"provider": composio_app})
+
+    from ...builtin_agents.composio.client import ComposioClient
+
+    app = require_app()
+
+    try:
+        client = ComposioClient()
+        data = await client.get_connection_status(connected_account_id)
+        status = data.get("status", "UNKNOWN")
+        logger.info(f"Composio verify {composio_app}: account={connected_account_id}, status={status}")
+
+        if status == "ACTIVE":
+            credentials = {
+                "provider": composio_app,
+                "connected_via": "composio",
+                "entity_id": tenant_id,
+                "composio_account_id": connected_account_id,
+                "access_token": "__composio_managed__",
+            }
+            await app.save_credential_raw(
+                tenant_id=tenant_id, service=composio_app,
+                credentials=credentials, account_name=account_name,
+            )
+            return {"status": "connected", "provider": composio_app}
+        else:
+            return {"status": status.lower(), "provider": composio_app}
+    except Exception as e:
+        logger.error(f"Composio verify failed for {composio_app}: {e}", exc_info=True)
+        raise OneValetError(E.OAUTH_FAILED, f"Failed to verify {composio_app} connection",
+                            details={"provider": composio_app})

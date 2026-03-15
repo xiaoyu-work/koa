@@ -153,6 +153,24 @@ class ComposioClient:
             resp.raise_for_status()
             return resp.json()
 
+    async def get_connection_status(
+        self,
+        connected_account_id: str,
+    ) -> Dict[str, Any]:
+        """
+        Check the status of a Composio connected account.
+
+        Returns dict with 'status' (INITIATED, ACTIVE, FAILED, etc.) and account details.
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{BASE_URL}/v1/connectedAccounts/{connected_account_id}",
+                headers=self._headers,
+                timeout=15.0,
+            )
+            resp.raise_for_status()
+            return resp.json()
+
     async def list_connections(
         self,
         entity_id: str = "default",
