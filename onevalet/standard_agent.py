@@ -51,7 +51,7 @@ Legacy Example (still supported):
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Optional, Callable, Any, AsyncIterator, Tuple, TYPE_CHECKING
 from uuid import uuid4
 
@@ -232,6 +232,19 @@ class StandardAgent(BaseAgent):
 
         # Context hints from orchestrator
         self.context_hints = context_hints or {}
+
+    def _user_now(self) -> tuple:
+        """Return (datetime, tz_name) in user's timezone from context_hints.
+        Falls back to UTC if timezone not available."""
+        tz_str = self.context_hints.get("timezone", "")
+        if tz_str and tz_str != "UTC":
+            try:
+                from zoneinfo import ZoneInfo
+                tz = ZoneInfo(tz_str)
+                return datetime.now(tz), tz_str
+            except Exception:
+                pass
+        return datetime.now(timezone.utc), "UTC"
 
         # Recalled memories from orchestrator (when enable_memory=true)
         self._recalled_memories: List[Dict[str, Any]] = []

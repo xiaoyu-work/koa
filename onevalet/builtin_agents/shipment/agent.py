@@ -47,7 +47,7 @@ Common carrier tracking number formats:
 - DHL: 10-11 digits"""
 
     def get_system_prompt(self) -> str:
-        now = datetime.now()
+        now, _ = self._user_now()
         return self._SYSTEM_PROMPT_TEMPLATE.format(
             today=now.strftime('%Y-%m-%d'),
             weekday=now.strftime('%A'),

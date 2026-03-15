@@ -43,11 +43,7 @@ for a richer briefing (calendar, email, todos).
 6. Be concise and helpful. Summarize, don't just dump raw data."""
 
     def get_system_prompt(self) -> str:
-        now = datetime.now()
-        try:
-            tz_name = now.astimezone().tzinfo.tzname(now) or "UTC"
-        except Exception:
-            tz_name = "UTC"
+        now, tz_name = self._user_now()
         return self._SYSTEM_PROMPT_TEMPLATE.format(
             today=now.strftime("%Y-%m-%d"),
             weekday=now.strftime("%A"),

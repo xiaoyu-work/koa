@@ -51,10 +51,7 @@ ASK the user for it in your text response WITHOUT calling any tools.
 7. After getting tool results, present the information clearly to the user."""
 
     def get_system_prompt(self) -> str:
-        from .search_helper import _resolve_tz
-        user_tz = self.metadata.get("timezone") if self.metadata else None
-        tz = _resolve_tz(user_tz)
-        now = datetime.now(tz)
+        now, _ = self._user_now()
         return self._SYSTEM_PROMPT_TEMPLATE.format(
             today=now.strftime("%Y-%m-%d"),
             weekday=now.strftime("%A"),

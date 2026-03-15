@@ -42,7 +42,7 @@ ASK the user for it in your text response WITHOUT calling any tools.
 5. Be helpful and proactive — suggest nearby alternatives or additional info when relevant."""
 
     def get_system_prompt(self) -> str:
-        now = datetime.now()
+        now, _ = self._user_now()
         return self._SYSTEM_PROMPT_TEMPLATE.format(
             today=now.strftime('%Y-%m-%d'),
             weekday=now.strftime('%A'),

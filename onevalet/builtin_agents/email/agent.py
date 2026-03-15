@@ -51,7 +51,7 @@ Guidelines:
 10. After searching emails, synthesize results immediately in a single response. Do not make additional searches unless the user asks."""
 
     def get_system_prompt(self) -> str:
-        now = datetime.now()
+        now, _ = self._user_now()
         return self._SYSTEM_PROMPT_TEMPLATE.format(
             today=now.strftime('%Y-%m-%d'),
             weekday=now.strftime('%A'),

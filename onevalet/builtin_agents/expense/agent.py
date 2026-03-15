@@ -83,7 +83,7 @@ ask for clarification in your text response WITHOUT calling any tools.
 12. If the user provides multiple expenses in one message, log each one separately."""
 
     def get_system_prompt(self) -> str:
-        now = datetime.now()
+        now, _ = self._user_now()
         prompt = self._SYSTEM_PROMPT_TEMPLATE.format(
             today=now.strftime('%Y-%m-%d'),
             weekday=now.strftime('%A'),

@@ -86,7 +86,7 @@ Only execute write actions (calendar/todo) after explicit user consent.
 """
 
     def get_system_prompt(self) -> str:
-        now = datetime.now()
+        now, _ = self._user_now()
         from datetime import timedelta
         tomorrow = (now + timedelta(days=1)).strftime("%Y-%m-%d")
         return self._SYSTEM_PROMPT_TEMPLATE.format(

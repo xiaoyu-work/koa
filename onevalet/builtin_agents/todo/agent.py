@@ -59,16 +59,7 @@ in your text response WITHOUT calling any tools.
 8. After getting tool results, provide a clear summary to the user."""
 
     def get_system_prompt(self) -> str:
-        user_tz_str = self.context_hints.get("timezone", "")
-        tz = timezone.utc
-        tz_name = "UTC"
-        if user_tz_str and user_tz_str != "UTC":
-            try:
-                tz = ZoneInfo(user_tz_str)
-                tz_name = user_tz_str
-            except Exception:
-                pass
-        now = datetime.now(tz)
+        now, tz_name = self._user_now()
         return self._SYSTEM_PROMPT_TEMPLATE.format(
             today=now.strftime('%Y-%m-%d'),
             weekday=now.strftime('%A'),
