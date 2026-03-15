@@ -1,6 +1,6 @@
 """Internal expense API routes (service-to-service).
 
-Provides read-only endpoints for querying expenses, category summaries,
+Provides endpoints for querying and managing expenses, category summaries,
 budgets with spending status, and receipts.
 """
 
@@ -8,7 +8,7 @@ import logging
 from datetime import date, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 
 from ..app import require_app, verify_service_key
 from onevalet.builtin_agents.expense.repository import ExpenseRepository
@@ -221,3 +221,97 @@ async def internal_list_receipts(
     )
 
     return {"receipts": [_serialize_row(r) for r in rows]}
+
+
+@router.post("/api/internal/expenses")
+async def internal_create_expense(
+    request: Request,
+    tenant_id: str,
+):
+    """Create a new expense. Internal use only."""
+    verify_service_key(request)
+    expense_repo, _, _ = await _get_repos()
+
+    body = await request.json()
+
+    # Parse date if provided
+    expense_date = None
+    if body.get("date"):
+        from datetime import datetime as dt
+        try:
+            expense_date = dt.strptime(body["date"], "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            pass
+
+    row = await expense_repo.add(
+        tenant_id=tenant_id,
+        amount=float(body["amount"]),
+        category=body.get("category", "other"),
+        description=body.get("description", ""),
+        merchant=body.get("merchant", ""),
+        date=expense_date,
+        currency=body.get("currency", "USD"),
+        receipt_id=body.get("receipt_id"),
+    )
+    return {"expense": _serialize_row(row)}
+
+
+@router.patch("/api/internal/expenses/{expense_id}")
+async def internal_update_expense(
+    request: Request,
+    expense_id: str,
+    tenant_id: str,
+):
+    """Update specific fields of an expense. Internal use only."""
+    verify_service_key(request)
+    expense_repo, _, _ = await _get_repos()
+
+    body = await request.json()
+
+    # Build update dict from allowed fields
+    allowed = {"amount", "category", "description", "merchant", "date", "currency", "receipt_id"}
+    updates = {}
+    for key in allowed:
+        if key in body:
+            if key == "amount":
+                updates[key] = float(body[key])
+            elif key == "date":
+                from datetime import datetime as dt
+                try:
+                    updates[key] = dt.strptime(body[key], "%Y-%m-%d").date()
+                except (ValueError, TypeError):
+                    continue
+            else:
+                updates[key] = body[key]
+
+    if not updates:
+        raise HTTPException(400, "No valid fields to update")
+
+    row = await expense_repo.update(
+        tenant_id=tenant_id,
+        expense_id=expense_id,
+        data=updates,
+    )
+
+    if row is None:
+        raise HTTPException(404, "Expense not found or not owned by this tenant")
+
+    return {"expense": _serialize_row(row)}
+
+
+@router.delete("/api/internal/expenses/{expense_id}")
+async def internal_delete_expense(
+    request: Request,
+    expense_id: str,
+    tenant_id: str,
+):
+    """Delete an expense. Internal use only."""
+    verify_service_key(request)
+    expense_repo, _, _ = await _get_repos()
+
+    deleted = await expense_repo.delete(tenant_id=tenant_id, expense_id=expense_id)
+
+    if not deleted:
+        raise HTTPException(404, "Expense not found or not owned by this tenant")
+
+    return {"deleted": True}
