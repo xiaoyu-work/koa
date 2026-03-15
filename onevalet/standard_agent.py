@@ -233,19 +233,6 @@ class StandardAgent(BaseAgent):
         # Context hints from orchestrator
         self.context_hints = context_hints or {}
 
-    def _user_now(self) -> tuple:
-        """Return (datetime, tz_name) in user's timezone from context_hints.
-        Falls back to UTC if timezone not available."""
-        tz_str = self.context_hints.get("timezone", "")
-        if tz_str and tz_str != "UTC":
-            try:
-                from zoneinfo import ZoneInfo
-                tz = ZoneInfo(tz_str)
-                return datetime.now(tz), tz_str
-            except Exception:
-                pass
-        return datetime.now(timezone.utc), "UTC"
-
         # Recalled memories from orchestrator (when enable_memory=true)
         self._recalled_memories: List[Dict[str, Any]] = []
 
@@ -286,6 +273,19 @@ class StandardAgent(BaseAgent):
         self._streaming_enabled = False
 
         logger.debug(f"Initialized {self.__class__.__name__} (ID: {self.agent_id}, Tenant: {tenant_id})")
+
+    def _user_now(self) -> tuple:
+        """Return (datetime, tz_name) in user's timezone from context_hints.
+        Falls back to UTC if timezone not available."""
+        tz_str = self.context_hints.get("timezone", "")
+        if tz_str and tz_str != "UTC":
+            try:
+                from zoneinfo import ZoneInfo
+                tz = ZoneInfo(tz_str)
+                return datetime.now(tz), tz_str
+            except Exception:
+                pass
+        return datetime.now(timezone.utc), "UTC"
 
     def _build_required_fields(self) -> List[RequiredField]:
         """Build RequiredField list from InputField specs or legacy method."""
