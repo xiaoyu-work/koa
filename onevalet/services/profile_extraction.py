@@ -890,7 +890,10 @@ class ProfileExtractionService:
     # Public API
     # -----------------------------------------------------------------
 
-    def start_extraction(self, tenant_id: str, providers: list, llm_client, profile_repo=None) -> str:
+    def start_extraction(
+        self, tenant_id: str, providers: list, llm_client,
+        profile_repo=None, callback_url: str = "", callback_headers: Optional[Dict[str, str]] = None,
+    ) -> str:
         """
         Start a background extraction job.
 
@@ -899,6 +902,8 @@ class ProfileExtractionService:
             providers: List of email provider instances (from EmailProviderFactory)
             llm_client: The OneValet LLM client (BaseLLMClient)
             profile_repo: Optional ProfileRepository for persisting results
+            callback_url: Optional URL to POST completed profile to
+            callback_headers: Optional headers for the callback request
 
         Returns:
             job_id for status polling
@@ -915,7 +920,10 @@ class ProfileExtractionService:
             "completed_at": None,
         }
 
-        asyncio.create_task(self._run_extraction(job_id, tenant_id, providers, llm_client, profile_repo))
+        asyncio.create_task(self._run_extraction(
+            job_id, tenant_id, providers, llm_client, profile_repo,
+            callback_url=callback_url, callback_headers=callback_headers,
+        ))
         return job_id
 
     def get_job_status(self, job_id: str) -> Optional[Dict]:
@@ -927,6 +935,7 @@ class ProfileExtractionService:
 
     async def _run_extraction(
         self, job_id: str, tenant_id: str, providers: list, llm_client, profile_repo=None,
+        callback_url: str = "", callback_headers: Optional[Dict[str, str]] = None,
     ):
         start_time = datetime.now(timezone.utc)
         try:
@@ -1100,6 +1109,10 @@ class ProfileExtractionService:
             })
             logger.info(f"Extraction completed in {total_time:.1f}s")
 
+            # Callback to notify caller with the extracted profile
+            if callback_url and final_profile:
+                await self._send_callback(callback_url, tenant_id, final_profile, callback_headers)
+
         except Exception as e:
             logger.error(f"Extraction failed: {e}", exc_info=True)
             self._update_job(job_id, {
@@ -1107,3 +1120,17 @@ class ProfileExtractionService:
                 "error": str(e),
                 "completed_at": datetime.now(timezone.utc).isoformat(),
             })
+
+    async def _send_callback(
+        self, url: str, tenant_id: str, profile: Dict[str, Any],
+        headers: Optional[Dict[str, str]] = None,
+    ):
+        """POST extracted profile to callback URL."""
+        payload = {"tenant_id": tenant_id, "profile": profile}
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.post(url, json=payload, headers=headers or {})
+                resp.raise_for_status()
+            logger.info(f"Profile callback sent to {url} for tenant {tenant_id}")
+        except Exception as e:
+            logger.error(f"Profile callback failed for tenant {tenant_id}: {e}")

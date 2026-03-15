@@ -24,6 +24,7 @@ async def start_profile_extraction(
     request: Request,
     tenant_id: str,
     email_account: Optional[str] = None,
+    callback_url: Optional[str] = None,
 ):
     """
     Start profile extraction for a tenant.
@@ -31,8 +32,10 @@ async def start_profile_extraction(
     If email_account is provided, only scan that account and LLM-merge
     with the existing profile. Otherwise scan all linked email accounts.
 
+    If callback_url is provided, POST the extracted profile there on completion.
+
     Requires X-Service-Key header.
-    Returns a job_id for polling status.
+    Returns a job_id for status polling.
     """
     verify_service_key(request)
     app = require_app()
@@ -62,17 +65,26 @@ async def start_profile_extraction(
     if not providers:
         raise OneValetError(E.INTERNAL_ERROR, "Failed to create email providers")
 
-    # Start background extraction (with DB persistence)
+    # Forward service key so callback can authenticate
+    callback_headers = {}
+    service_key = request.headers.get("X-Service-Key")
+    if service_key:
+        callback_headers["X-Service-Key"] = service_key
+
+    # Start background extraction (with DB persistence + callback)
     profile_repo = ProfileRepository(app._database)
     job_id = _service.start_extraction(
         tenant_id=tenant_id,
         providers=providers,
         llm_client=app._llm_client,
         profile_repo=profile_repo,
+        callback_url=callback_url or "",
+        callback_headers=callback_headers if callback_url else None,
     )
 
     logger.info(f"Profile extraction started: job={job_id}, tenant={tenant_id}, "
-                f"email_account={email_account}, providers={len(providers)}")
+                f"email_account={email_account}, providers={len(providers)}, "
+                f"callback={'yes' if callback_url else 'no'}")
     return {"job_id": job_id, "status": "started"}
 
 
