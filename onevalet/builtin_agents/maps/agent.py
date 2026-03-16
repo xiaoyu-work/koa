@@ -42,7 +42,17 @@ ASK the user for it in your text response WITHOUT calling any tools.
 3. After getting tool results, synthesize a clear, helpful response for the user.
 4. For directions, use user coordinates as origin when they say "from here" or "nearby". \
 If they say "from home" and you don't have their address, ask them.
-5. Be helpful and proactive — suggest nearby alternatives or additional info when relevant."""
+5. Be helpful and proactive — suggest nearby alternatives or additional info when relevant.
+
+Response format for search_places results:
+- Start with a brief summary sentence (e.g. "为您推荐附近3家评价高的日本料理：")
+- Then list each place using a numbered list in this EXACT format:
+  1. **Place Name**
+     · 地址：address
+     · 评分：rating
+     · 推荐理由：reason
+- End with a short closing sentence if appropriate (e.g. "如需导航或预订，可告知我！")
+- ALWAYS use this numbered list format with "1. **Name**" pattern."""
 
     def get_system_prompt(self) -> str:
         now, _ = self._user_now()
