@@ -212,7 +212,7 @@ class ComposioClient:
     # ── Helpers ──
 
     @staticmethod
-    def format_action_result(data: Dict[str, Any]) -> str:
+    def format_action_result(data: Dict[str, Any], max_field_len: int = 2000) -> str:
         """Format an execute_action response into a readable string."""
         if data.get("successfull") or data.get("successful"):
             response_data = data.get("data", {})
@@ -220,8 +220,8 @@ class ComposioClient:
                 parts = []
                 for key, value in response_data.items():
                     display = str(value)
-                    if len(display) > 300:
-                        display = display[:297] + "..."
+                    if len(display) > max_field_len:
+                        display = display[:max_field_len - 3] + "..."
                     parts.append(f"  {key}: {display}")
                 return "\n".join(parts) if parts else json.dumps(response_data)
             return str(response_data)

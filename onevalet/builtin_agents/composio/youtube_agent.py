@@ -451,7 +451,13 @@ Instructions:
 9. If the user wants video captions or a transcript, use list_captions then download_captions.
 10. If YouTube is not yet connected, use connect_youtube first.
 11. If the user's request is ambiguous, ask for clarification WITHOUT calling any tools.
-12. After getting tool results, provide a clear summary to the user."""
+12. After getting tool results, provide a clear summary to the user.
+
+Response format:
+- Always include clickable YouTube links for videos: https://www.youtube.com/watch?v={videoId}
+- Always include channel links when relevant: https://www.youtube.com/channel/{channelId}
+- Always include playlist links when relevant: https://www.youtube.com/playlist?list={playlistId}
+- Format each result with title, channel name, and link on the same line."""
 
     tools = (
         search_videos,
