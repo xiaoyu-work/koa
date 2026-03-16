@@ -15,6 +15,12 @@ from onevalet.tool_decorator import tool
 
 from .shipment_repo import ShipmentRepository
 
+try:
+    from onevalet.providers.shipment.carrier_detector import get_tracking_url
+except ImportError:
+    def get_tracking_url(carrier: str, tracking_number: str):
+        return None
+
 logger = logging.getLogger(__name__)
 
 
@@ -160,22 +166,74 @@ async def _query_one(
     """Query a specific shipment by tracking number.
     
     Returns (formatted_text, raw_result_dict_or_None).
+    Always saves to repo if possible, even when tracking info is unavailable.
     """
     if not tracking_number:
         return "No tracking number provided.", None
 
-    if not provider:
-        return "Shipment tracking is not available right now.", None
-
     if not carrier:
         carrier = _detect_carrier(tracking_number)
 
-    if not carrier:
-        return f"Could not identify carrier for {tracking_number}. Please specify the carrier.", None
+    # If no provider or no carrier, still save to repo with pending status
+    if not provider or not carrier:
+        if repo:
+            await repo.upsert_shipment(
+                tenant_id=tenant_id,
+                tracking_number=tracking_number,
+                carrier=carrier or "unknown",
+                tracking_url=None,
+                status="pending",
+                description=description,
+                last_update="Added to tracking. Status will update when available.",
+                estimated_delivery=None,
+                tracking_history=[],
+            )
+            raw_data = {
+                "tracking_number": tracking_number,
+                "carrier": carrier or "unknown",
+                "status": "pending",
+                "last_update": "Added to tracking. Status will update when available.",
+                "description": description,
+            }
+            msg = f"Added {tracking_number} to your tracking list."
+            if not carrier:
+                msg += " Carrier could not be auto-detected — please specify it for live updates."
+            if not provider:
+                msg += " Live tracking is temporarily unavailable; status will update later."
+            return msg, raw_data
+        if not carrier:
+            return f"Could not identify carrier for {tracking_number}. Please specify the carrier.", None
+        return "Shipment tracking is not available right now.", None
 
     result = await provider.track(tracking_number, carrier)
 
     if not result.get("success"):
+        # Provider failed, but still save to repo so user can track later
+        if repo:
+            await repo.upsert_shipment(
+                tenant_id=tenant_id,
+                tracking_number=tracking_number,
+                carrier=carrier,
+                tracking_url=get_tracking_url(carrier, tracking_number) if carrier else None,
+                status="pending",
+                description=description,
+                last_update=result.get("error", "Tracking info not yet available."),
+                estimated_delivery=None,
+                tracking_history=[],
+            )
+            raw_data = {
+                "tracking_number": tracking_number,
+                "carrier": carrier,
+                "status": "pending",
+                "last_update": result.get("error", "Tracking info not yet available."),
+                "description": description,
+                "tracking_url": get_tracking_url(carrier, tracking_number) if carrier else None,
+            }
+            return (
+                f"Added {tracking_number} to your tracking list. "
+                f"Live status is not available yet ({result.get('error', 'unknown reason')}). "
+                f"It will update automatically once the carrier scans the package."
+            ), raw_data
         return f"Failed to track {tracking_number}: {result.get('error')}", None
 
     status = result.get("status", "unknown")
