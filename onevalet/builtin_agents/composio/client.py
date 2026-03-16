@@ -85,6 +85,10 @@ class ComposioClient:
         }
         if connected_account_id:
             body["connectedAccountId"] = connected_account_id
+        else:
+            # Composio requires appName when connectedAccountId is not provided
+            app_name = action_name.split("_")[0].lower()
+            body["appName"] = app_name
 
         async with httpx.AsyncClient() as client:
             resp = await client.post(
