@@ -80,6 +80,28 @@ class ReactLoopMixin:
     - ``_build_llm_messages()`` (Orchestrator)
     """
 
+    async def _yield_chunked_response(
+        self, text: str, turn: int,
+    ) -> AsyncIterator[AgentEvent]:
+        """Yield response text in paragraph-sized chunks for progressive rendering.
+
+        Splits on double-newline boundaries so the frontend can display
+        each paragraph as soon as it arrives instead of waiting for the
+        entire response.
+        """
+        yield AgentEvent(type=EventType.MESSAGE_START, data={"turn": turn})
+        paragraphs = text.split("\n\n")
+        for i, paragraph in enumerate(paragraphs):
+            chunk = paragraph
+            if i < len(paragraphs) - 1:
+                chunk += "\n\n"
+            if chunk:
+                yield AgentEvent(
+                    type=EventType.MESSAGE_CHUNK, data={"chunk": chunk},
+                )
+                await asyncio.sleep(0)  # yield control so SSE can flush
+        yield AgentEvent(type=EventType.MESSAGE_END, data={})
+
     async def _react_loop_events(
         self,
         messages: List[Dict[str, Any]],
@@ -321,9 +343,8 @@ class ReactLoopMixin:
                         turn=turn, tool_calls=[], final_answer=True,
                         tenant_id=tenant_id,
                     )
-                    yield AgentEvent(type=EventType.MESSAGE_START, data={"turn": turn})
-                    yield AgentEvent(type=EventType.MESSAGE_CHUNK, data={"chunk": final_response})
-                    yield AgentEvent(type=EventType.MESSAGE_END, data={})
+                    async for event in self._yield_chunked_response(final_response, turn):
+                        yield event
                     return
 
             if tool_calls:
@@ -373,12 +394,11 @@ class ReactLoopMixin:
                         turn=turn, tool_calls=[COMPLETE_TASK_TOOL_NAME],
                         final_answer=True, tenant_id=tenant_id,
                     )
-                    yield AgentEvent(type=EventType.MESSAGE_START, data={"turn": turn})
-                    yield AgentEvent(type=EventType.MESSAGE_CHUNK, data={"chunk": final_response})
-                    yield AgentEvent(type=EventType.MESSAGE_END, data={})
+                    async for event in self._yield_chunked_response(final_response, turn):
+                        yield event
                     break
 
-                # Use remaining tools for execution (or original list if complete_task had no result)
+                # complete_task was called alongside other tools -- add its result
                 tool_calls = remaining_tool_calls if remaining_tool_calls else tool_calls
 
                 tool_names = [tc.name for tc in tool_calls]
@@ -518,6 +538,9 @@ class ReactLoopMixin:
                             result_text = result.result_text
                             r_meta = result.metadata if isinstance(result.metadata, dict) else {}
                             tool_trace = r_meta.get("tool_trace") or []
+                            # Collect media forwarded from agent's internal tools
+                            agent_media = r_meta.get("media") or []
+                            result_media = agent_media
                         else:
                             result_text = str(result) if result is not None else ""
                             tool_trace = []
@@ -580,9 +603,8 @@ class ReactLoopMixin:
                         turn=turn, tool_calls=tool_names + [COMPLETE_TASK_TOOL_NAME],
                         final_answer=True, tenant_id=tenant_id,
                     )
-                    yield AgentEvent(type=EventType.MESSAGE_START, data={"turn": turn})
-                    yield AgentEvent(type=EventType.MESSAGE_CHUNK, data={"chunk": final_response})
-                    yield AgentEvent(type=EventType.MESSAGE_END, data={})
+                    async for event in self._yield_chunked_response(final_response, turn):
+                        yield event
                     break
 
                 # Watchdog: detect loops
@@ -592,9 +614,8 @@ class ReactLoopMixin:
                 if loop_desc:
                     logger.warning(f"[ReAct] {loop_desc}")
                     final_response = "I noticed I was repeating the same actions without making progress. Let me provide what I have so far."
-                    yield AgentEvent(type=EventType.MESSAGE_START, data={"turn": turn})
-                    yield AgentEvent(type=EventType.MESSAGE_CHUNK, data={"chunk": final_response})
-                    yield AgentEvent(type=EventType.MESSAGE_END, data={})
+                    async for event in self._yield_chunked_response(final_response, turn):
+                        yield event
                     break
 
                 # Audit: log turn summary
@@ -611,9 +632,8 @@ class ReactLoopMixin:
                     if pending_approvals:
                         pending_approvals = collect_batch_approvals(pending_approvals)
                     if loop_broken_text:
-                        yield AgentEvent(type=EventType.MESSAGE_START, data={"turn": turn})
-                        yield AgentEvent(type=EventType.MESSAGE_CHUNK, data={"chunk": loop_broken_text})
-                        yield AgentEvent(type=EventType.MESSAGE_END, data={})
+                        async for event in self._yield_chunked_response(loop_broken_text, turn):
+                            yield event
                     break
 
                 # Agent passthrough: single completed agent-tool skips LLM re-summary
@@ -630,9 +650,8 @@ class ReactLoopMixin:
                         f"({len(agent_text)} chars from {tool_calls[0].name})"
                     )
                     final_response = agent_text
-                    yield AgentEvent(type=EventType.MESSAGE_START, data={"turn": turn})
-                    yield AgentEvent(type=EventType.MESSAGE_CHUNK, data={"chunk": agent_text})
-                    yield AgentEvent(type=EventType.MESSAGE_END, data={})
+                    async for event in self._yield_chunked_response(agent_text, turn):
+                        yield event
                     break
 
         else:
@@ -658,9 +677,8 @@ class ReactLoopMixin:
                 final_text = "I was unable to complete the request within the allowed turns."
 
             final_response = final_text
-            yield AgentEvent(type=EventType.MESSAGE_START, data={"turn": turn})
-            yield AgentEvent(type=EventType.MESSAGE_CHUNK, data={"chunk": final_text})
-            yield AgentEvent(type=EventType.MESSAGE_END, data={})
+            async for event in self._yield_chunked_response(final_text, turn):
+                yield event
 
         duration_ms = int((time.monotonic() - start_time) * 1000)
 

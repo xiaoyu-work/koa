@@ -60,7 +60,7 @@ from .constants import COMPLETE_TASK_TOOL_NAME, COMPLETE_TASK_SCHEMA
 from .fields import InputField
 from .llm.base import LLMResponse, ToolCall as LLMToolCall
 from .message import Message
-from .models import RequiredField, AgentToolContext, AgentTool
+from .models import RequiredField, AgentToolContext, AgentTool, ToolOutput
 from .protocols import LLMClientProtocol
 from .result import AgentResult, AgentStatus, ApprovalResult
 from .streaming.engine import StreamEngine
@@ -242,6 +242,7 @@ class StandardAgent(BaseAgent):
         self._pending_tool_call: Optional[Tuple[LLMToolCall, AgentTool, Dict[str, Any]]] = None
         self._remaining_tool_calls: List[LLMToolCall] = []
         self._tool_trace: List[Dict[str, Any]] = []
+        self._collected_media: List[Dict[str, Any]] = []  # media from ToolOutput results
 
         # Pre-populate collected_fields with context_hints (only for declared fields)
         if context_hints:
@@ -557,6 +558,7 @@ class StandardAgent(BaseAgent):
             ]
             self._react_turn = 0
             self._tool_trace = []
+            self._collected_media = []
             return await self._run_react()
 
         # Default for non-domain subclasses (they override this)
@@ -1380,6 +1382,7 @@ Return JSON only."""
                 "tool_trace": list(self._tool_trace),
                 "tool_calls_count": len(self._tool_trace),
                 "partial_result": True,
+                "media": self._collected_media or None,
             },
         )
 
@@ -1413,6 +1416,7 @@ Return JSON only."""
                         metadata={
                             "tool_trace": list(self._tool_trace),
                             "tool_calls_count": len(self._tool_trace),
+                            "media": self._collected_media or None,
                         },
                     )
                 else:
@@ -1496,11 +1500,17 @@ Return JSON only."""
                 )
 
             try:
-                result_text = await asyncio.wait_for(
+                tool_result = await asyncio.wait_for(
                     tool.executor(args, self._build_tool_context()),
                     timeout=self.tool_timeout,
                 )
-                result_str = str(result_text)
+                # Extract media from ToolOutput before converting to string
+                if isinstance(tool_result, ToolOutput):
+                    result_str = tool_result.text
+                    if tool_result.media:
+                        self._collected_media.extend(tool_result.media)
+                else:
+                    result_str = str(tool_result)
                 if len(result_str) > self.max_tool_result_chars:
                     result_str = result_str[: self.max_tool_result_chars] + "\n...[truncated]"
                 self._tool_trace.append(
