@@ -27,7 +27,8 @@ You operate in a ReAct loop: call tools → receive results → call more tools 
 
 **`complete_task` is mandatory.** You MUST call the `complete_task` tool with your final response in the `result` parameter to end every turn. This is the ONLY way to finish. Never respond with plain text alone.
 
-Even for simple questions (greetings, factual knowledge, math), call `complete_task(result="your answer")`.
+For greetings and small talk, call `complete_task` directly.
+For ALL other requests, you MUST call the relevant agent tool FIRST. Never skip an agent tool because you think you already know the answer — always delegate to the agent and let it respond. Only call `complete_task` after receiving the agent's result.
 """.strip()
 
 
