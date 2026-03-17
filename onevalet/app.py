@@ -477,6 +477,11 @@ class OneValet:
         await self._ensure_initialized()
         return await self._credential_store.find_by_email(email, service, tenant_id=tenant_id)
 
+    async def list_credentials_by_service(self, service: str):
+        """List all credentials for a given service across all tenants."""
+        await self._ensure_initialized()
+        return await self._credential_store.list_by_service(service)
+
     async def get_credential(self, tenant_id: str, service: str, account_name: str = "primary"):
         """Get full credentials for a specific service/account."""
         await self._ensure_initialized()

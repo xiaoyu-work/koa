@@ -79,6 +79,9 @@ class CredentialStore(Repository):
         account_name: str = "primary",
     ) -> None:
         """Save credentials. Upserts on conflict."""
+        # Guard against double-encoding: if credentials is already a JSON string, parse it first
+        if isinstance(credentials, str):
+            credentials = json.loads(credentials)
         await self.db.execute(
             """
             INSERT INTO credentials (tenant_id, service, account_name, credentials_json, updated_at)
@@ -160,6 +163,28 @@ class CredentialStore(Repository):
             tenant_id, service, account_name,
         )
         return result == "DELETE 1"
+
+    async def list_by_service(self, service: str) -> List[dict]:
+        """List all credentials for a given service across all tenants."""
+        rows = await self.db.fetch(
+            """
+            SELECT tenant_id, service, account_name, credentials_json
+            FROM credentials WHERE service = $1
+            ORDER BY tenant_id
+            """,
+            service,
+        )
+        results = []
+        for row in rows:
+            val = row["credentials_json"]
+            creds = json.loads(val) if isinstance(val, str) else val
+            results.append({
+                "tenant_id": row["tenant_id"],
+                "service": row["service"],
+                "account_name": row["account_name"],
+                "credentials": creds,
+            })
+        return results
 
     async def find_by_email(
         self,
