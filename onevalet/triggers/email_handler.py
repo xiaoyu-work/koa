@@ -11,8 +11,9 @@ from ..llm.base import BaseLLMClient
 logger = logging.getLogger(__name__)
 
 _IMPORTANCE_SYSTEM_PROMPT = """\
-You are an email importance classifier. Evaluate the email and respond with ONLY a JSON object.
+You are an email classifier. Evaluate the email and respond with ONLY a JSON object.
 
+TASK 1 — IMPORTANCE:
 Rules for IMPORTANT emails (require immediate attention):
 - OTP / verification codes
 - Security alerts (login attempts, password resets, suspicious activity)
@@ -29,18 +30,35 @@ Rules for NOT IMPORTANT emails:
 - Marketing and promotional emails
 - Automated status updates that require no action
 
+TASK 2 — SUBSCRIPTION DETECTION:
+If this email is a receipt, invoice, billing confirmation, renewal notice, or cancellation
+for a recurring subscription service, extract the subscription details.
+Examples: Netflix, Spotify, iCloud, T-Mobile, Adobe, YouTube Premium, etc.
+Do NOT include one-time purchases (e.g. buying a product on Amazon).
+
 Respond with ONLY this JSON (no markdown, no extra text):
-{"important": true/false, "reason": "brief reason", "summary": "one-line summary of the email"}
+{"important": true/false, "reason": "brief reason", "summary": "one-line summary", "subscription": null}
+
+If a subscription is detected, replace null with:
+{"service_name": "Netflix", "category": "streaming", "amount": 15.99, "currency": "USD", "billing_cycle": "monthly", "status": "active"}
+
+subscription fields:
+- service_name: Name of the service
+- category: One of "streaming", "cloud", "productivity", "saas", "developer", "telecom", "vpn", "fitness", "news", "gaming", "education", "finance", "home", "shopping", "other"
+- amount: Charged amount as number, or null if not found
+- currency: Currency code (default "USD")
+- billing_cycle: One of "monthly", "yearly", "weekly", "one-time", or null
+- status: "active" for receipts/renewals, "cancelled" for cancellation emails, "trial" for free trials
 """
 
 
 class EmailEventHandler:
-    """Handles email events by evaluating importance via LLM and sending callbacks.
+    """Handles email events by evaluating importance and detecting subscriptions via LLM.
 
-    Also detects subscription-related emails and upserts to the subscriptions table.
+    A single LLM call classifies importance AND detects subscriptions simultaneously.
 
     Args:
-        llm_client: LLM client for importance evaluation
+        llm_client: LLM client for evaluation
         callback_url: URL to POST important email notifications to
         database: Optional asyncpg pool for subscription storage
     """
@@ -56,15 +74,11 @@ class EmailEventHandler:
         self._processed_ids: Set[str] = set()
         self._database = database
 
-        from ..providers.subscription import SubscriptionDetector
-        self._subscription_detector = SubscriptionDetector(llm_client=llm_client)
-
     async def handle_email(self, tenant_id: str, data: Dict[str, Any]) -> None:
         """Process an incoming email event.
 
-        Evaluates importance via LLM, and if important, POSTs a callback.
-        Also checks for subscription patterns and upserts to DB.
-        Skips duplicate message_ids.
+        Single LLM call evaluates importance and detects subscriptions.
+        If important, POSTs a callback. If subscription detected, upserts to DB.
         """
         message_id = data.get("message_id", "")
 
@@ -79,25 +93,25 @@ class EmailEventHandler:
         subject = data.get("subject", "")
         snippet = data.get("snippet", "")
 
-        # Subscription detection (runs in parallel with importance check)
-        try:
-            sub_info = await self._subscription_detector.check_email(sender, subject, snippet)
-            if sub_info and self._database:
-                await self._upsert_subscription(tenant_id, sub_info)
-        except Exception as e:
-            logger.warning(f"Subscription detection failed: {e}")
-
-        # Evaluate importance via LLM
-        evaluation = await self._evaluate_importance(sender, subject, snippet)
+        # Single LLM call for both importance and subscription detection
+        evaluation = await self._evaluate_email(sender, subject, snippet)
         if evaluation is None:
             logger.warning(f"LLM evaluation failed for email {message_id}")
             return
 
+        # Handle subscription if detected
+        sub_data = evaluation.get("subscription")
+        if sub_data and isinstance(sub_data, dict) and sub_data.get("service_name") and self._database:
+            try:
+                await self._upsert_subscription(tenant_id, sub_data, sender)
+            except Exception as e:
+                logger.warning(f"Subscription upsert failed: {e}")
+
+        # Handle importance
         if not evaluation.get("important", False):
             logger.debug(f"Email not important: {subject} (reason: {evaluation.get('reason', 'N/A')})")
             return
 
-        # Important email — send callback
         logger.info(f"Important email detected: {subject} — {evaluation.get('reason', '')}")
         await self._send_callback(
             tenant_id=tenant_id,
@@ -108,44 +122,65 @@ class EmailEventHandler:
             reason=evaluation.get("reason", ""),
         )
 
-    async def _upsert_subscription(self, tenant_id: str, sub_info) -> None:
+    async def _upsert_subscription(self, tenant_id: str, sub: Dict[str, Any], sender: str) -> None:
         """Upsert detected subscription to database."""
         from datetime import datetime, timezone
         now = datetime.now(timezone.utc)
-        try:
-            await self._database.execute("""
-                INSERT INTO subscriptions (
-                    tenant_id, service_name, category, amount, currency,
-                    billing_cycle, next_billing_date, last_charged_date,
-                    status, detected_from, source_email, updated_at
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-                ON CONFLICT (tenant_id, service_name) DO UPDATE SET
-                    amount = COALESCE(EXCLUDED.amount, subscriptions.amount),
-                    currency = COALESCE(EXCLUDED.currency, subscriptions.currency),
-                    billing_cycle = COALESCE(EXCLUDED.billing_cycle, subscriptions.billing_cycle),
-                    next_billing_date = COALESCE(EXCLUDED.next_billing_date, subscriptions.next_billing_date),
-                    last_charged_date = COALESCE(EXCLUDED.last_charged_date, subscriptions.last_charged_date),
-                    status = EXCLUDED.status,
-                    source_email = COALESCE(EXCLUDED.source_email, subscriptions.source_email),
-                    is_active = TRUE,
-                    updated_at = $12
-            """,
-                tenant_id, sub_info.service_name, sub_info.category,
-                sub_info.amount, sub_info.currency, sub_info.billing_cycle,
-                sub_info.next_billing_date, sub_info.last_charged_date,
-                sub_info.status, "email", sub_info.source_email, now,
-            )
-            logger.info(f"Subscription detected: {sub_info.service_name} for tenant {tenant_id}")
-        except Exception as e:
-            logger.error(f"Failed to upsert subscription: {e}")
 
-    async def _evaluate_importance(
+        # Validate billing_cycle
+        valid_cycles = {"monthly", "yearly", "weekly", "one-time"}
+        billing_cycle = sub.get("billing_cycle")
+        if billing_cycle not in valid_cycles:
+            billing_cycle = None
+
+        # Validate status
+        valid_statuses = {"active", "cancelled", "trial", "paused"}
+        status = sub.get("status", "active")
+        if status not in valid_statuses:
+            status = "active"
+
+        # Parse amount
+        amount = sub.get("amount")
+        if isinstance(amount, str):
+            try:
+                amount = float(amount.replace(",", ""))
+            except (ValueError, AttributeError):
+                amount = None
+
+        await self._database.execute("""
+            INSERT INTO subscriptions (
+                tenant_id, service_name, category, amount, currency,
+                billing_cycle, status, detected_from, source_email, updated_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            ON CONFLICT (tenant_id, service_name) DO UPDATE SET
+                amount = COALESCE(EXCLUDED.amount, subscriptions.amount),
+                currency = COALESCE(EXCLUDED.currency, subscriptions.currency),
+                billing_cycle = COALESCE(EXCLUDED.billing_cycle, subscriptions.billing_cycle),
+                status = EXCLUDED.status,
+                source_email = COALESCE(EXCLUDED.source_email, subscriptions.source_email),
+                is_active = TRUE,
+                updated_at = $10
+        """,
+            tenant_id,
+            sub["service_name"],
+            sub.get("category", "other"),
+            amount,
+            sub.get("currency", "USD"),
+            billing_cycle,
+            status,
+            "email",
+            sender,
+            now,
+        )
+        logger.info(f"Subscription detected: {sub['service_name']} for tenant {tenant_id}")
+
+    async def _evaluate_email(
         self, sender: str, subject: str, snippet: str
     ) -> Optional[Dict[str, Any]]:
-        """Call the LLM to evaluate email importance.
+        """Call the LLM to evaluate email importance and detect subscriptions.
 
         Returns:
-            Dict with keys: important (bool), reason (str), summary (str)
+            Dict with keys: important (bool), reason (str), summary (str), subscription (dict|null)
             None if the LLM call fails.
         """
         user_message = (
@@ -160,7 +195,7 @@ class EmailEventHandler:
                     {"role": "system", "content": _IMPORTANCE_SYSTEM_PROMPT},
                     {"role": "user", "content": user_message},
                 ],
-                config={"temperature": 0.0, "max_tokens": 256},
+                config={"temperature": 0.0, "max_tokens": 512},
             )
             content = response.content.strip()
             # Strip markdown fences if present
