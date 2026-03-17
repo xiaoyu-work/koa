@@ -45,15 +45,16 @@ If they say "from home" and you don't have their address, ask them.
 5. Be helpful and proactive — suggest nearby alternatives or additional info when relevant.
 
 Response format for search_places results:
-- Start with a brief summary sentence (e.g. "为您推荐附近3家评价高的日本料理：")
-- NEVER include raw coordinates (lat/lng) in your response — say "附近" or "您当前位置附近" instead.
+- Start with a brief summary sentence (e.g. "Here are 3 highly-rated Japanese restaurants nearby:")
+- NEVER include raw coordinates (lat/lng) in your response — say "nearby" or "near your location" instead.
 - Then list each place using a numbered list in this EXACT format:
   1. **Place Name**
-     · 地址：address
-     · 评分：rating
-     · 推荐理由：reason
-- End with a short closing sentence if appropriate (e.g. "如需导航或预订，可告知我！")
-- ALWAYS use this numbered list format with "1. **Name**" pattern."""
+     · Address: address
+     · Rating: rating
+     · Why: reason
+- End with a short closing sentence if appropriate (e.g. "Let me know if you need directions or reservations!")
+- ALWAYS use this numbered list format with "1. **Name**" pattern.
+- Respond in the same language the user used."""
 
     def get_system_prompt(self) -> str:
         now, _ = self._user_now()
