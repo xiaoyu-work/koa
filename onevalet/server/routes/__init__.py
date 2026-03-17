@@ -12,6 +12,7 @@ from .cron import router as cron_router
 from .profile import router as profile_router
 from .shipments import router as shipments_router
 from .expenses import router as expenses_router
+from .subscriptions import router as subscriptions_router
 
 
 def register_routes(app: FastAPI):
@@ -25,3 +26,4 @@ def register_routes(app: FastAPI):
     app.include_router(profile_router)
     app.include_router(shipments_router)
     app.include_router(expenses_router)
+    app.include_router(subscriptions_router)

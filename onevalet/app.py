@@ -374,6 +374,7 @@ class OneValet:
             self._email_handler = EmailEventHandler(
                 llm_client=self._llm_client,
                 callback_url=callback_url,
+                database=self._database,
             )
             logger.info("EmailEventHandler initialized")
 

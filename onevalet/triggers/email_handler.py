@@ -37,24 +37,33 @@ Respond with ONLY this JSON (no markdown, no extra text):
 class EmailEventHandler:
     """Handles email events by evaluating importance via LLM and sending callbacks.
 
+    Also detects subscription-related emails and upserts to the subscriptions table.
+
     Args:
         llm_client: LLM client for importance evaluation
         callback_url: URL to POST important email notifications to
+        database: Optional asyncpg pool for subscription storage
     """
 
     def __init__(
         self,
         llm_client: BaseLLMClient,
         callback_url: str,
+        database=None,
     ):
         self._llm_client = llm_client
         self._callback_url = callback_url
         self._processed_ids: Set[str] = set()
+        self._database = database
+
+        from ..providers.subscription import SubscriptionDetector
+        self._subscription_detector = SubscriptionDetector(llm_client=llm_client)
 
     async def handle_email(self, tenant_id: str, data: Dict[str, Any]) -> None:
         """Process an incoming email event.
 
         Evaluates importance via LLM, and if important, POSTs a callback.
+        Also checks for subscription patterns and upserts to DB.
         Skips duplicate message_ids.
         """
         message_id = data.get("message_id", "")
@@ -69,6 +78,14 @@ class EmailEventHandler:
         sender = data.get("sender", "")
         subject = data.get("subject", "")
         snippet = data.get("snippet", "")
+
+        # Subscription detection (runs in parallel with importance check)
+        try:
+            sub_info = await self._subscription_detector.check_email(sender, subject, snippet)
+            if sub_info and self._database:
+                await self._upsert_subscription(tenant_id, sub_info)
+        except Exception as e:
+            logger.warning(f"Subscription detection failed: {e}")
 
         # Evaluate importance via LLM
         evaluation = await self._evaluate_importance(sender, subject, snippet)
@@ -90,6 +107,37 @@ class EmailEventHandler:
             message_id=message_id,
             reason=evaluation.get("reason", ""),
         )
+
+    async def _upsert_subscription(self, tenant_id: str, sub_info) -> None:
+        """Upsert detected subscription to database."""
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        try:
+            await self._database.execute("""
+                INSERT INTO subscriptions (
+                    tenant_id, service_name, category, amount, currency,
+                    billing_cycle, next_billing_date, last_charged_date,
+                    status, detected_from, source_email, updated_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                ON CONFLICT (tenant_id, service_name) DO UPDATE SET
+                    amount = COALESCE(EXCLUDED.amount, subscriptions.amount),
+                    currency = COALESCE(EXCLUDED.currency, subscriptions.currency),
+                    billing_cycle = COALESCE(EXCLUDED.billing_cycle, subscriptions.billing_cycle),
+                    next_billing_date = COALESCE(EXCLUDED.next_billing_date, subscriptions.next_billing_date),
+                    last_charged_date = COALESCE(EXCLUDED.last_charged_date, subscriptions.last_charged_date),
+                    status = EXCLUDED.status,
+                    source_email = COALESCE(EXCLUDED.source_email, subscriptions.source_email),
+                    is_active = TRUE,
+                    updated_at = $12
+            """,
+                tenant_id, sub_info.service_name, sub_info.category,
+                sub_info.amount, sub_info.currency, sub_info.billing_cycle,
+                sub_info.next_billing_date, sub_info.last_charged_date,
+                sub_info.status, "email", sub_info.source_email, now,
+            )
+            logger.info(f"Subscription detected: {sub_info.service_name} for tenant {tenant_id}")
+        except Exception as e:
+            logger.error(f"Failed to upsert subscription: {e}")
 
     async def _evaluate_importance(
         self, sender: str, subject: str, snippet: str
