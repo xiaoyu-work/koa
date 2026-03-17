@@ -5,10 +5,12 @@ Extracted from MapSearchAgent, DirectionsAgent, and AirQualityAgent.
 Each function takes (args: dict, context: AgentToolContext) -> str.
 """
 
+import html
 import json
 import logging
 import os
 import re
+from datetime import datetime
 from typing import Annotated, Any, Dict, Optional
 
 import httpx
@@ -154,7 +156,18 @@ async def search_places(
             }
             price_display = _PRICE_MAP.get(price_level, price_level)
             hours = place.get("regularOpeningHours", {})
-            hours_text = "; ".join(hours.get("weekdayDescriptions", [])) if hours else ""
+            hours_descriptions = hours.get("weekdayDescriptions", []) if hours else []
+            hours_text = "; ".join(hours_descriptions) if hours_descriptions else ""
+
+            # Extract today's hours for the card (compact display)
+            today_hours = ""
+            if hours_descriptions:
+                weekday = datetime.now().strftime("%A")  # e.g. "Monday"
+                for desc in hours_descriptions:
+                    if desc.startswith(weekday):
+                        # "Monday: 10:00 AM – 9:00 PM" → "10:00 AM – 9:00 PM"
+                        today_hours = desc.split(": ", 1)[1] if ": " in desc else desc
+                        break
 
             result_lines.append(f"{i}. {name}")
             if address:
@@ -188,8 +201,8 @@ async def search_places(
                 card["price"] = price_display
             if phone:
                 card["phone"] = phone
-            if hours_text:
-                card["hours"] = hours_text
+            if today_hours:
+                card["hours"] = today_hours
             if maps_uri:
                 card["mapUrl"] = maps_uri
             if website:
