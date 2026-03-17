@@ -80,6 +80,7 @@ async def start_profile_extraction(
         profile_repo=profile_repo,
         callback_url=callback_url or "",
         callback_headers=callback_headers if callback_url else None,
+        database=app._database,
     )
 
     logger.info(f"Profile extraction started: job={job_id}, tenant={tenant_id}, "

@@ -436,7 +436,10 @@ Extract into this structure:
     "family": [{{"name": "Name", "relationship": "mother/father/sibling", "birthday": "Month Day"}}],
     "significant_other": {{"name": "Name", "relationship": "spouse/partner", "birthday": "Month Day"}},
     "anniversary": "Month Day"
-  }}
+  }},
+  "subscriptions": [
+    {{"service_name": "Netflix", "category": "streaming", "amount": 15.99, "currency": "USD", "billing_cycle": "monthly", "status": "active"}}
+  ]
 }}
 
 === STRICT EXTRACTION RULES ===
@@ -492,6 +495,17 @@ Extract into this structure:
    - When in doubt, OMIT the information
    - OMIT empty fields entirely - no null values, no empty arrays
    - If uncertain whether info is about user vs. a company, OMIT it
+
+7. SUBSCRIPTIONS:
+   - Extract from receipts, invoices, billing confirmations, subscription renewal emails.
+   - service_name: The service or product name (e.g. "Netflix", "Spotify", "iCloud", "T-Mobile").
+   - category: One of "streaming", "cloud", "productivity", "saas", "developer", "telecom",
+     "vpn", "fitness", "news", "gaming", "education", "finance", "home", "shopping", "other".
+   - amount: The charged amount as a number (e.g. 15.99). Omit if not found.
+   - currency: Currency code (e.g. "USD"). Default "USD".
+   - billing_cycle: One of "monthly", "yearly", "weekly", "one-time". Omit if unclear.
+   - status: "active" for receipts/renewals, "cancelled" for cancellation confirmations, "trial" for free trials.
+   - DO NOT include one-time purchases (e.g. buying a product on Amazon). Only recurring services.
 
 Return ONLY valid JSON."""
 
@@ -893,6 +907,7 @@ class ProfileExtractionService:
     def start_extraction(
         self, tenant_id: str, providers: list, llm_client,
         profile_repo=None, callback_url: str = "", callback_headers: Optional[Dict[str, str]] = None,
+        database=None,
     ) -> str:
         """
         Start a background extraction job.
@@ -904,6 +919,7 @@ class ProfileExtractionService:
             profile_repo: Optional ProfileRepository for persisting results
             callback_url: Optional URL to POST completed profile to
             callback_headers: Optional headers for the callback request
+            database: Optional asyncpg pool for subscription persistence
 
         Returns:
             job_id for status polling
@@ -923,6 +939,7 @@ class ProfileExtractionService:
         asyncio.create_task(self._run_extraction(
             job_id, tenant_id, providers, llm_client, profile_repo,
             callback_url=callback_url, callback_headers=callback_headers,
+            database=database,
         ))
         return job_id
 
@@ -936,6 +953,7 @@ class ProfileExtractionService:
     async def _run_extraction(
         self, job_id: str, tenant_id: str, providers: list, llm_client, profile_repo=None,
         callback_url: str = "", callback_headers: Optional[Dict[str, str]] = None,
+        database=None,
     ):
         start_time = datetime.now(timezone.utc)
         try:
@@ -1055,6 +1073,44 @@ class ProfileExtractionService:
             # Phase 7: Merge batches from this extraction
             logger.info("Phase 7: Merging batches...")
             new_profile = self._merge_all(profiles)
+
+            # Phase 7.5: Save extracted subscriptions to DB
+            subscriptions = new_profile.pop("subscriptions", [])
+            if subscriptions and database:
+                sub_count = 0
+                for sub in subscriptions:
+                    if not isinstance(sub, dict) or not sub.get("service_name"):
+                        continue
+                    try:
+                        now = datetime.now(timezone.utc)
+                        await database.execute("""
+                            INSERT INTO subscriptions (
+                                tenant_id, service_name, category, amount, currency,
+                                billing_cycle, status, detected_from, updated_at
+                            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                            ON CONFLICT (tenant_id, service_name) DO UPDATE SET
+                                amount = COALESCE(EXCLUDED.amount, subscriptions.amount),
+                                currency = COALESCE(EXCLUDED.currency, subscriptions.currency),
+                                billing_cycle = COALESCE(EXCLUDED.billing_cycle, subscriptions.billing_cycle),
+                                status = EXCLUDED.status,
+                                is_active = TRUE,
+                                updated_at = $9
+                        """,
+                            tenant_id,
+                            sub.get("service_name"),
+                            sub.get("category", "other"),
+                            sub.get("amount"),
+                            sub.get("currency", "USD"),
+                            sub.get("billing_cycle"),
+                            sub.get("status", "active"),
+                            "email_scan",
+                            now,
+                        )
+                        sub_count += 1
+                    except Exception as e:
+                        logger.warning(f"Failed to save subscription {sub.get('service_name')}: {e}")
+                if sub_count:
+                    logger.info(f"Saved {sub_count} subscriptions from extraction for tenant {tenant_id}")
 
             # Phase 8: Save raw extraction & LLM merge with existing profile
             if profile_repo and new_profile:
