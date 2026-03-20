@@ -189,7 +189,11 @@ async def query_events(
 # =============================================================================
 
 async def _preview_create_event(args: dict, context: AgentToolContext) -> str:
-    """Generate a preview of the event to be created."""
+    """Generate a preview of the event to be created.
+    Returns JSON with inline_cards for rich frontend rendering.
+    """
+    import json as _json
+
     summary = args.get("summary", "")
     start_str = args.get("start", "")
     end_str = args.get("end", "")
@@ -208,22 +212,35 @@ async def _preview_create_event(args: dict, context: AgentToolContext) -> str:
         except Exception:
             end_str = f"{start_str} + 1 hour"
 
-    parts = ["Event Draft:"]
-    parts.append(f"Title: {summary}")
-    parts.append(f"Start: {start_str}")
-    parts.append(f"End: {end_str}")
+    # Parse start date into ISO format for frontend card
+    start_date = ""
+    start_time = ""
+    try:
+        start_dt = _parse_time_to_datetime(start_str)
+        start_date = start_dt.strftime("%Y-%m-%d")
+        start_time = start_dt.strftime("%I:%M %p").lstrip("0")
+    except Exception:
+        start_date = start_str
 
-    if description:
-        parts.append(f"Description: {description}")
+    # Build inline card JSON for rich rendering
+    card = {
+        "card_type": "event_draft",
+        "title": summary,
+        "startDate": start_date,
+        "startTime": start_time,
+        "endTime": end_str,
+        "location": location or None,
+        "options": ["approve", "edit", "decline"],
+    }
+
+    # Return text with embedded card marker for the frontend
+    text_parts = [f"📅 **{summary}**"]
+    text_parts.append(f"🕐 {start_str} — {end_str}")
     if location:
-        parts.append(f"Location: {location}")
-    if attendees:
-        parts.append(f"Attendees: {attendees}")
+        text_parts.append(f"📍 {location}")
 
-    parts.append("---")
-    parts.append("Looks good?")
-
-    return "\n".join(parts)
+    # Embed card data as a JSON block the frontend can parse
+    return "\n".join(text_parts) + "\n\n<!-- inline_card:" + _json.dumps(card, ensure_ascii=False) + " -->"
 
 
 @tool(needs_approval=True, get_preview=_preview_create_event)
