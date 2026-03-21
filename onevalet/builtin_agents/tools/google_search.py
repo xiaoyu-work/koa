@@ -53,6 +53,49 @@ async def _download_thumbnails(
         return await asyncio.gather(*tasks)
 
 
+async def _brave_search_fallback(query: str, num_results: int = 5) -> str:
+    """Fallback to Brave Search API when Google Search fails."""
+    api_key = os.getenv("BRAVE_SEARCH_API_KEY")
+    if not api_key:
+        return ""
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                "https://api.search.brave.com/res/v1/web/search",
+                params={"q": query, "count": min(num_results, 10)},
+                headers={
+                    "Accept": "application/json",
+                    "Accept-Encoding": "gzip",
+                    "X-Subscription-Token": api_key,
+                },
+                timeout=15.0,
+            )
+            if response.status_code != 200:
+                logger.warning(f"Brave Search fallback failed: {response.status_code}")
+                return ""
+
+            data = response.json()
+            results = data.get("web", {}).get("results", [])
+            if not results:
+                return f"No results found for '{query}'."
+
+            output = []
+            for i, item in enumerate(results[:num_results], 1):
+                title = item.get("title", "No title")
+                url = item.get("url", "")
+                description = item.get("description", "").replace("\n", " ")
+                output.append(f"{i}. {title}\n   URL: {url}\n   {description}")
+
+            return (
+                f"Found results for '{query}' (via Brave Search).\n"
+                f"Top {len(output)} results:\n\n" + "\n\n".join(output)
+            )
+    except Exception as e:
+        logger.warning(f"Brave Search fallback error: {e}")
+        return ""
+
+
 async def google_search_executor(args: dict, context: AgentToolContext = None):
     """Search the web using Google Custom Search API.
 
@@ -70,6 +113,10 @@ async def google_search_executor(args: dict, context: AgentToolContext = None):
     search_engine_id = os.getenv("GOOGLE_SEARCH_ENGINE_ID")
 
     if not api_key or not search_engine_id:
+        # Try Brave Search as primary if Google not configured
+        brave_result = await _brave_search_fallback(query, num_results)
+        if brave_result:
+            return brave_result
         return (
             "Error: Google Search API not configured. "
             "Set GOOGLE_SEARCH_API_KEY and GOOGLE_SEARCH_ENGINE_ID environment variables."
@@ -94,6 +141,10 @@ async def google_search_executor(args: dict, context: AgentToolContext = None):
 
             if response.status_code != 200:
                 logger.error(f"Google Search API error: {response.status_code} - {response.text}")
+                # Fallback to Brave Search
+                brave_result = await _brave_search_fallback(query, num_results)
+                if brave_result:
+                    return brave_result
                 return f"Error: Search failed with status {response.status_code}"
 
             data = response.json()
@@ -176,9 +227,15 @@ async def google_search_executor(args: dict, context: AgentToolContext = None):
             return ToolOutput(text=text, media=media_list)
 
     except httpx.TimeoutException:
+        brave_result = await _brave_search_fallback(query, num_results)
+        if brave_result:
+            return brave_result
         return "Error: Search request timed out"
     except Exception as e:
         logger.error(f"Google Search error: {e}", exc_info=True)
+        brave_result = await _brave_search_fallback(query, num_results)
+        if brave_result:
+            return brave_result
         return f"Error: {e}"
 
 
