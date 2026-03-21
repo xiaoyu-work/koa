@@ -132,7 +132,11 @@ class MomexMemory:
                 for item in results
             ]
         except Exception as e:
-            logger.warning(f"Failed to search memories for {tenant_id}: {e}")
+            import traceback
+            logger.warning(
+                f"Failed to search memories for {tenant_id}: {e}\n"
+                f"{traceback.format_exc()}"
+            )
             return []
 
     async def add(
@@ -150,4 +154,8 @@ class MomexMemory:
             memory = self._get_memory(tenant_id)
             await memory.add(messages=messages, infer=infer)
         except Exception as e:
-            logger.warning(f"Failed to add memories for {tenant_id}: {e}")
+            import traceback
+            logger.warning(
+                f"Failed to add memories for {tenant_id}: {e}\n"
+                f"{traceback.format_exc()}"
+            )
