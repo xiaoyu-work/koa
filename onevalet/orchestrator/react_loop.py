@@ -417,9 +417,37 @@ class ReactLoopMixin:
                         data={"tool_name": tc.name, "call_id": tc.id},
                     )
 
-                # Execute all tool calls concurrently with per-tool timing
+                # Execute all tool calls concurrently with per-tool timing.
+                # When speculative tasks exist (image requests), check if a
+                # matching result is already available before executing.
+                speculative = (context or {}).get("_speculative_tasks", {})
+
                 async def _timed_execute(tc):
                     t0 = time.monotonic()
+
+                    # Try to reuse a speculative result
+                    if speculative and tc.name == "google_search":
+                        try:
+                            args = tc.arguments if isinstance(tc.arguments, dict) else json.loads(tc.arguments)
+                        except (json.JSONDecodeError, TypeError):
+                            args = {}
+                        search_type = args.get("search_type", "web")
+                        spec_key = f"google_search:{search_type}"
+                        spec_task = speculative.pop(spec_key, None)
+                        if spec_task is not None:
+                            try:
+                                result = await spec_task
+                                if result is not None:
+                                    elapsed = int((time.monotonic() - t0) * 1000)
+                                    logger.info(
+                                        f"[Speculative] ♻️  Reused {spec_key} "
+                                        f"(waited {elapsed}ms for pre-started task)"
+                                    )
+                                    return TimedResult(result=result, duration_ms=elapsed)
+                            except Exception as e:
+                                logger.info(f"[Speculative] {spec_key} failed, falling back: {e}")
+
+                    # Normal execution path
                     try:
                         r = await self._execute_with_timeout(tc, tenant_id, metadata=metadata, request_tools=request_tools, request_context=context)
                     except BaseException as exc:
@@ -681,6 +709,13 @@ class ReactLoopMixin:
                 yield event
 
         duration_ms = int((time.monotonic() - start_time) * 1000)
+
+        # Cancel any speculative tasks that were not consumed
+        speculative = (context or {}).get("_speculative_tasks", {})
+        for key, task in speculative.items():
+            if task and not task.done():
+                task.cancel()
+                logger.info(f"[Speculative] Cancelled unused task: {key}")
 
         yield AgentEvent(
             type=EventType.EXECUTION_END,

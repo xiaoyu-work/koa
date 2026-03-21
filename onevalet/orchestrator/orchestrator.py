@@ -54,6 +54,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any, AsyncIterator, Callable, TYPE_CHECKING
 
 from ..message import Message
+from ..models import AgentToolContext
 from ..result import AgentResult, AgentStatus
 from ..streaming.models import StreamMode, AgentEvent, EventType
 
@@ -461,6 +462,17 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
             yield AgentEvent(type=EventType.EXECUTION_END, data=agent_result)
             return
 
+        # Step 3b: Speculative execution — kick off likely tools before LLM decides
+        # For image requests, the LLM almost always calls google_search. Starting
+        # it now lets us reuse the result later, saving 1-3 seconds of latency.
+        speculative_tasks: Dict[str, asyncio.Task] = {}
+        if images and message.strip():
+            speculative_tasks = self._start_speculative_tasks(
+                message, tenant_id, metadata,
+            )
+            if speculative_tasks:
+                context["_speculative_tasks"] = speculative_tasks
+
         # Step 4: Intent Analysis — classify domains and detect multi-intent
         intent = await self._analyze_intent(message, context)
 
@@ -578,6 +590,84 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
         # Step 9: Post-process
         result = await self.post_process(result, context)
         yield AgentEvent(type=EventType.EXECUTION_END, data=result)
+
+    # ==========================================================================
+    # SPECULATIVE EXECUTION
+    # ==========================================================================
+
+    _SPECULATIVE_TIMEOUT = 10.0  # seconds before giving up on speculative task
+
+    def _start_speculative_tasks(
+        self,
+        message: str,
+        tenant_id: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, asyncio.Task]:
+        """Start speculative tool execution for image requests.
+
+        For requests containing images, the LLM almost always invokes
+        ``google_search``.  By kicking the search off *before* the first
+        LLM call, we can shave 1-3 s off the total latency.
+
+        Returns a dict mapping task keys to ``asyncio.Task`` objects.
+        The react loop checks these tasks and reuses results when the
+        LLM requests a matching tool call.
+        """
+        tasks: Dict[str, asyncio.Task] = {}
+
+        try:
+            from ..builtin_agents.tools.google_search import google_search_executor
+        except ImportError:
+            logger.debug("[Speculative] google_search not available, skipping")
+            return tasks
+
+        # Speculative web search using the user's raw prompt
+        async def _run_web_search():
+            try:
+                ctx = AgentToolContext(tenant_id=tenant_id, metadata=metadata or {})
+                return await asyncio.wait_for(
+                    google_search_executor(
+                        {"query": message, "num_results": 5, "search_type": "web"},
+                        ctx,
+                    ),
+                    timeout=self._SPECULATIVE_TIMEOUT,
+                )
+            except Exception as e:
+                logger.info(f"[Speculative] web search failed (non-fatal): {e}")
+                return None
+
+        # Speculative image search using the user's raw prompt
+        async def _run_image_search():
+            try:
+                ctx = AgentToolContext(tenant_id=tenant_id, metadata=metadata or {})
+                return await asyncio.wait_for(
+                    google_search_executor(
+                        {"query": message, "num_results": 5, "search_type": "image"},
+                        ctx,
+                    ),
+                    timeout=self._SPECULATIVE_TIMEOUT,
+                )
+            except Exception as e:
+                logger.info(f"[Speculative] image search failed (non-fatal): {e}")
+                return None
+
+        tasks["google_search:web"] = asyncio.create_task(_run_web_search())
+        tasks["google_search:image"] = asyncio.create_task(_run_image_search())
+
+        logger.info(
+            f"[Speculative] Started {len(tasks)} speculative tasks for image request"
+        )
+        return tasks
+
+    @staticmethod
+    def _cancel_speculative_tasks(
+        speculative: Dict[str, asyncio.Task],
+    ) -> None:
+        """Cancel any speculative tasks that were not consumed."""
+        for key, task in speculative.items():
+            if task and not task.done():
+                task.cancel()
+                logger.info(f"[Speculative] Cancelled unused task: {key}")
 
     # ==========================================================================
     # REACT LOOP — see react_loop.py (ReactLoopMixin)
