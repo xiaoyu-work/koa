@@ -79,17 +79,20 @@ class CredentialStore(Repository):
         account_name: str = "primary",
     ) -> None:
         """Save credentials. Upserts on conflict."""
-        # Guard against double-encoding: if credentials is already a JSON string, parse it first
         if isinstance(credentials, str):
             credentials = json.loads(credentials)
+        # Pass dict directly — asyncpg's JSONB codec handles encoding.
+        # Do NOT json.dumps() here: the codec calls json.dumps() internally,
+        # and double-encoding stores a JSON string instead of a JSON object,
+        # breaking SQL operators like ->>'email'.
         await self.db.execute(
             """
             INSERT INTO credentials (tenant_id, service, account_name, credentials_json, updated_at)
-            VALUES ($1, $2, $3, $4::jsonb, NOW())
+            VALUES ($1, $2, $3, $4, NOW())
             ON CONFLICT (tenant_id, service, account_name)
-            DO UPDATE SET credentials_json = $4::jsonb, updated_at = NOW()
+            DO UPDATE SET credentials_json = $4, updated_at = NOW()
             """,
-            tenant_id, service, account_name, json.dumps(credentials),
+            tenant_id, service, account_name, credentials,
         )
 
     async def get(
