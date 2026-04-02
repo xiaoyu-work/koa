@@ -35,7 +35,6 @@ _PROVIDER_ENV_VARS: Dict[str, Optional[str]] = {
     "dashscope": "DASHSCOPE_API_KEY",
     "gemini": "GOOGLE_API_KEY",
     "ollama": None,
-    "copilot": None,  # Copilot uses OAuth, not API keys
 }
 
 
@@ -65,9 +64,6 @@ def build_litellm_model_string(provider: str, model: str) -> str:
         return f"ollama/{model}"
     if provider == "dashscope":
         # DashScope uses OpenAI-compatible mode via base_url
-        return f"openai/{model}"
-    if provider == "copilot":
-        # Copilot API is OpenAI-compatible
         return f"openai/{model}"
     # Fallback: pass through as-is
     return model
