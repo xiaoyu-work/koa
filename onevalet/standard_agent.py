@@ -335,9 +335,65 @@ class StandardAgent(BaseAgent):
     def get_system_prompt(self) -> str:
         """Return the system prompt for the mini ReAct loop.
 
+        Injects user context (True Memory, User Profile, Personality) from
+        the orchestrator handoff so domain agents can personalize responses.
         Override in subclasses to customize. Only used when tools is non-empty.
         """
-        return self.domain_system_prompt + self._COMPLETE_TASK_INSTRUCTION
+        parts = [self.domain_system_prompt]
+
+        # Inject user context from orchestrator handoff
+        meta = self.context_hints.get("handoff", {}).get("known_entities", {})
+        # Also check direct context_hints for backward compat
+        user_context = self._build_user_context_section()
+        if user_context:
+            parts.append(user_context)
+
+        parts.append(self._COMPLETE_TASK_INSTRUCTION)
+        return "\n\n".join(parts)
+
+    def _build_user_context_section(self) -> str:
+        """Build user context section from orchestrator-passed data."""
+        sections: List[str] = []
+
+        # True Memory (canonical facts + behavioral feedback)
+        true_memory = self.context_hints.get("true_memory")
+        if true_memory and isinstance(true_memory, list):
+            lines = []
+            for fact in true_memory[:10]:
+                if not isinstance(fact, dict):
+                    continue
+                summary = str(fact.get("summary") or "").strip()
+                if not summary:
+                    continue
+                line = f"- {summary}"
+                why = str(fact.get("why") or "").strip()
+                how = str(fact.get("how_to_apply") or "").strip()
+                if why:
+                    line += f" Why: {why}"
+                if how:
+                    line += f" Apply: {how}"
+                lines.append(line)
+            if lines:
+                sections.append("[True Memory]\n" + "\n".join(lines))
+
+        # User Profile
+        user_profile = self.context_hints.get("user_profile")
+        if user_profile and isinstance(user_profile, dict):
+            profile_lines = []
+            identity = user_profile.get("identity") or {}
+            if identity.get("full_name"):
+                profile_lines.append(f"Name: {identity['full_name']}")
+            if identity.get("birthday"):
+                profile_lines.append(f"Birthday: {identity['birthday']}")
+            if profile_lines:
+                sections.append("[User Profile]\n" + "\n".join(profile_lines))
+
+        # Personality
+        personality = self.context_hints.get("koi_personality")
+        if personality and isinstance(personality, str):
+            sections.append(f"[Personality Style]\n{personality}")
+
+        return "\n\n".join(sections)
 
     # ===== Required Methods (Must Override) =====
 
