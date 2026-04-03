@@ -94,6 +94,9 @@ from ..config import AgentRegistry
 logger = logging.getLogger(__name__)
 
 
+from .tool_pipeline import ToolPipeline, credential_check_hook, result_audit_hook
+from .state_persistence import PlanStore
+
 class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
     """
     Central coordinator for all agents with ReAct loop architecture.
@@ -267,9 +270,15 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
         # Audit logging
         self._audit = AuditLogger()
 
+        # Tool execution pipeline with before/after hooks
+        self._tool_pipeline = ToolPipeline()
+        self._tool_pipeline.add_before_hook(credential_check_hook)
+        self._tool_pipeline.add_after_hook(result_audit_hook)
+
         # State
         self._initialized = False
-        self._tenant_plans: Dict[str, Any] = {}
+        self._plan_store = PlanStore(database=database)
+        self._tenant_plans: Dict[str, Any] = {}  # in-memory fallback for legacy code
 
     @property
     def agent_registry(self) -> Optional[AgentRegistry]:
@@ -338,6 +347,34 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
             await self._agent_registry.shutdown()
         self._initialized = False
         logger.info("Orchestrator shutdown")
+
+    def _resolve_model_fallback(self, loop_error: Any) -> Optional[Any]:
+        """Resolve a fallback LLM client for model-level retry.
+
+        Returns an LLM client different from the one that failed, or
+        None if no fallback is available.
+        """
+        from .error_classifier import LLMErrorKind
+
+        # Don't retry auth errors at model level
+        if loop_error.error_kind == LLMErrorKind.AUTH:
+            return None
+
+        fallback_providers = self._react_config.fallback_providers
+        if not fallback_providers:
+            return None
+
+        registry = self._get_llm_registry()
+        if registry is None:
+            return None
+
+        for provider_name in fallback_providers:
+            client = registry.get(provider_name)
+            if client is not None and client is not self.llm_client:
+                logger.info(f"[Orchestrator] Model-level fallback resolved: {provider_name}")
+                return client
+
+        return None
 
     # ==========================================================================
     # MAIN ENTRY POINT
@@ -553,18 +590,65 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
                 for img in images
             ]
 
-        # Step 7: Run ReAct loop
+        # Step 7: Run ReAct loop with model-level fallback
         final_response = ""
         exec_data: Dict[str, Any] = {}
-        async for event in self._react_loop_events(
-            messages, tool_schemas, tenant_id,
-            context=context, user_message=message, media=media,
-            metadata=metadata, request_tools=request_tools,
-        ):
-            if event.type == EventType.EXECUTION_END:
-                exec_data = event.data
-                final_response = exec_data.get("final_response", "")
-            yield event
+
+        from .react_loop import _ReactLoopLLMError
+
+        try:
+            async for event in self._react_loop_events(
+                messages, tool_schemas, tenant_id,
+                context=context, user_message=message, media=media,
+                metadata=metadata, request_tools=request_tools,
+            ):
+                if event.type == EventType.EXECUTION_END:
+                    exec_data = event.data
+                    final_response = exec_data.get("final_response", "")
+                yield event
+        except _ReactLoopLLMError as loop_err:
+            # Model-level fallback: retry the entire ReAct loop with a
+            # different provider when the primary model fails after all
+            # per-call retries are exhausted.
+            fallback_client = self._resolve_model_fallback(loop_err)
+            if fallback_client is not None:
+                logger.warning(
+                    f"[Orchestrator] ReAct loop failed (turn={loop_err.turn}, "
+                    f"kind={loop_err.error_kind.value}), retrying with fallback model"
+                )
+                # Rebuild messages to get a clean context for retry
+                retry_messages = await self._build_llm_messages(context, message, needs_memory=intent.needs_memory)
+                try:
+                    async for event in self._react_loop_events(
+                        retry_messages, tool_schemas, tenant_id,
+                        context=context, user_message=message, media=media,
+                        metadata=metadata, request_tools=request_tools,
+                        _llm_client_override=fallback_client,
+                    ):
+                        if event.type == EventType.EXECUTION_END:
+                            exec_data = event.data
+                            final_response = exec_data.get("final_response", "")
+                        yield event
+                except _ReactLoopLLMError as retry_err:
+                    logger.error(
+                        f"[Orchestrator] Fallback model also failed: {retry_err.original}"
+                    )
+                    yield AgentEvent(
+                        type=EventType.ERROR,
+                        data={"error": str(retry_err.original), "error_type": type(retry_err.original).__name__},
+                    )
+                    final_response = "Sorry, I'm having trouble processing your request right now. Please try again later."
+                    exec_data = {"final_response": final_response, "turns": 0, "token_usage": {}, "duration_ms": 0, "tool_calls_count": 0, "tool_calls": []}
+            else:
+                logger.error(
+                    f"[Orchestrator] ReAct loop failed, no fallback available: {loop_err.original}"
+                )
+                yield AgentEvent(
+                    type=EventType.ERROR,
+                    data={"error": str(loop_err.original), "error_type": type(loop_err.original).__name__},
+                )
+                final_response = "Sorry, I'm having trouble processing your request right now. Please try again later."
+                exec_data = {"final_response": final_response, "turns": 0, "token_usage": {}, "duration_ms": 0, "tool_calls_count": 0, "tool_calls": []}
 
         # Step 8: Map loop results -> AgentResult
         pending_approvals = exec_data.get("pending_approvals", [])
@@ -1326,8 +1410,11 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
                     data={"sub_task_id": st.id},
                 )
             else:
-                # Fix 6: Multiple parallel tasks — collect events in memory
-                # during parallel execution, then yield them after.
+                # Multiple parallel tasks — each gets an isolated context
+                # manager and a deepcopy of context to prevent shared-state
+                # race conditions across concurrent sub-tasks.
+                _agent_pool_lock = asyncio.Lock()
+
                 async def _run_collecting(sub_task):
                     aug_msg = self._build_dag_augmented_message(
                         sub_task, all_results,
@@ -1335,6 +1422,7 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
                     t_schemas = await self._build_tool_schemas_with_domain_fallback(
                         tenant_id, domains=[sub_task.domain],
                     )
+                    # Fully isolated context per sub-task
                     task_context = copy.deepcopy(context)
                     msgs = await self._build_llm_messages(task_context, aug_msg)
                     exec_d: Dict[str, Any] = {}
@@ -1437,7 +1525,11 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
         results: Dict[int, "SubTaskResult"],
         context: Dict[str, Any],
     ) -> str:
-        """Synthesize multiple sub-task results into a unified response."""
+        """Synthesize multiple sub-task results into a unified response.
+
+        Includes user profile and language context so the synthesis
+        matches the user's communication style and language preference.
+        """
         # If only one sub-task completed successfully, return its result directly
         successful = [r for r in results.values() if r.status == "completed"]
         if len(successful) == 1:
@@ -1458,10 +1550,36 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
             "Preserve all specific data points. Be concise."
         )
 
+        # Build a context-aware system prompt for synthesis
+        synthesis_system_parts = [
+            "You synthesize multiple task results into a unified response.",
+        ]
+
+        # Inject user profile if available for personalized tone
+        user_profile = context.get("user_profile")
+        if user_profile:
+            profile_str = user_profile if isinstance(user_profile, str) else str(user_profile)
+            if len(profile_str) < 500:
+                synthesis_system_parts.append(
+                    f"\n[User Profile]\n{profile_str}"
+                )
+
+        # Inject language preference so synthesis matches user's language
+        language = context.get("language") or context.get("locale")
+        if language:
+            synthesis_system_parts.append(
+                f"\nRespond in the same language as the user's original message. "
+                f"User locale hint: {language}"
+            )
+        else:
+            synthesis_system_parts.append(
+                "\nRespond in the same language as the user's original message."
+            )
+
         messages = [
             {
                 "role": "system",
-                "content": "You synthesize multiple task results into a unified response.",
+                "content": "\n".join(synthesis_system_parts),
             },
             {"role": "user", "content": synthesis_message},
         ]

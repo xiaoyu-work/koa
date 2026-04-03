@@ -9,6 +9,8 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
+from .error_classifier import LLMErrorKind, classify_llm_error
+
 logger = logging.getLogger(__name__)
 
 
@@ -117,21 +119,21 @@ class LLMManagerMixin:
 
             except Exception as e:
                 last_error = e
-                error_name = type(e).__name__.lower()
+                error_kind = classify_llm_error(e)
 
                 # Auth errors: raise immediately (no fallback can help)
-                if "auth" in error_name or "authentication" in error_name or "permission" in error_name:
+                if error_kind == LLMErrorKind.AUTH:
                     raise
 
                 # Rate limit: exponential backoff
-                if "ratelimit" in error_name or "rate_limit" in error_name or "429" in str(e):
+                if error_kind == LLMErrorKind.RATE_LIMIT:
                     delay = self._react_config.llm_retry_base_delay * (2 ** attempt)
                     logger.warning(f"Rate limited, retrying in {delay}s (attempt {attempt + 1})")
                     await asyncio.sleep(delay)
                     continue
 
                 # Context overflow: three-step recovery
-                if "context" in error_name or "overflow" in error_name or "token" in error_name or "length" in str(e).lower():
+                if error_kind == LLMErrorKind.CONTEXT_OVERFLOW:
                     if attempt == 0:
                         logger.warning("Context overflow, trimming history")
                         messages = self._context_manager.trim_if_needed(messages)
@@ -144,16 +146,21 @@ class LLMManagerMixin:
                     continue
 
                 # Timeout: retry once
-                if "timeout" in error_name:
+                if error_kind == LLMErrorKind.TIMEOUT:
                     if attempt == 0:
                         logger.warning("LLM timeout, retrying once")
                         continue
                     break  # let fallback chain handle it
 
-                # Unknown error: retry with backoff
+                # Bad request: don't retry (invalid params won't fix themselves)
+                if error_kind == LLMErrorKind.BAD_REQUEST:
+                    logger.warning(f"LLM bad request ({e}), not retrying")
+                    break
+
+                # Service unavailable / transient / unknown: retry with backoff
                 if attempt < self._react_config.llm_max_retries:
                     delay = self._react_config.llm_retry_base_delay * (2 ** attempt)
-                    logger.warning(f"LLM call failed ({e}), retrying in {delay}s")
+                    logger.warning(f"LLM call failed ({error_kind.value}: {e}), retrying in {delay}s")
                     await asyncio.sleep(delay)
                     continue
 

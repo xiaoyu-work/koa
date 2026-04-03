@@ -27,6 +27,20 @@ logger = logging.getLogger(__name__)
 
 TimedResult = namedtuple("TimedResult", ["result", "duration_ms"])
 
+
+class _ReactLoopLLMError(Exception):
+    """Raised when the ReAct loop LLM call fails after all retries.
+
+    Carries classification metadata so the caller can decide whether
+    to attempt model-level fallback.
+    """
+
+    def __init__(self, original: Exception, error_kind: "LLMErrorKind", turn: int):
+        self.original = original
+        self.error_kind = error_kind
+        self.turn = turn
+        super().__init__(str(original))
+
 # ── Tool acknowledgment messages ──────────────────────────────────
 # Shown to the user before tool execution so they know Koi is working.
 # Only emitted on turn 1 (first tool invocation); subsequent turns in
@@ -114,6 +128,7 @@ class ReactLoopMixin:
         media: Optional[List[Dict[str, Any]]] = None,
         metadata: Optional[Dict[str, Any]] = None,
         request_tools: Optional[List] = None,
+        _llm_client_override: Optional[Any] = None,
     ) -> AsyncIterator[AgentEvent]:
         """Unified ReAct loop implementation yielding streaming events.
 
@@ -146,6 +161,8 @@ class ReactLoopMixin:
         final_response = ""
         result_status = None
         _recent_tool_names: List[str] = []  # watchdog loop detection
+        _recent_tool_fingerprints: List[str] = []  # tool name + args hash
+        _recent_result_hashes: List[str] = []  # result content hash
         _response_media: List[Dict[str, Any]] = []  # images for client storage
 
         logger.info(f"[ReAct] tenant={tenant_id}")
@@ -156,9 +173,11 @@ class ReactLoopMixin:
         )
 
         # Model routing: classify once before the loop, reuse for all turns.
-        routed_llm_client = None
+        # If a model-level override is provided (e.g. from fallback), use it
+        # directly and skip routing.
+        routed_llm_client = _llm_client_override
         routing_score = -1
-        if self._model_router:
+        if routed_llm_client is None and self._model_router:
             try:
                 from ..llm.router import RoutingDecision
                 decision = await self._model_router.route(messages)
@@ -181,8 +200,16 @@ class ReactLoopMixin:
         enable_planning = routing_score >= self._react_config.planning_score_threshold
 
         # Case 1: Pending plan from previous turn -- user is responding to it
-        if self._tenant_plans.get(tenant_id) and context:
-            pending_plan_text = self._format_plan_text(self._tenant_plans.pop(tenant_id))
+        # Check both persistent store and in-memory fallback.
+        plan_store = getattr(self, '_plan_store', None)
+        pending_plan_data = None
+        if plan_store is not None:
+            pending_plan_data = await plan_store.pop(tenant_id)
+        if pending_plan_data is None:
+            pending_plan_data = self._tenant_plans.pop(tenant_id, None)
+
+        if pending_plan_data and context:
+            pending_plan_text = self._format_plan_text(pending_plan_data)
 
             logger.info("[ReAct] Pending plan found, injecting into prompt for LLM to handle")
             messages = await self._build_llm_messages(
@@ -207,7 +234,11 @@ class ReactLoopMixin:
                     # Present plan to user, pause execution
                     plan_text = self._format_plan_text(plan_data)
                     friendly = self._format_plan_for_user(plan_data)
-                    self._tenant_plans[tenant_id] = plan_data
+                    # Persist plan to survive restarts
+                    if plan_store is not None:
+                        await plan_store.save(tenant_id, plan_data)
+                    else:
+                        self._tenant_plans[tenant_id] = plan_data
                     logger.info(f"[ReAct] Plan generated, awaiting approval: {plan_data.get('goal', '')}")
                     yield AgentEvent(
                         type=EventType.PLAN_GENERATED,
@@ -268,11 +299,21 @@ class ReactLoopMixin:
                     **extra_kwargs,
                 )
             except Exception as e:
-                yield AgentEvent(
-                    type=EventType.ERROR,
-                    data={"error": str(e), "error_type": type(e).__name__},
-                )
-                return
+                # Classify the error to decide whether to retry at model level
+                from .error_classifier import classify_llm_error, LLMErrorKind
+                error_kind = classify_llm_error(e)
+
+                if error_kind == LLMErrorKind.AUTH:
+                    # Auth errors are not recoverable at model level
+                    yield AgentEvent(
+                        type=EventType.ERROR,
+                        data={"error": str(e), "error_type": type(e).__name__},
+                    )
+                    return
+
+                # For other errors: signal the caller to attempt model-level
+                # fallback by raising with classification metadata.
+                raise _ReactLoopLLMError(e, error_kind, turn) from e
 
             # Accumulate token usage
             usage = getattr(response, "usage", None)
@@ -285,6 +326,8 @@ class ReactLoopMixin:
 
             # No tool calls -> LLM forgot to call complete_task.
             # Retry up to max_complete_task_retries times with tool_choice="required".
+            # Nudge messages are removed after each attempt to avoid polluting
+            # subsequent turns with "Call complete_task now" clutter.
             if not tool_calls:
                 max_retries = self._react_config.max_complete_task_retries
                 for retry in range(1, max_retries + 1):
@@ -292,18 +335,22 @@ class ReactLoopMixin:
                         f"[ReAct] turn={turn} no tool calls, "
                         f"grace retry {retry}/{max_retries}"
                     )
-                    messages.append({"role": "user", "content": "Call `complete_task` now with your final answer."})
+                    nudge_msg = {"role": "user", "content": "Call `complete_task` now with your final answer."}
+                    messages.append(nudge_msg)
                     try:
                         response = await self._llm_call_with_retry(
                             messages, tool_schemas, tool_choice="required",
                             llm_client_override=routed_llm_client,
                         )
                     except Exception as e:
+                        messages.pop()  # remove nudge before propagating
                         yield AgentEvent(
                             type=EventType.ERROR,
                             data={"error": str(e), "error_type": type(e).__name__},
                         )
                         return
+                    # Remove the nudge message so it doesn't pollute context
+                    messages.pop()
                     usage_retry = getattr(response, "usage", None)
                     if usage_retry:
                         total_usage.input_tokens += getattr(usage_retry, "prompt_tokens", 0)
@@ -637,10 +684,31 @@ class ReactLoopMixin:
                         yield event
                     break
 
-                # Watchdog: detect loops
-                for tn in tool_names:
-                    _recent_tool_names.append(tn)
-                loop_desc = self._detect_loop(_recent_tool_names)
+                # Watchdog: detect loops (enhanced with args + result hashes)
+                import hashlib
+                for tc, timed in zip(tool_calls, timed_results):
+                    _recent_tool_names.append(tc.name)
+                    # Fingerprint: tool name + serialized args
+                    try:
+                        args_str = json.dumps(
+                            tc.arguments if isinstance(tc.arguments, dict) else json.loads(tc.arguments),
+                            sort_keys=True,
+                        )
+                    except (json.JSONDecodeError, TypeError):
+                        args_str = str(tc.arguments)
+                    fp = f"{tc.name}:{hashlib.md5(args_str.encode()).hexdigest()[:8]}"
+                    _recent_tool_fingerprints.append(fp)
+                    # Result hash
+                    result_val = timed.result if isinstance(timed, TimedResult) else timed
+                    result_str = str(result_val) if result_val is not None else ""
+                    rh = hashlib.md5(result_str[:2000].encode()).hexdigest()[:8]
+                    _recent_result_hashes.append(rh)
+
+                loop_desc = self._detect_loop(
+                    _recent_tool_names,
+                    _recent_tool_fingerprints,
+                    _recent_result_hashes,
+                )
                 if loop_desc:
                     logger.warning(f"[ReAct] {loop_desc}")
                     final_response = "I noticed I was repeating the same actions without making progress. Let me provide what I have so far."
@@ -765,24 +833,36 @@ class ReactLoopMixin:
 
         system_msgs, old_msgs, recent_msgs = split
 
-        # Build a compact representation of old messages for summarization
+        # Token-budget-aware truncation: allocate a per-message budget
+        # based on the summarizer's total budget rather than a fixed
+        # character count.  This preserves more content from tool results
+        # that carry important data in the second half.
+        SUMMARIZER_BUDGET_CHARS = 12_000  # ~3k tokens for the summarizer input
+        per_msg_budget = max(200, SUMMARIZER_BUDGET_CHARS // max(len(old_msgs), 1))
+
         old_text_parts = []
         for msg in old_msgs:
             role = msg.get("role", "unknown")
             content = msg.get("content", "")
             if isinstance(content, str) and content:
-                # Truncate very long individual messages for the summary request
-                if len(content) > 500:
-                    content = content[:497] + "..."
+                if len(content) > per_msg_budget:
+                    # Keep head and tail to preserve both context and conclusions
+                    head_len = int(per_msg_budget * 0.6)
+                    tail_len = int(per_msg_budget * 0.35)
+                    content = (
+                        content[:head_len]
+                        + f"\n...[{len(content) - head_len - tail_len} chars omitted]...\n"
+                        + content[-tail_len:]
+                    )
                 old_text_parts.append(f"{role}: {content}")
 
         if not old_text_parts:
             return self._context_manager.trim_if_needed(messages)
 
         old_text = "\n".join(old_text_parts)
-        # Cap the input to the summarizer to avoid nested overflow
-        if len(old_text) > 8000:
-            old_text = old_text[:8000] + "\n...[truncated]"
+        # Final safety cap for the summarizer input
+        if len(old_text) > SUMMARIZER_BUDGET_CHARS:
+            old_text = old_text[:SUMMARIZER_BUDGET_CHARS] + "\n...[truncated]"
 
         try:
             summary_response = await self.llm_client.chat_completion(
@@ -875,9 +955,37 @@ class ReactLoopMixin:
         return msg
 
     @staticmethod
-    def _detect_loop(tool_history: list) -> Optional[str]:
+    def _detect_loop(
+        tool_history: list,
+        fingerprint_history: Optional[list] = None,
+        result_hash_history: Optional[list] = None,
+    ) -> Optional[str]:
+        """Detect if the LLM is repeating the same actions.
+
+        Checks three layers:
+        1. Same tool+args called consecutively (exact repeat)
+        2. Different tools but identical results (no progress)
+        3. Tool name pattern cycles (A-B-A-B)
+        """
+        # Layer 1: Same tool + same args 3 times (exact repeat — strongest signal)
+        if fingerprint_history and len(fingerprint_history) >= 3:
+            if len(set(fingerprint_history[-3:])) == 1:
+                return f"Exact repeat: {fingerprint_history[-1]} called 3 times with same args"
+
+        # Layer 2: Consecutive identical results (no progress)
+        if result_hash_history and len(result_hash_history) >= 2:
+            if result_hash_history[-1] == result_hash_history[-2]:
+                # Same tool producing same output — wasting tokens
+                if fingerprint_history and len(fingerprint_history) >= 2:
+                    if fingerprint_history[-1] == fingerprint_history[-2]:
+                        return "No progress: same tool returned identical results twice"
+
+        # Layer 3: Tool name pattern cycles (fallback to original logic)
         if len(tool_history) >= 3 and len(set(tool_history[-3:])) == 1:
-            return f"Loop detected: {tool_history[-1]} called 3 times consecutively"
+            # Only flag if we don't have fingerprint data or fingerprints also match
+            if not fingerprint_history or len(set(fingerprint_history[-3:])) == 1:
+                return f"Loop detected: {tool_history[-1]} called 3 times consecutively"
+
         for cycle_len in range(2, 5):
             needed = cycle_len * 2
             if len(tool_history) < needed:
@@ -887,4 +995,5 @@ class ReactLoopMixin:
             if all(tail[i] == cycle[i % cycle_len] for i in range(needed)):
                 pattern = "↔".join(cycle)
                 return f"Cycle detected: {pattern} repeated {needed // cycle_len} times"
+
         return None

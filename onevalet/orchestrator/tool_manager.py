@@ -302,6 +302,19 @@ class ToolManagerMixin:
                 credentials=self.credential_store,
                 metadata=self._build_tool_metadata(metadata),
             )
+
+            # Use tool pipeline if available for unified before/after hooks
+            pipeline = getattr(self, '_tool_pipeline', None)
+            if pipeline is not None:
+                from .tool_pipeline import ToolExecutionResult
+                pipeline_result = await pipeline.execute(
+                    tool, args, context,
+                    timeout=self._react_config.tool_execution_timeout,
+                )
+                if not pipeline_result.success and isinstance(pipeline_result.result, BaseException):
+                    raise pipeline_result.result
+                return pipeline_result.result
+
             return await tool.executor(args, context)
 
     def _is_agent_tool(self, tool_name: str) -> bool:
