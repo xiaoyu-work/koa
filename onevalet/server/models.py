@@ -1,8 +1,8 @@
 """Pydantic request/response models for the OneValet API."""
 
-from typing import Optional
+from typing import Any, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ImageInput(BaseModel):
@@ -21,6 +21,8 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     response: str
     status: str
+    true_memory_proposals: list[dict[str, Any]] = Field(default_factory=list)
+    token_usage: dict[str, Any] = Field(default_factory=dict)
 
 
 class CredentialSaveRequest(BaseModel):

@@ -60,6 +60,8 @@ async def chat(req: ChatRequest):
     return ChatResponse(
         response=result.raw_message or "",
         status=result.status.value if result.status else "completed",
+        true_memory_proposals=(result.metadata or {}).get("true_memory_proposals", []),
+        token_usage=(result.metadata or {}).get("token_usage", {}),
     )
 
 

@@ -279,6 +279,7 @@ class ReactLoopMixin:
             if usage:
                 total_usage.input_tokens += getattr(usage, "prompt_tokens", 0)
                 total_usage.output_tokens += getattr(usage, "completion_tokens", 0)
+                total_usage.cost_usd += getattr(usage, "cost", 0) or 0
 
             tool_calls = response.tool_calls
 
@@ -307,6 +308,7 @@ class ReactLoopMixin:
                     if usage_retry:
                         total_usage.input_tokens += getattr(usage_retry, "prompt_tokens", 0)
                         total_usage.output_tokens += getattr(usage_retry, "completion_tokens", 0)
+                        total_usage.cost_usd += getattr(usage_retry, "cost", 0) or 0
                     tool_calls = response.tool_calls
                     if tool_calls:
                         break  # success -- proceed to tool execution
@@ -701,6 +703,7 @@ class ReactLoopMixin:
                 if usage:
                     total_usage.input_tokens += getattr(usage, "prompt_tokens", 0)
                     total_usage.output_tokens += getattr(usage, "completion_tokens", 0)
+                    total_usage.cost_usd += getattr(usage, "cost", 0) or 0
             except Exception:
                 final_text = "I was unable to complete the request within the allowed turns."
 
@@ -730,6 +733,7 @@ class ReactLoopMixin:
                 "token_usage": {
                     "input_tokens": total_usage.input_tokens,
                     "output_tokens": total_usage.output_tokens,
+                    "cost_usd": round(total_usage.cost_usd, 6),
                 },
                 "tool_calls": [dataclasses.asdict(r) for r in all_tool_records],
             },
