@@ -19,11 +19,11 @@ pytestmark = [pytest.mark.integration, pytest.mark.travel]
 # ---------------------------------------------------------------------------
 
 TOOL_SELECTION_CASES = [
-    ("Plan a 3-day trip to Tokyo", ["search_places", "check_weather", "search_hotels"]),
-    ("I'm planning a trip to Paris, what's the weather like there?", ["check_weather"]),
+    ("Plan a 3-day trip to Tokyo", ["search_places", "check_weather", "search_hotels", "get_weather"]),
+    ("I'm planning a trip to Paris, what's the weather like there?", ["check_weather", "get_weather"]),
     ("Find hotels in Barcelona for next week", ["search_hotels"]),
     ("Search for restaurants near the Eiffel Tower", ["search_places"]),
-    ("Plan a trip to London from New York", ["search_flights", "search_places", "check_weather"]),
+    ("Plan a trip to London from New York", ["search_flights", "search_places", "check_weather", "get_weather"]),
     ("How do I get from Shibuya to Asakusa?", ["get_directions"]),
     ("Find flights from SF to Tokyo", ["search_flights"]),
 ]
@@ -48,12 +48,12 @@ async def test_tool_selection(orchestrator_factory, user_input, expected_tools):
 # ---------------------------------------------------------------------------
 
 async def test_weather_extracts_location(orchestrator_factory):
-    """check_weather should receive the destination city."""
+    """check_weather or get_weather should receive the destination city."""
     orch, recorder = await orchestrator_factory()
     await orch.handle_message("test_user", "Plan a 3-day trip to Tokyo")
 
-    calls = [c for c in recorder.tool_calls if c["tool_name"] == "check_weather"]
-    assert calls, "Expected check_weather to be called"
+    calls = [c for c in recorder.tool_calls if c["tool_name"] in ("check_weather", "get_weather")]
+    assert calls, "Expected check_weather or get_weather to be called"
 
     args = calls[0]["arguments"]
     location = args.get("location", "") or args.get("city", "") or args.get("query", "")

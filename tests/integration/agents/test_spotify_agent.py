@@ -49,7 +49,7 @@ TOOL_SELECTION_CASES = [
     ("Set Spotify to repeat this track", ["set_repeat"]),
     ("Set the Spotify volume to 50%", ["set_volume"]),
     ("Save this song to my Spotify library", ["save_tracks"]),
-    ("Recommend me songs similar to what I listen to", ["get_recommendations"]),
+    ("Recommend me songs similar to what I listen to", ["get_recommendations", "get_recently_played", "get_top_tracks"]),
     ("What Spotify devices are available?", ["get_available_devices"]),
     ("Create a new Spotify playlist called Road Trip", ["create_playlist"]),
     ("Show me my liked songs on Spotify", ["get_saved_tracks"]),

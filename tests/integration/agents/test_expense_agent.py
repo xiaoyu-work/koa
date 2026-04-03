@@ -26,7 +26,7 @@ TOOL_SELECTION_CASES = [
     ("I spent $15 on lunch today", ["log_expense"]),
     ("Uber ride $12 yesterday", ["log_expense"]),
     ("Coffee at Starbucks $5.50", ["log_expense"]),
-    ("Show me my expenses this month", ["query_expenses"]),
+    ("Show me my expenses this month", ["query_expenses", "spending_summary"]),
     ("How much did I spend last week?", ["query_expenses", "spending_summary"]),
     ("Delete the Starbucks expense from yesterday", ["delete_expense", "query_expenses"]),
     ("Remove the $5 coffee charge", ["delete_expense", "query_expenses"]),

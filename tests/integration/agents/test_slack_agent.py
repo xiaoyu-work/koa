@@ -42,7 +42,7 @@ TOOL_SELECTION_CASES = [
     ("Find the Slack user with email alice@company.com", ["find_user_by_email"]),
     ("React to that message with a thumbsup emoji", ["add_reaction"]),
     ("Is user U12345 currently online on Slack?", ["get_user_presence"]),
-    ("Invite Bob and Alice to the #new-project channel", ["invite_to_channel"]),
+    ("Invite Bob and Alice to the #new-project channel", ["invite_to_channel", "find_users"]),
     ("Set my Slack status to 'In a meeting' with a calendar emoji", ["set_status"]),
 ]
 

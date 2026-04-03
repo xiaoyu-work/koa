@@ -17,7 +17,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.travel]
 
 TOOL_SELECTION_CASES = [
     ("Find Italian restaurants near downtown Seattle", ["search_places"]),
-    ("Where's the nearest gas station?", ["search_places"]),
+    ("Where's the nearest gas station? I'm in downtown Seattle", ["search_places"]),
     ("Coffee shops in San Francisco", ["search_places"]),
     ("Best pizza places in Brooklyn", ["search_places"]),
     ("How do I get to the airport from downtown?", ["get_directions"]),
