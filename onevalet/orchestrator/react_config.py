@@ -24,6 +24,8 @@ class ReactLoopConfig:
 
     # Loop control
     max_turns: int = 10
+    react_timeout: float = 300.0
+    """Global timeout in seconds for the entire ReAct loop execution."""
 
     # Tool execution
     tool_execution_timeout: int = 30
