@@ -185,29 +185,28 @@ async def analyze_user_habits(*, context: AgentToolContext) -> str:
     if not discoveries:
         return "Not enough data yet to discover habits (need at least a week of usage)."
 
-    # 4. Store discoveries as True Memory facts
-    stored_count = 0
-    mem_store = (
-        context.context_hints.get("true_memory_store")
-        if context.context_hints
-        else None
-    )
-    if mem_store:
-        for d in discoveries:
-            try:
-                await mem_store.upsert_fact(
-                    user_id=tenant_id,
-                    namespace=d["namespace"],
-                    fact_key=d["fact_key"],
-                    value_json=d["value"],
-                    summary=d["summary"],
-                    confidence=0.7,
-                    source_type="system_inferred",
-                    how_to_apply=d.get("how_to_apply", ""),
-                )
-                stored_count += 1
-            except Exception as e:
-                logger.warning(f"Failed to store habit '{d['fact_key']}': {e}")
+    # 4. Convert discoveries into true_memory_proposals format
+    #    These will be picked up by koi-backend's _apply_true_memory_proposals()
+    #    via the orchestrator's result.metadata["true_memory_proposals"] pipeline.
+    proposals = []
+    for d in discoveries:
+        proposals.append({
+            "operation": "upsert",
+            "namespace": d["namespace"],
+            "fact_key": d["fact_key"],
+            "value": d["value"],
+            "summary": d["summary"],
+            "confidence": 0.7,
+            "source_type": "system_inferred",
+            "how_to_apply": d.get("how_to_apply", ""),
+            "why": "Inferred from user behavior patterns over the past week.",
+        })
+
+    # Store proposals in context metadata so the orchestrator picks them up
+    if context.metadata is None:
+        context.metadata = {}
+    existing = context.metadata.get("true_memory_proposals", [])
+    context.metadata["true_memory_proposals"] = existing + proposals
 
     # 5. Adjust proactive job schedules based on discovered timing
     cron_service = (
@@ -218,7 +217,7 @@ async def analyze_user_habits(*, context: AgentToolContext) -> str:
     if cron_service:
         await _adjust_proactive_schedules(cron_service, tenant_id, discoveries)
 
-    summary_lines = [f"Discovered {len(discoveries)} habit(s), stored {stored_count}:"]
+    summary_lines = [f"Discovered {len(discoveries)} habit(s):"]
     for d in discoveries:
         summary_lines.append(f"  • {d['summary']}")
 
