@@ -250,7 +250,6 @@ async def _preview_create_event(args: dict, context: AgentToolContext) -> str:
     return "\n".join(text_parts) + "\n\n<!-- inline_card:" + _json.dumps(card, ensure_ascii=False) + " -->"
 
 
-@tool(needs_approval=True, get_preview=_preview_create_event)
 async def _schedule_event_reminders(
     context: AgentToolContext,
     summary: str,
@@ -333,6 +332,7 @@ async def _schedule_event_reminders(
             logger.warning(f"Failed to schedule reminder '{job.name}': {e}")
 
 
+@tool(needs_approval=True, get_preview=_preview_create_event)
 async def create_event(
     summary: Annotated[str, "Event title/summary"],
     start: Annotated[str, "Event start time (e.g., 'tomorrow at 2pm', '2025-03-15 14:00')"],
