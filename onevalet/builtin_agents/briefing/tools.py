@@ -5,7 +5,7 @@ and management of the scheduled briefing job.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 from onevalet.models import AgentToolContext
@@ -53,6 +53,20 @@ def _format_schedule(job) -> str:
     return kind
 
 
+def _is_within_hours(iso_str: str, hours: int) -> bool:
+    """Return True if *iso_str* is an ISO-8601 datetime within *hours* from now."""
+    if not iso_str:
+        return False
+    try:
+        dt = datetime.fromisoformat(iso_str)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
+        return now <= dt <= now + timedelta(hours=hours)
+    except (ValueError, TypeError):
+        return False
+
+
 def _format_relative(ms) -> str:
     """Format ms timestamp as relative time from now."""
     if ms is None:
@@ -92,7 +106,9 @@ async def get_briefing(*, context: AgentToolContext) -> str:
                 lines = ["## Calendar"]
                 for e in events["data"]:
                     time_str = e.get("start", {}).get("dateTime", "All day")
-                    lines.append(f"- {time_str}: {e.get('summary', 'Untitled')}")
+                    start_dt = e.get("start", {}).get("dateTime", "")
+                    label = "🔴 SOON: " if _is_within_hours(start_dt, 2) else ""
+                    lines.append(f"- {label}{time_str}: {e.get('summary', 'Untitled')}")
                 sections.append("\n".join(lines))
         except Exception as exc:
             logger.debug("Briefing: calendar section failed: %s", exc)
@@ -105,7 +121,9 @@ async def get_briefing(*, context: AgentToolContext) -> str:
             if tasks.get("success") and tasks.get("data"):
                 lines = ["## Tasks"]
                 for t in tasks["data"][:10]:
-                    lines.append(f"- {t.get('title', 'Untitled')}")
+                    due = t.get("due_date") or t.get("due", {}).get("date", "")
+                    overdue = "🔴 OVERDUE: " if due and due < now.strftime("%Y-%m-%d") else ""
+                    lines.append(f"- {overdue}{t.get('title', 'Untitled')}")
                 sections.append("\n".join(lines))
         except Exception as exc:
             logger.debug("Briefing: todo section failed: %s", exc)
@@ -119,8 +137,11 @@ async def get_briefing(*, context: AgentToolContext) -> str:
             dates = await repo.get_important_dates(context.tenant_id, days_ahead=7)
             if dates:
                 lines = ["## Upcoming Dates"]
+                today_str = now.strftime("%Y-%m-%d")
                 for d in dates:
-                    lines.append(f"- {d.get('title', '')}: {d.get('upcoming_date', d.get('date', ''))}")
+                    date_str = d.get("upcoming_date", d.get("date", ""))
+                    today_mark = "🔴 TODAY: " if date_str == today_str else ""
+                    lines.append(f"- {today_mark}{d.get('title', '')}: {date_str}")
                 sections.append("\n".join(lines))
         except Exception as exc:
             logger.debug("Briefing: important dates section failed: %s", exc)
@@ -141,7 +162,15 @@ async def get_briefing(*, context: AgentToolContext) -> str:
     if not sections:
         return "No briefing data available. Connect your calendar, email, or todo services first."
 
-    return "\n\n".join(sections)
+    # Count urgent items across all sections
+    combined = "\n".join(sections)
+    urgent_count = sum(1 for line in combined.split("\n") if "🔴" in line)
+
+    if urgent_count == 0 and len(sections) <= 1:
+        return "😌 Quiet day ahead — no urgent meetings, tasks, or emails. Enjoy!"
+
+    summary = f"📊 {urgent_count} urgent item{'s' if urgent_count != 1 else ''} today."
+    return summary + "\n\n" + "\n\n".join(sections)
 
 
 # =============================================================================
