@@ -1,9 +1,9 @@
-"""Tests for onevalet.orchestrator.context_manager"""
+"""Tests for koa.orchestrator.context_manager"""
 
 import pytest
 
-from onevalet.orchestrator.context_manager import ContextManager
-from onevalet.orchestrator.react_config import ReactLoopConfig
+from koa.orchestrator.context_manager import ContextManager
+from koa.orchestrator.react_config import ReactLoopConfig
 
 
 @pytest.fixture

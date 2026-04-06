@@ -1,8 +1,8 @@
-"""Tests for onevalet.builtin_agents.composio.client — pure logic only"""
+"""Tests for koa.builtin_agents.composio.client — pure logic only"""
 
 import pytest
 
-from onevalet.builtin_agents.composio.client import ComposioClient
+from koa.builtin_agents.composio.client import ComposioClient
 
 
 # =========================================================================

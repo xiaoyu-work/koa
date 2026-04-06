@@ -3,13 +3,13 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: onevalet
-      POSTGRES_PASSWORD: onevalet
-      POSTGRES_DB: onevalet
+      POSTGRES_USER: koa
+      POSTGRES_PASSWORD: koa
+      POSTGRES_DB: koa
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U onevalet"]
+      test: ["CMD-SHELL", "pg_isready -U koa"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -22,11 +22,11 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql://onevalet:onevalet@db:5432/onevalet
+      DATABASE_URL: postgresql://koa:koa@db:5432/koa
     volumes:
       - ./config.yaml:/app/config.yaml:ro
     command: >
-      sh -c "alembic upgrade head && python -m onevalet --host 0.0.0.0"
+      sh -c "alembic upgrade head && python -m koa --host 0.0.0.0"
     depends_on:
       db:
         condition: service_healthy

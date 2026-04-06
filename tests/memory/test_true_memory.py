@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from onevalet.memory.true_memory import (
+from koa.memory.true_memory import (
     extract_true_memory_proposals,
     format_true_memory_for_prompt,
     looks_like_true_memory_candidate,

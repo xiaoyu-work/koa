@@ -1,8 +1,8 @@
-"""Tests for onevalet.orchestrator.transcript_repair"""
+"""Tests for koa.orchestrator.transcript_repair"""
 
 import pytest
 
-from onevalet.orchestrator.transcript_repair import (
+from koa.orchestrator.transcript_repair import (
     SYNTHETIC_TOOL_RESULT,
     repair_tool_call_inputs,
     repair_tool_use_result_pairing,

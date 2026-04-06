@@ -1,4 +1,4 @@
-"""Tests for onevalet.checkpoint.storage.MemoryStorage
+"""Tests for koa.checkpoint.storage.MemoryStorage
 
 Tests cover all CheckpointStorage interface methods:
 - save / get / delete
@@ -11,8 +11,8 @@ Tests cover all CheckpointStorage interface methods:
 import pytest
 from datetime import datetime, timedelta
 
-from onevalet.checkpoint.models import Checkpoint, CheckpointTree
-from onevalet.checkpoint.storage import MemoryStorage
+from koa.checkpoint.models import Checkpoint, CheckpointTree
+from koa.checkpoint.storage import MemoryStorage
 
 
 def _make_checkpoint(

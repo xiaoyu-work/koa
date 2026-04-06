@@ -1,8 +1,8 @@
-"""Tests for onevalet.llm.base — BaseLLMClient pure logic methods"""
+"""Tests for koa.llm.base — BaseLLMClient pure logic methods"""
 
 import pytest
 
-from onevalet.llm.base import (
+from koa.llm.base import (
     BaseLLMClient,
     LLMConfig,
     LLMResponse,
@@ -11,7 +11,7 @@ from onevalet.llm.base import (
     ToolCall,
     Usage,
 )
-from onevalet.models import AgentTool
+from koa.models import AgentTool
 
 
 # ── Concrete subclass for testing (abstract methods stubbed) ──

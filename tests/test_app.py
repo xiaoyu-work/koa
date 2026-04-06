@@ -1,10 +1,10 @@
-"""Tests for onevalet.app — config loading and env var mapping"""
+"""Tests for koa.app — config loading and env var mapping"""
 
 import os
 import pytest
 import tempfile
 
-from onevalet.app import OneValet, _load_config
+from koa.app import Koa, _load_config
 
 
 # =========================================================================
@@ -77,7 +77,7 @@ class TestCredentialsLoading:
         monkeypatch.delenv("COMPOSIO_API_KEY", raising=False)
         monkeypatch.delenv("WEATHER_API_KEY", raising=False)
 
-        app = OneValet.__new__(OneValet)
+        app = Koa.__new__(Koa)
         app._config = {"credentials": {
             "COMPOSIO_API_KEY": "test-composio-key",
             "WEATHER_API_KEY": "test-weather-key",
@@ -93,7 +93,7 @@ class TestCredentialsLoading:
     async def test_empty_credentials_no_side_effects(self, monkeypatch):
         monkeypatch.delenv("COMPOSIO_API_KEY", raising=False)
 
-        app = OneValet.__new__(OneValet)
+        app = Koa.__new__(Koa)
         app._config = {"credentials": {}}
         await app._load_credentials_to_env()
 
@@ -103,7 +103,7 @@ class TestCredentialsLoading:
     async def test_empty_value_skipped(self, monkeypatch):
         monkeypatch.delenv("COMPOSIO_API_KEY", raising=False)
 
-        app = OneValet.__new__(OneValet)
+        app = Koa.__new__(Koa)
         app._config = {"credentials": {"COMPOSIO_API_KEY": ""}}
         await app._load_credentials_to_env()
 
@@ -114,7 +114,7 @@ class TestCredentialsLoading:
         """Env vars already set take precedence over config values."""
         monkeypatch.setenv("COMPOSIO_API_KEY", "from-env")
 
-        app = OneValet.__new__(OneValet)
+        app = Koa.__new__(Koa)
         app._config = {"credentials": {"COMPOSIO_API_KEY": "from-config"}}
         await app._load_credentials_to_env()
 

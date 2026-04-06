@@ -1,9 +1,9 @@
-"""Tests for onevalet.agents.decorator"""
+"""Tests for koa.agents.decorator"""
 
 import pytest
 
-from onevalet.fields import InputField, OutputField
-from onevalet.agents.decorator import (
+from koa.fields import InputField, OutputField
+from koa.agents.decorator import (
     AGENT_REGISTRY,
     AgentMetadata,
     _extract_fields,

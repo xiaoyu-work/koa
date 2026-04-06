@@ -1,4 +1,4 @@
-"""Tests for pure logic functions extracted from onevalet.orchestrator.orchestrator
+"""Tests for pure logic functions extracted from koa.orchestrator.orchestrator
 
 Tests cover:
 - _tool_name_from_schema
@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 from unittest.mock import MagicMock
 
-from onevalet.orchestrator.react_config import (
+from koa.orchestrator.react_config import (
     COMPLETE_TASK_TOOL_NAME,
     CompleteTaskResult,
 )

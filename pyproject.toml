@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 # momex pin: 24be52c (search perf optimization)
 
 [project]
-name = "onevalet"
+name = "koa"
 version = "0.1.1"
 description = "A personal AI agent framework with state-driven agents and ReAct orchestration"
 readme = "README.md"
@@ -74,7 +74,7 @@ all = [
 ]
 
 [project.scripts]
-onevalet = "onevalet.server:main"
+koa = "koa.server:main"
 
 [project.urls]
 Homepage = "https://github.com/withkoi/koa"
@@ -86,7 +86,7 @@ Issues = "https://github.com/withkoi/koa/issues"
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["onevalet"]
+packages = ["koa"]
 
 [tool.black]
 line-length = 100

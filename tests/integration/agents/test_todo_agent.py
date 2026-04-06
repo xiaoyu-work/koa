@@ -11,7 +11,7 @@ Tests tool selection, argument extraction, response quality, and approval flow f
 
 import pytest
 
-from onevalet.result import AgentStatus
+from koa.result import AgentStatus
 
 pytestmark = [pytest.mark.integration, pytest.mark.productivity]
 

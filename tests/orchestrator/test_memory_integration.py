@@ -5,8 +5,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from onevalet.orchestrator.orchestrator import Orchestrator
-from onevalet.result import AgentResult, AgentStatus
+from koa.orchestrator.orchestrator import Orchestrator
+from koa.result import AgentResult, AgentStatus
 
 
 class DummyMomex:

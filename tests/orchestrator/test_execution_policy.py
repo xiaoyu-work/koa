@@ -1,7 +1,7 @@
 """Tests for runtime execution policy checks."""
 
-from onevalet.models import AgentTool
-from onevalet.orchestrator.execution_policy import ExecutionPolicyEngine
+from koa.models import AgentTool
+from koa.orchestrator.execution_policy import ExecutionPolicyEngine
 
 
 def _make_tool(**overrides) -> AgentTool:

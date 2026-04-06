@@ -1,9 +1,9 @@
-"""Tests for onevalet.agents.discovery"""
+"""Tests for koa.agents.discovery"""
 
 import pytest
 
-from onevalet.agents.decorator import AGENT_REGISTRY, AgentMetadata, valet
-from onevalet.agents.discovery import AgentDiscovery
+from koa.agents.decorator import AGENT_REGISTRY, AgentMetadata, valet
+from koa.agents.discovery import AgentDiscovery
 
 
 class TestAgentDiscovery:
@@ -31,13 +31,13 @@ class TestAgentDiscovery:
 
     def test_scan_module_finds_decorated_agents(self):
         # The composio agents should be discoverable
-        count = self.discovery.scan_module("onevalet.builtin_agents.composio.slack_agent")
+        count = self.discovery.scan_module("koa.builtin_agents.composio.slack_agent")
         assert count >= 1
         names = self.discovery.get_agent_names()
         assert "SlackComposioAgent" in names
 
     def test_get_agent_found(self):
-        self.discovery.scan_module("onevalet.builtin_agents.composio.slack_agent")
+        self.discovery.scan_module("koa.builtin_agents.composio.slack_agent")
         agent = self.discovery.get_agent("SlackComposioAgent")
         assert agent is not None
         assert isinstance(agent, AgentMetadata)
@@ -46,12 +46,12 @@ class TestAgentDiscovery:
         assert self.discovery.get_agent("NonExistentAgent") is None
 
     def test_scan_package(self):
-        count = self.discovery.scan_package("onevalet.builtin_agents.composio")
+        count = self.discovery.scan_package("koa.builtin_agents.composio")
         assert count >= 2  # at least Slack + GitHub
 
     def test_no_duplicates_on_rescan(self):
-        count1 = self.discovery.scan_module("onevalet.builtin_agents.composio.slack_agent")
-        count2 = self.discovery.scan_module("onevalet.builtin_agents.composio.slack_agent")
+        count1 = self.discovery.scan_module("koa.builtin_agents.composio.slack_agent")
+        count2 = self.discovery.scan_module("koa.builtin_agents.composio.slack_agent")
         assert count1 >= 1
         assert count2 == 0  # already discovered
 
@@ -76,13 +76,13 @@ class TestAgentDiscovery:
         assert count2 == 0
 
     def test_clear(self):
-        self.discovery.scan_module("onevalet.builtin_agents.composio.slack_agent")
+        self.discovery.scan_module("koa.builtin_agents.composio.slack_agent")
         assert len(self.discovery.get_discovered_agents()) > 0
         self.discovery.clear()
         assert len(self.discovery.get_discovered_agents()) == 0
 
     def test_scan_paths(self):
         count = self.discovery.scan_paths([
-            "onevalet.builtin_agents.composio",
+            "koa.builtin_agents.composio",
         ])
         assert count >= 2

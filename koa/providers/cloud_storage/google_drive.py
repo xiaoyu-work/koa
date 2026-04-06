@@ -1,0 +1,463 @@
+"""
+Google Drive Provider - Google Drive API v3 implementation
+
+Uses Google Drive API for cloud storage operations.
+Shares OAuth tokens with Gmail / Google Calendar (service name: google_drive).
+Requires OAuth scope: https://www.googleapis.com/auth/drive
+"""
+
+import logging
+from typing import Any, Callable, Dict, Optional
+from datetime import datetime, timedelta, timezone
+
+import httpx
+
+from .base import BaseCloudStorageProvider
+from ..http_mixin import OAuthHTTPMixin
+
+logger = logging.getLogger(__name__)
+
+DRIVE_API = "https://www.googleapis.com/drive/v3"
+
+# Map Google MIME types to human-readable labels
+MIME_TYPE_LABELS = {
+    "application/vnd.google-apps.document": "Google Doc",
+    "application/vnd.google-apps.spreadsheet": "Google Sheet",
+    "application/vnd.google-apps.presentation": "Google Slides",
+    "application/vnd.google-apps.folder": "Folder",
+    "application/vnd.google-apps.form": "Google Form",
+    "application/vnd.google-apps.drawing": "Google Drawing",
+    "application/vnd.google-apps.site": "Google Site",
+    "application/vnd.google-apps.shortcut": "Shortcut",
+    "application/pdf": "PDF",
+    "image/jpeg": "JPEG Image",
+    "image/png": "PNG Image",
+    "image/gif": "GIF Image",
+    "video/mp4": "MP4 Video",
+    "audio/mpeg": "MP3 Audio",
+    "application/zip": "ZIP Archive",
+    "text/plain": "Text File",
+    "text/csv": "CSV File",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "Word Document",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "Excel Spreadsheet",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": "PowerPoint Presentation",
+}
+
+# MIME type filter mapping for file_type parameter
+FILE_TYPE_MIME_MAP = {
+    "document": "application/vnd.google-apps.document",
+    "spreadsheet": "application/vnd.google-apps.spreadsheet",
+    "presentation": "application/vnd.google-apps.presentation",
+    "folder": "application/vnd.google-apps.folder",
+    "pdf": "application/pdf",
+    "image": "image/",
+    "video": "video/",
+}
+
+# Standard fields requested for file listings
+FILE_FIELDS = "id,name,mimeType,modifiedTime,size,webViewLink,parents"
+FILES_LIST_FIELDS = f"files({FILE_FIELDS})"
+
+
+class GoogleDriveProvider(BaseCloudStorageProvider, OAuthHTTPMixin):
+    """Google Drive provider implementation using Drive API v3."""
+
+    def __init__(
+        self,
+        credentials: dict,
+        on_token_refreshed: Optional[Callable[[dict], None]] = None,
+    ):
+        super().__init__(credentials, on_token_refreshed)
+
+    def _get_headers(self) -> Dict[str, str]:
+        return {"Authorization": f"Bearer {self.access_token}"}
+
+    @staticmethod
+    def _format_mime_type(mime: str) -> str:
+        """Convert MIME type to a human-readable label."""
+        if mime in MIME_TYPE_LABELS:
+            return MIME_TYPE_LABELS[mime]
+        # Fallback: use the subtype portion
+        if "/" in mime:
+            return mime.split("/")[-1].upper()
+        return mime
+
+    def _normalize_file(self, f: dict) -> dict:
+        """Normalize a Drive API file resource to the unified format."""
+        size_raw = f.get("size")
+        size = int(size_raw) if size_raw else None
+
+        return {
+            "id": f.get("id", ""),
+            "name": f.get("name", ""),
+            "type": self._format_mime_type(f.get("mimeType", "")),
+            "modified": f.get("modifiedTime", ""),
+            "size": size,
+            "path": "",  # Drive doesn't expose a flat path; parents are available
+            "url": f.get("webViewLink", ""),
+        }
+
+    async def search_files(
+        self,
+        query: str,
+        file_type: Optional[str] = None,
+        max_results: int = 10,
+    ) -> Dict[str, Any]:
+        """Search files in Google Drive by keyword."""
+        try:
+            if not await self.ensure_valid_token():
+                return {"success": False, "error": "Failed to refresh access token"}
+
+            q_parts = [f"name contains '{query}'", "trashed = false"]
+
+            if file_type:
+                mime = FILE_TYPE_MIME_MAP.get(file_type.lower())
+                if mime:
+                    if mime.endswith("/"):
+                        q_parts.append(f"mimeType contains '{mime}'")
+                    else:
+                        q_parts.append(f"mimeType = '{mime}'")
+
+            q_str = " and ".join(q_parts)
+
+            params = {
+                "q": q_str,
+                "pageSize": min(max_results, 100),
+                "fields": FILES_LIST_FIELDS,
+                "orderBy": "modifiedTime desc",
+            }
+
+            response = await self._oauth_request(
+                "GET", f"{DRIVE_API}/files",
+                params=params, timeout=15.0,
+            )
+
+            if response.status_code != 200:
+                logger.error(f"Drive search failed: {response.status_code} - {response.text}")
+                return {"success": False, "error": f"Drive API error: {response.status_code}"}
+
+            files = response.json().get("files", [])
+            results = [self._normalize_file(f) for f in files]
+
+            logger.info(f"Drive search found {len(results)} files for '{query}'")
+            return {"success": True, "data": results}
+
+        except Exception as e:
+            logger.error(f"Drive search error: {e}", exc_info=True)
+            return {"success": False, "error": str(e)}
+
+    async def list_recent_files(
+        self,
+        max_results: int = 10,
+    ) -> Dict[str, Any]:
+        """List recently modified files in Google Drive."""
+        try:
+            if not await self.ensure_valid_token():
+                return {"success": False, "error": "Failed to refresh access token"}
+
+            params = {
+                "q": "trashed = false",
+                "pageSize": min(max_results, 100),
+                "fields": FILES_LIST_FIELDS,
+                "orderBy": "modifiedTime desc",
+            }
+
+            response = await self._oauth_request(
+                "GET", f"{DRIVE_API}/files",
+                params=params, timeout=15.0,
+            )
+
+            if response.status_code != 200:
+                logger.error(f"Drive list recent failed: {response.status_code} - {response.text}")
+                return {"success": False, "error": f"Drive API error: {response.status_code}"}
+
+            files = response.json().get("files", [])
+            results = [self._normalize_file(f) for f in files]
+
+            logger.info(f"Drive listed {len(results)} recent files")
+            return {"success": True, "data": results}
+
+        except Exception as e:
+            logger.error(f"Drive list recent error: {e}", exc_info=True)
+            return {"success": False, "error": str(e)}
+
+    async def get_file_info(self, file_id: str) -> Dict[str, Any]:
+        """Get detailed metadata for a single file."""
+        try:
+            if not await self.ensure_valid_token():
+                return {"success": False, "error": "Failed to refresh access token"}
+
+            fields = f"{FILE_FIELDS},shared,owners,sharingUser,capabilities"
+
+            response = await self._oauth_request(
+                "GET", f"{DRIVE_API}/files/{file_id}",
+                params={"fields": fields}, timeout=10.0,
+            )
+
+            if response.status_code != 200:
+                logger.error(f"Drive get file failed: {response.status_code} - {response.text}")
+                return {"success": False, "error": f"Drive API error: {response.status_code}"}
+
+            f = response.json()
+            data = self._normalize_file(f)
+            data["shared"] = f.get("shared", False)
+
+            logger.info(f"Drive got file info: {file_id}")
+            return {"success": True, "data": data}
+
+        except Exception as e:
+            logger.error(f"Drive get file error: {e}", exc_info=True)
+            return {"success": False, "error": str(e)}
+
+    async def get_download_link(self, file_id: str) -> Dict[str, Any]:
+        """Get a download link for a file.
+
+        For native Google types (Docs, Sheets, etc.) there is no direct
+        download link -- the webViewLink is returned instead.
+        """
+        try:
+            if not await self.ensure_valid_token():
+                return {"success": False, "error": "Failed to refresh access token"}
+
+            response = await self._oauth_request(
+                "GET", f"{DRIVE_API}/files/{file_id}",
+                params={"fields": "webContentLink,webViewLink,mimeType"},
+                timeout=10.0,
+            )
+
+            if response.status_code != 200:
+                logger.error(f"Drive download link failed: {response.status_code} - {response.text}")
+                return {"success": False, "error": f"Drive API error: {response.status_code}"}
+
+            data = response.json()
+            url = data.get("webContentLink") or data.get("webViewLink", "")
+
+            logger.info(f"Drive got download link for: {file_id}")
+            return {
+                "success": True,
+                "data": {"url": url, "expires": ""},
+            }
+
+        except Exception as e:
+            logger.error(f"Drive download link error: {e}", exc_info=True)
+            return {"success": False, "error": str(e)}
+
+    async def share_file(
+        self,
+        file_id: str,
+        email: Optional[str] = None,
+        link_type: str = "view",
+    ) -> Dict[str, Any]:
+        """Share a file with a user or create a shareable link.
+
+        Args:
+            file_id: Drive file ID.
+            email: If provided, share directly with this email address.
+            link_type: "view" (reader) or "edit" (writer).
+
+        Returns:
+            {"success": bool, "data": {"url": str, "type": str}, "error": str}
+        """
+        try:
+            if not await self.ensure_valid_token():
+                return {"success": False, "error": "Failed to refresh access token"}
+
+            role = "writer" if link_type == "edit" else "reader"
+
+            if email:
+                permission = {
+                    "type": "user",
+                    "role": role,
+                    "emailAddress": email,
+                }
+            else:
+                permission = {
+                    "type": "anyone",
+                    "role": role,
+                }
+
+            response = await self._oauth_request(
+                "POST", f"{DRIVE_API}/files/{file_id}/permissions",
+                headers={"Content-Type": "application/json"},
+                json=permission, timeout=15.0,
+            )
+
+            if response.status_code not in (200, 201):
+                logger.error(f"Drive share failed: {response.status_code} - {response.text}")
+                return {"success": False, "error": f"Drive API error: {response.status_code}"}
+
+            # Get the shareable link
+            file_resp = await self._oauth_request(
+                "GET", f"{DRIVE_API}/files/{file_id}",
+                params={"fields": "webViewLink"}, timeout=10.0,
+            )
+
+            url = ""
+            if file_resp.status_code == 200:
+                url = file_resp.json().get("webViewLink", "")
+
+            share_type = f"{'email' if email else 'link'} ({link_type})"
+            logger.info(f"Drive shared file {file_id} via {share_type}")
+            return {
+                "success": True,
+                "data": {"url": url, "type": share_type},
+            }
+
+        except Exception as e:
+            logger.error(f"Drive share error: {e}", exc_info=True)
+            return {"success": False, "error": str(e)}
+
+    async def _find_or_create_folder(
+        self, client: httpx.AsyncClient, folder_name: str, parent_id: str = "root",
+    ) -> str:
+        """Find a folder by name under a parent, or create it. Returns folder ID."""
+        safe_name = folder_name.replace("'", "\\'")
+        q = (
+            f"name = '{safe_name}' and "
+            f"mimeType = 'application/vnd.google-apps.folder' and "
+            f"'{parent_id}' in parents and trashed = false"
+        )
+
+        # Use _oauth_request for automatic 401 retry
+        resp = await self._oauth_request(
+            "GET", f"{DRIVE_API}/files",
+            params={"q": q, "fields": "files(id)", "pageSize": 1},
+            timeout=10.0,
+        )
+        if resp.status_code == 200:
+            files = resp.json().get("files", [])
+            if files:
+                return files[0]["id"]
+        elif resp.status_code != 200:
+            resp.raise_for_status()
+
+        # Create folder
+        metadata = {
+            "name": folder_name,
+            "mimeType": "application/vnd.google-apps.folder",
+            "parents": [parent_id],
+        }
+        resp = await self._oauth_request(
+            "POST", f"{DRIVE_API}/files",
+            headers={"Content-Type": "application/json"},
+            json=metadata, timeout=15.0,
+        )
+        resp.raise_for_status()
+        return resp.json()["id"]
+
+    async def _ensure_folder_path(
+        self, client: httpx.AsyncClient, folder_path: str,
+    ) -> str:
+        """Ensure a nested folder path exists (e.g. 'Koa/Receipts/2026-02').
+        Returns the leaf folder ID."""
+        parent_id = "root"
+        for part in folder_path.strip("/").split("/"):
+            if not part:
+                continue
+            parent_id = await self._find_or_create_folder(client, part, parent_id)
+        return parent_id
+
+    async def upload_file(
+        self,
+        file_name: str,
+        file_data: bytes,
+        mime_type: str = "image/jpeg",
+        folder_path: str = "",
+    ) -> Dict[str, Any]:
+        """Upload a file to Google Drive.
+
+        Uses multipart upload (metadata + media) to Drive API v3.
+        Creates the folder path if it doesn't exist.
+        """
+        try:
+            if not await self.ensure_valid_token():
+                return {"success": False, "error": "Failed to refresh access token"}
+
+            async with httpx.AsyncClient() as client:
+                # Ensure folder exists
+                parent_id = "root"
+                if folder_path:
+                    parent_id = await self._ensure_folder_path(client, folder_path)
+
+                # Multipart upload: metadata + file content
+                import json as _json
+                import uuid as _uuid
+
+                metadata = {"name": file_name, "parents": [parent_id]}
+                metadata_bytes = _json.dumps(metadata).encode("utf-8")
+
+                # Build multipart/related body manually
+                boundary = f"koa_upload_{_uuid.uuid4().hex}"
+                body = (
+                    f"--{boundary}\r\n"
+                    f"Content-Type: application/json; charset=UTF-8\r\n\r\n"
+                ).encode("utf-8")
+                body += metadata_bytes
+                body += (
+                    f"\r\n--{boundary}\r\n"
+                    f"Content-Type: {mime_type}\r\n\r\n"
+                ).encode("utf-8")
+                body += file_data
+                body += f"\r\n--{boundary}--".encode("utf-8")
+
+                resp = await self._oauth_request(
+                    "POST",
+                    "https://www.googleapis.com/upload/drive/v3/files",
+                    headers={"Content-Type": f"multipart/related; boundary={boundary}"},
+                    params={"uploadType": "multipart", "fields": "id,name,webViewLink"},
+                    content=body, timeout=60.0,
+                )
+
+                if resp.status_code not in (200, 201):
+                    logger.error(f"Drive upload failed: {resp.status_code} - {resp.text}")
+                    return {"success": False, "error": f"Drive API error: {resp.status_code}"}
+
+                data = resp.json()
+                logger.info(f"Drive uploaded file: {file_name} -> {data.get('id')}")
+                return {
+                    "success": True,
+                    "data": {
+                        "id": data.get("id", ""),
+                        "url": data.get("webViewLink", ""),
+                        "name": data.get("name", file_name),
+                    },
+                }
+
+        except Exception as e:
+            logger.error(f"Drive upload error: {e}", exc_info=True)
+            return {"success": False, "error": str(e)}
+
+    async def get_storage_usage(self) -> Dict[str, Any]:
+        """Get Google Drive storage usage information."""
+        try:
+            if not await self.ensure_valid_token():
+                return {"success": False, "error": "Failed to refresh access token"}
+
+            response = await self._oauth_request(
+                "GET", f"{DRIVE_API}/about",
+                params={"fields": "storageQuota"}, timeout=10.0,
+            )
+
+            if response.status_code != 200:
+                logger.error(f"Drive storage usage failed: {response.status_code} - {response.text}")
+                return {"success": False, "error": f"Drive API error: {response.status_code}"}
+
+            quota = response.json().get("storageQuota", {})
+            used = int(quota.get("usage", 0))
+            total = int(quota.get("limit", 0))
+            percent = (used / total * 100) if total > 0 else 0.0
+
+            logger.info(f"Drive storage: {self.format_size(used)} / {self.format_size(total)}")
+            return {
+                "success": True,
+                "data": {
+                    "used": used,
+                    "total": total,
+                    "percent": round(percent, 2),
+                },
+            }
+
+        except Exception as e:
+            logger.error(f"Drive storage usage error: {e}", exc_info=True)
+            return {"success": False, "error": str(e)}
+

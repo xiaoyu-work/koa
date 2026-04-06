@@ -3,8 +3,8 @@
 import pytest
 from unittest.mock import AsyncMock
 
-from onevalet.agents.decorator import AGENT_REGISTRY, valet
-from onevalet.config.registry import AgentRegistry
+from koa.agents.decorator import AGENT_REGISTRY, valet
+from koa.config.registry import AgentRegistry
 
 
 # ── Fixtures ──

@@ -1,4 +1,4 @@
-"""Tests for onevalet.orchestrator.dag_executor
+"""Tests for koa.orchestrator.dag_executor
 
 Tests cover:
 - topological_sort() — no dependencies, linear chain, diamond, parallel, cycle detection
@@ -9,8 +9,8 @@ Tests cover:
 
 import pytest
 
-from onevalet.orchestrator.intent_analyzer import SubTask
-from onevalet.orchestrator.dag_executor import (
+from koa.orchestrator.intent_analyzer import SubTask
+from koa.orchestrator.dag_executor import (
     topological_sort,
     SubTaskResult,
     get_runnable_tasks,

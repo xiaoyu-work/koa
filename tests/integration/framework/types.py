@@ -1,6 +1,6 @@
 """Protocol definitions for the multi-turn conversation testing framework.
 
-These protocols decouple the framework from concrete OneValet types,
+These protocols decouple the framework from concrete Koa types,
 making it possible to extract this module as a standalone package later.
 """
 

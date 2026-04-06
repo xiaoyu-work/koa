@@ -30,7 +30,7 @@ Edit `.env` and fill in the keys you need:
 
 ```
 OPENAI_API_KEY=sk-...
-DATABASE_URL=postgresql://user:pass@localhost:5432/onevalet
+DATABASE_URL=postgresql://user:pass@localhost:5432/koa
 ```
 
 See [Configuration](configuration.md) for the full list of environment variables.
@@ -52,7 +52,7 @@ database: ${DATABASE_URL}
 ## 5. Start the server
 
 ```bash
-python -m onevalet
+python -m koa
 ```
 
 The server starts on `http://0.0.0.0:8000` by default.

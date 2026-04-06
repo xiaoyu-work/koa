@@ -3,7 +3,7 @@
 ## Basic Agent
 
 ```python
-from onevalet import valet, StandardAgent, InputField, AgentStatus
+from koa import valet, StandardAgent, InputField, AgentStatus
 
 @valet
 class BookingAgent(StandardAgent):
@@ -85,7 +85,7 @@ email = InputField(
 Use `OutputField` to declare structured outputs from your agent:
 
 ```python
-from onevalet import valet, StandardAgent, InputField, OutputField, AgentStatus
+from koa import valet, StandardAgent, InputField, OutputField, AgentStatus
 
 @valet
 class BookingAgent(StandardAgent):

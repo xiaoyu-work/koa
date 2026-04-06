@@ -1,7 +1,7 @@
 """Tests for memory governance and session working memory."""
 
-from onevalet.memory.governance import MemoryGovernance
-from onevalet.memory.session_memory import SessionMemoryManager
+from koa.memory.governance import MemoryGovernance
+from koa.memory.session_memory import SessionMemoryManager
 
 
 class TestMemoryGovernance:

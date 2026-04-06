@@ -53,7 +53,7 @@ async def test_search_action_extracted(orchestrator_factory):
     orch, recorder = await orchestrator_factory()
 
     # Access the agent directly for field extraction testing
-    from onevalet.builtin_agents.cloud_storage.agent import CloudStorageAgent
+    from koa.builtin_agents.cloud_storage.agent import CloudStorageAgent
 
     agent = CloudStorageAgent.__new__(CloudStorageAgent)
     agent.llm_client = orch.llm_client
@@ -68,7 +68,7 @@ async def test_usage_action_extracted(orchestrator_factory):
     """A storage usage request should extract action=usage."""
     orch, recorder = await orchestrator_factory()
 
-    from onevalet.builtin_agents.cloud_storage.agent import CloudStorageAgent
+    from koa.builtin_agents.cloud_storage.agent import CloudStorageAgent
 
     agent = CloudStorageAgent.__new__(CloudStorageAgent)
     agent.llm_client = orch.llm_client
@@ -82,7 +82,7 @@ async def test_recent_action_extracted(orchestrator_factory):
     """Asking for recent files should extract action=recent."""
     orch, recorder = await orchestrator_factory()
 
-    from onevalet.builtin_agents.cloud_storage.agent import CloudStorageAgent
+    from koa.builtin_agents.cloud_storage.agent import CloudStorageAgent
 
     agent = CloudStorageAgent.__new__(CloudStorageAgent)
     agent.llm_client = orch.llm_client
@@ -96,7 +96,7 @@ async def test_share_action_extracts_target(orchestrator_factory):
     """A share request should extract the target email address."""
     orch, recorder = await orchestrator_factory()
 
-    from onevalet.builtin_agents.cloud_storage.agent import CloudStorageAgent
+    from koa.builtin_agents.cloud_storage.agent import CloudStorageAgent
 
     agent = CloudStorageAgent.__new__(CloudStorageAgent)
     agent.llm_client = orch.llm_client
@@ -113,7 +113,7 @@ async def test_provider_extraction(orchestrator_factory):
     """Mentioning a specific provider should extract it."""
     orch, recorder = await orchestrator_factory()
 
-    from onevalet.builtin_agents.cloud_storage.agent import CloudStorageAgent
+    from koa.builtin_agents.cloud_storage.agent import CloudStorageAgent
 
     agent = CloudStorageAgent.__new__(CloudStorageAgent)
     agent.llm_client = orch.llm_client

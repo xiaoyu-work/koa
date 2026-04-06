@@ -1,0 +1,71 @@
+"""
+TodoAgent - Agent for all todo, reminder, and task management requests.
+
+Replaces the separate TodoQueryAgent, CreateTodoAgent, UpdateTodoAgent, DeleteTodoAgent,
+ReminderAgent, TaskManagementAgent, and PlannerAgent with a single agent that has its own
+mini ReAct loop. The orchestrator sees only one "TodoAgent" tool instead of seven.
+
+The internal LLM decides which tools to call (query_tasks, create_task, update_task,
+delete_task, set_reminder, manage_reminders) based on the user's request.
+"""
+
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
+from koa import valet
+from koa.constants import TODO_SERVICES
+from koa.standard_agent import StandardAgent
+
+from .tools import (
+    query_tasks,
+    create_task,
+    update_task,
+    delete_task,
+    set_reminder,
+    manage_reminders,
+    check_overdue_tasks,
+)
+
+
+@valet(domain="productivity", requires_service=list(TODO_SERVICES))
+class TodoAgent(StandardAgent):
+    """List, create, complete, and delete todo tasks; set and manage reminders. Use when the user mentions tasks, todos, to-do lists, reminders, or wants to be reminded about something."""
+
+    max_turns = 5
+
+    _SYSTEM_PROMPT_TEMPLATE = """\
+You are a todo and reminder management assistant with access to task and reminder tools.
+
+Available tools:
+- query_tasks: List or search the user's todo tasks across all connected providers.
+- create_task: Create a new todo task with title, optional due date and priority.
+- update_task: Mark a todo task as complete by searching for it.
+- delete_task: Delete a todo task by searching for it.
+- set_reminder: Create a time-based reminder (one-time or recurring).
+- manage_reminders: List, update, pause, resume, or delete scheduled reminders and automations.
+
+Today: {today} ({weekday}), current time: {current_time}, timezone: {timezone}
+
+Instructions:
+1. For task queries (list, search), call query_tasks.
+2. For creating tasks, call create_task with the title and any mentioned due date or priority.
+3. For completing/marking done, call update_task with a search query describing the task.
+4. For deleting tasks, call delete_task with a search query.
+5. For time-based reminders ("remind me in 5 minutes", "every day at 8am"), call set_reminder. \
+Calculate the exact schedule_datetime from the current date/time.
+6. For managing existing reminders ("show my reminders", "pause my morning alert", \
+"delete my medicine reminder"), call manage_reminders with the appropriate action.
+7. If the user's request is ambiguous or missing information, ask for clarification \
+in your text response WITHOUT calling any tools.
+8. After getting tool results, provide a clear summary to the user."""
+
+    def get_system_prompt(self) -> str:
+        now, tz_name = self._user_now()
+        return self._SYSTEM_PROMPT_TEMPLATE.format(
+            today=now.strftime('%Y-%m-%d'),
+            weekday=now.strftime('%A'),
+            current_time=now.strftime('%H:%M'),
+            timezone=tz_name,
+        )
+
+    tools = (query_tasks, create_task, update_task, delete_task, set_reminder, manage_reminders, check_overdue_tasks)

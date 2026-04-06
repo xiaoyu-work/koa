@@ -1,4 +1,4 @@
-"""Tests for onevalet.orchestrator.intent_analyzer
+"""Tests for koa.orchestrator.intent_analyzer
 
 Tests cover:
 - IntentAnalyzer.analyze() with mock LLM
@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Optional
 from unittest.mock import AsyncMock, MagicMock
 
-from onevalet.orchestrator.intent_analyzer import (
+from koa.orchestrator.intent_analyzer import (
     IntentAnalyzer,
     IntentAnalysis,
     SubTask,

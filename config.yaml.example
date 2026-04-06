@@ -4,7 +4,7 @@ database: ${DATABASE_URL}
 # supabase:
 #   url: ${SUPABASE_URL}
 #   service_role_key: ${SUPABASE_SERVICE_ROLE_KEY}
-#   storage_bucket: onevalet-files        # bucket name in Supabase Dashboard
+#   storage_bucket: koa-files        # bucket name in Supabase Dashboard
 
 llm:
   provider: openai          # openai | anthropic | azure | dashscope | gemini | ollama

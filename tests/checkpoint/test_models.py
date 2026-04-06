@@ -1,4 +1,4 @@
-"""Tests for onevalet.checkpoint.models
+"""Tests for koa.checkpoint.models
 
 Tests cover:
 - Checkpoint: serialization (to_dict, from_dict, to_json, from_json), generate_id
@@ -11,7 +11,7 @@ import json
 import pytest
 from datetime import datetime
 
-from onevalet.checkpoint.models import (
+from koa.checkpoint.models import (
     Checkpoint,
     CheckpointMetadata,
     CheckpointTree,

@@ -1,4 +1,4 @@
-"""Tests for onevalet.builtin_agents.composio.twitter_agent — tool functions.
+"""Tests for koa.builtin_agents.composio.twitter_agent — tool functions.
 
 Each tool is tested for:
 - Required-param validation (returns error string when missing)
@@ -14,7 +14,7 @@ has the signature ``async def executor(args: dict, context) -> str``.
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 
-from onevalet.builtin_agents.composio.twitter_agent import (
+from koa.builtin_agents.composio.twitter_agent import (
     # existing tools
     post_tweet,
     get_timeline,
@@ -80,7 +80,7 @@ def _failure_data(error="Something went wrong"):
 
 def _mock_client():
     """Return a patch context for ComposioClient."""
-    return patch("onevalet.builtin_agents.composio.twitter_agent.ComposioClient")
+    return patch("koa.builtin_agents.composio.twitter_agent.ComposioClient")
 
 
 # ---------------------------------------------------------------------------

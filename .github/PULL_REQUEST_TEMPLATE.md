@@ -12,8 +12,8 @@ Brief description of changes.
 ## Checklist
 
 - [ ] Tests pass (`pytest`)
-- [ ] Code formatted (`black onevalet tests`)
-- [ ] Linting passes (`ruff check onevalet tests`)
+- [ ] Code formatted (`black koa tests`)
+- [ ] Linting passes (`ruff check koa tests`)
 - [ ] Documentation updated (if needed)
 
 ## Related Issues

@@ -1,4 +1,4 @@
-"""Tests for onevalet.checkpoint.manager.CheckpointManager
+"""Tests for koa.checkpoint.manager.CheckpointManager
 
 Tests cover:
 - save_checkpoint / get_checkpoint / get_agent_state
@@ -15,8 +15,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List
 
-from onevalet.checkpoint.manager import CheckpointManager, CheckpointError
-from onevalet.checkpoint.storage import MemoryStorage
+from koa.checkpoint.manager import CheckpointManager, CheckpointError
+from koa.checkpoint.storage import MemoryStorage
 
 
 @dataclass

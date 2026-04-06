@@ -2,7 +2,7 @@
 
 import pytest
 
-from onevalet.orchestrator.tool_policy import ToolPolicyFilter
+from koa.orchestrator.tool_policy import ToolPolicyFilter
 
 
 def _make_schema(name: str, description: str = "") -> dict:

@@ -1,4 +1,4 @@
-"""Unit tests for onevalet.builtin_agents.composio.github_agent — pure logic only.
+"""Unit tests for koa.builtin_agents.composio.github_agent — pure logic only.
 
 Tests _check_api_key, input validation, action constant wiring, and
 success/failure formatting for every tool without making real API calls.
@@ -8,7 +8,7 @@ import pytest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from onevalet.builtin_agents.composio.github_agent import (
+from koa.builtin_agents.composio.github_agent import (
     GitHubComposioAgent,
     _check_api_key,
     create_issue,
@@ -100,7 +100,7 @@ class TestAgentWiring:
 # Tool tests — existing tools
 # =========================================================================
 
-_MODULE = "onevalet.builtin_agents.composio.github_agent"
+_MODULE = "koa.builtin_agents.composio.github_agent"
 
 
 class TestCreateIssue:

@@ -19,13 +19,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from onevalet.llm.base import LLMConfig
-from onevalet.llm.litellm_client import LiteLLMClient
-from onevalet.config.registry import AgentRegistry
-from onevalet.llm.registry import LLMRegistry
-from onevalet.models import AgentTool
-from onevalet.orchestrator.orchestrator import Orchestrator
-from onevalet.result import AgentStatus
+from koa.llm.base import LLMConfig
+from koa.llm.litellm_client import LiteLLMClient
+from koa.config.registry import AgentRegistry
+from koa.llm.registry import LLMRegistry
+from koa.models import AgentTool
+from koa.orchestrator.orchestrator import Orchestrator
+from koa.result import AgentStatus
 
 from tests.integration.framework import Conversation
 
@@ -405,10 +405,10 @@ def llm_client():
 @pytest.fixture(scope="session")
 def agent_registry():
     """Session-scoped agent registry with all builtin agents loaded."""
-    from onevalet.agents.discovery import AgentDiscovery
+    from koa.agents.discovery import AgentDiscovery
 
     discovery = AgentDiscovery()
-    discovery.scan_package("onevalet.builtin_agents")
+    discovery.scan_package("koa.builtin_agents")
     discovery.sync_from_global_registry()
 
     llm_registry = LLMRegistry.get_instance()

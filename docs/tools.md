@@ -7,7 +7,7 @@ Koa provides a tool system for LLM function calling.
 Use the `@tool` decorator to define and register a tool:
 
 ```python
-from onevalet import tool, ToolCategory, ToolExecutionContext
+from koa import tool, ToolCategory, ToolExecutionContext
 
 @tool(category=ToolCategory.UTILITY)
 async def check_availability(
@@ -45,7 +45,7 @@ The `@tool` decorator automatically:
 The built-in categories are:
 
 ```python
-from onevalet import ToolCategory
+from koa import ToolCategory
 
 ToolCategory.UTILITY   # General-purpose utilities
 ToolCategory.WEB       # Web-related tools (search, fetch, etc.)

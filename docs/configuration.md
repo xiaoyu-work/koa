@@ -28,13 +28,13 @@ database: ${DATABASE_URL}
 
 ```bash
 # Default: reads config.yaml, listens on 0.0.0.0:8000
-python -m onevalet
+python -m koa
 
 # Custom config path
-ONEVALET_CONFIG=my_config.yaml python -m onevalet
+KOA_CONFIG=my_config.yaml python -m koa
 
 # Custom host/port
-ONEVALET_HOST=127.0.0.1 ONEVALET_PORT=9000 python -m onevalet
+KOA_HOST=127.0.0.1 KOA_PORT=9000 python -m koa
 ```
 
 ## Environment Variables

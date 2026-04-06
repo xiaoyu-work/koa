@@ -28,13 +28,13 @@ We use [Black](https://github.com/psf/black) for formatting and [Ruff](https://g
 
 ```bash
 # Format code
-black onevalet tests
+black koa tests
 
 # Lint
-ruff check onevalet tests
+ruff check koa tests
 
 # Type check
-mypy onevalet
+mypy koa
 ```
 
 ## Pull Request Process
