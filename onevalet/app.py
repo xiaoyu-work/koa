@@ -572,6 +572,24 @@ class OneValet:
                     delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
                 ))
 
+            # --- Habit Discovery (weekly) ---
+            if "Proactive: Habit Discovery" not in existing_names:
+                jobs_to_create.append(CronJobCreate(
+                    name="Proactive: Habit Discovery",
+                    description="Weekly analysis of user behavior patterns.",
+                    user_id=tenant_id,
+                    schedule=CronScheduleSpec(expr="0 3 * * 0"),  # Sunday 3am
+                    session_target=SessionTarget.ISOLATED,
+                    wake_mode=WakeMode.NEXT_HEARTBEAT,
+                    payload=AgentTurnPayload(
+                        message="Analyze the user's behavior patterns from the past week. "
+                                "Discover habits like active hours, most-used features, and weekly rhythm. "
+                                "Store discoveries and adjust notification schedules accordingly. "
+                                "Respond with nothing_to_report (this is a background analysis, don't notify the user)."
+                    ),
+                    delivery=DeliveryConfig(mode=DeliveryMode.NONE),
+                ))
+
             for job_input in jobs_to_create:
                 await self._cron_service.add(job_input)
                 logger.info(f"Auto-created proactive job '{job_input.name}' for tenant {tenant_id}")

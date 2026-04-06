@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 
 from onevalet import valet
 from onevalet.standard_agent import StandardAgent
+from .habit_discovery import analyze_user_habits
 
 
 @valet(domain="productivity")
@@ -42,4 +43,4 @@ Rules:
             timezone=tz_name,
         )
 
-    tools = ()  # Tools will be provided by the orchestrator based on user's connected services
+    tools = (analyze_user_habits,)  # Additional tools provided by the orchestrator based on user's connected services
