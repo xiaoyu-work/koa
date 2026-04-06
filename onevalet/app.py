@@ -416,9 +416,20 @@ class OneValet:
         """Auto-create system proactive cron jobs for a tenant if they don't exist.
 
         Called when a user connects a new service (OAuth). Creates:
-        - Calendar check every 15 min (if not already present)
-        - Task check daily at 9am (if not already present)
-        - Subscription check daily at 10am (if not already present)
+        - Calendar check every 15 min
+        - Task check daily at 9am
+        - Subscription check daily at 10am
+        - Evening Summary at 9pm (F3)
+        - Weekly Planning Sunday 7pm (F4)
+        - Task Rollover at 8pm (F20)
+        - Departure Reminder every 10 min (F1)
+        - Meeting Prep every 5 min (F2)
+        - Weather Alert at 7am/12pm/5pm (F9)
+        - Idle Time suggestions at 10/12/2/4pm weekdays (F5)
+        - Lunch suggestion at 11:30am weekdays (F13)
+        - Inactivity Check at 10am/3pm (F6)
+
+        Each job is only created if not already present (idempotent).
         """
         if not self._cron_service:
             return
@@ -535,6 +546,120 @@ class OneValet:
                         message="Check for tasks that were due today but not completed. "
                                 "If any, list them briefly and suggest moving to tomorrow. "
                                 "If all tasks are done or none were due, respond with nothing_to_report."
+                    ),
+                    delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
+                ))
+
+            # --- Smart Departure Reminder (F1) ---
+            if "Proactive: Departure Reminder" not in existing_names:
+                jobs_to_create.append(CronJobCreate(
+                    name="Proactive: Departure Reminder",
+                    description="Check if user needs to leave for upcoming events based on travel time.",
+                    user_id=tenant_id,
+                    schedule=CronScheduleSpec(expr="*/10 * * * *"),
+                    session_target=SessionTarget.ISOLATED,
+                    wake_mode=WakeMode.NEXT_HEARTBEAT,
+                    payload=AgentTurnPayload(
+                        message="Check calendar events in the next 2 hours that have a location. "
+                                "For each, get the user's current location and calculate travel time. "
+                                "If the user needs to leave within 15 minutes to arrive on time, "
+                                "notify them with: event name, time, travel duration, and suggested departure time. "
+                                "Include meeting link if available. "
+                                "If no events need departure alerts, respond with nothing_to_report."
+                    ),
+                    delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
+                ))
+
+            # --- Meeting Prep (F2) ---
+            if "Proactive: Meeting Prep" not in existing_names:
+                jobs_to_create.append(CronJobCreate(
+                    name="Proactive: Meeting Prep",
+                    description="Provide context before meetings start.",
+                    user_id=tenant_id,
+                    schedule=CronScheduleSpec(expr="*/5 * * * *"),
+                    session_target=SessionTarget.ISOLATED,
+                    wake_mode=WakeMode.NEXT_HEARTBEAT,
+                    payload=AgentTurnPayload(
+                        message="Check if there's a calendar event starting in the next 10 minutes. "
+                                "If yes, prepare the user: include the event name, who's attending, "
+                                "and search recent emails from those attendees to provide context. "
+                                "Keep it to 2-3 lines: what the meeting is about and any recent context. "
+                                "If no meeting in 10 min, respond with nothing_to_report."
+                    ),
+                    delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
+                ))
+
+            # --- Departure Weather Alert (F9) ---
+            if "Proactive: Weather Alert" not in existing_names:
+                jobs_to_create.append(CronJobCreate(
+                    name="Proactive: Weather Alert",
+                    description="Weather warnings at key times of day.",
+                    user_id=tenant_id,
+                    schedule=CronScheduleSpec(expr="0 7,12,17 * * *"),
+                    session_target=SessionTarget.ISOLATED,
+                    wake_mode=WakeMode.NEXT_HEARTBEAT,
+                    payload=AgentTurnPayload(
+                        message="Check the weather at the user's current location. "
+                                "Only notify if there's something actionable: "
+                                "rain/snow expected in next 4 hours (suggest umbrella/jacket), "
+                                "extreme heat >35°C or cold <0°C, "
+                                "or severe weather warnings. "
+                                "If weather is normal and pleasant, respond with nothing_to_report."
+                    ),
+                    delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
+                ))
+
+            # --- Idle Time Suggestions (F5) ---
+            if "Proactive: Idle Time" not in existing_names:
+                jobs_to_create.append(CronJobCreate(
+                    name="Proactive: Idle Time",
+                    description="Suggest productive use of free time.",
+                    user_id=tenant_id,
+                    schedule=CronScheduleSpec(expr="0 10,12,14,16 * * 1-5"),
+                    session_target=SessionTarget.ISOLATED,
+                    wake_mode=WakeMode.NEXT_HEARTBEAT,
+                    payload=AgentTurnPayload(
+                        message="Check if the user has no calendar events in the next 2 hours. "
+                                "If they have free time AND there are overdue tasks or important unread emails, "
+                                "suggest tackling them now: 'You're free until 3pm — good time to handle those 2 overdue tasks?' "
+                                "If they're busy or have nothing pending, respond with nothing_to_report."
+                    ),
+                    delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
+                ))
+
+            # --- Lunch Suggestion (F13) ---
+            if "Proactive: Lunch" not in existing_names:
+                jobs_to_create.append(CronJobCreate(
+                    name="Proactive: Lunch",
+                    description="Lunch suggestion when user is free at noon.",
+                    user_id=tenant_id,
+                    schedule=CronScheduleSpec(expr="30 11 * * 1-5"),
+                    session_target=SessionTarget.ISOLATED,
+                    wake_mode=WakeMode.NEXT_HEARTBEAT,
+                    payload=AgentTurnPayload(
+                        message="Check if the user has no meetings between 12-1pm. "
+                                "If free, get their current location and suggest 2-3 nearby restaurants "
+                                "with ratings. Keep it casual: 'Lunch time! Here are a few spots near you...' "
+                                "If they have a lunch meeting or location is unknown, respond with nothing_to_report."
+                    ),
+                    delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
+                ))
+
+            # --- Inactivity Check (F6) ---
+            if "Proactive: Inactivity Check" not in existing_names:
+                jobs_to_create.append(CronJobCreate(
+                    name="Proactive: Inactivity Check",
+                    description="Check on user if they haven't interacted in a while.",
+                    user_id=tenant_id,
+                    schedule=CronScheduleSpec(expr="0 10,15 * * *"),
+                    session_target=SessionTarget.ISOLATED,
+                    wake_mode=WakeMode.NEXT_HEARTBEAT,
+                    payload=AgentTurnPayload(
+                        message="Check if there are important unread emails or overdue tasks "
+                                "that the user might have missed. Only notify if there are 3+ "
+                                "important items they haven't addressed. "
+                                "Keep it brief: 'You have 3 important emails and 2 overdue tasks — want a quick summary?' "
+                                "If nothing important is pending, respond with nothing_to_report."
                     ),
                     delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
                 ))
