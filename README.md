@@ -4,21 +4,21 @@
 
 ### What Koa Does
 
-- 📧 **Email** — triages Gmail & Outlook, flags what's important, sends on your behalf
-- 📅 **Calendar** — manages Google Calendar & Outlook events, resolves conflicts, sets reminders
-- ✅ **Tasks & Todos** — Google Tasks, Microsoft To Do, Todoist — unified under one AI
-- 💰 **Expenses** — tracks spending, scans receipts, manages budgets
-- 📦 **Packages** — auto-detects tracking numbers from emails, monitors delivery status
-- 🏠 **Smart Home** — controls Philips Hue lights & Sonos speakers by voice
-- ✈️ **Trip Planning** — builds itineraries, searches flights & hotels
-- 🗺️ **Maps & Location** — directions, nearby places, commute estimates
-- 📝 **Notion** — reads and writes to your Notion workspace
-- ☁️ **Cloud Storage** — Google Drive, OneDrive, Dropbox file management
-- 🔔 **Subscriptions** — detects recurring charges, alerts on renewals
-- 📰 **Daily Briefings** — morning digest of weather, calendar, emails, reminders
-- 🎨 **Image Generation** — creates images via DALL·E, Gemini, or Azure
-- 🤖 **Proactive Intelligence** — learns your habits, reaches out before you ask
-- 🕶️ **AI Glasses** — delivers notifications and interacts through smart glasses
+![Email](https://img.shields.io/badge/Email-Gmail_%26_Outlook-4285F4?style=flat-square&logo=gmail&logoColor=white)
+![Calendar](https://img.shields.io/badge/Calendar-Google_%26_Outlook-0078D4?style=flat-square&logo=googlecalendar&logoColor=white)
+![Tasks](https://img.shields.io/badge/Tasks-Todoist_%26_Microsoft_To_Do-E44332?style=flat-square&logo=todoist&logoColor=white)
+![Expenses](https://img.shields.io/badge/Expenses-Receipts_%26_Budgets-16A34A?style=flat-square&logo=cashapp&logoColor=white)
+![Packages](https://img.shields.io/badge/Packages-Auto_Tracking-F59E0B?style=flat-square&logo=box&logoColor=white)
+![Smart Home](https://img.shields.io/badge/Smart_Home-Hue_%26_Sonos-E7A600?style=flat-square&logo=philipshue&logoColor=white)
+![Trips](https://img.shields.io/badge/Trips-Flights_%26_Hotels-0EA5E9?style=flat-square&logo=tripadvisor&logoColor=white)
+![Maps](https://img.shields.io/badge/Maps-Directions_%26_Places-34A853?style=flat-square&logo=googlemaps&logoColor=white)
+![Notion](https://img.shields.io/badge/Notion-Read_%26_Write-000000?style=flat-square&logo=notion&logoColor=white)
+![Cloud Storage](https://img.shields.io/badge/Storage-Drive_%26_Dropbox-2563EB?style=flat-square&logo=googledrive&logoColor=white)
+![Subscriptions](https://img.shields.io/badge/Subscriptions-Renewal_Alerts-8B5CF6?style=flat-square&logo=stripe&logoColor=white)
+![Briefings](https://img.shields.io/badge/Briefings-Daily_Digest-F97316?style=flat-square&logo=rss&logoColor=white)
+![Image Gen](https://img.shields.io/badge/Image_Gen-DALL·E_%26_Gemini-EC4899?style=flat-square&logo=openai&logoColor=white)
+![Proactive](https://img.shields.io/badge/Proactive-Reaches_You_First-DC2626?style=flat-square&logo=lightning&logoColor=white)
+![AI Glasses](https://img.shields.io/badge/AI_Glasses-Smart_Notifications-6366F1?style=flat-square&logo=meta&logoColor=white)
 
 ### How It's Different
 
