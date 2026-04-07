@@ -98,16 +98,34 @@ class IntentAnalyzer:
     def __init__(self, llm_client: Any):
         self.llm_client = llm_client
 
-    async def analyze(self, user_message: str) -> IntentAnalysis:
+    async def analyze(
+        self,
+        user_message: str,
+        conversation_history: Optional[List[Dict[str, Any]]] = None,
+    ) -> IntentAnalysis:
         """Analyze user message intent and domain classification.
 
-        Uses a single lightweight LLM call (~200 tokens).
+        Uses a single lightweight LLM call.
+        Includes recent conversation history so short follow-ups like "ok",
+        "yes", "tell me more" are classified in the context of the preceding
+        exchange rather than defaulting to 'general'.
+
         Falls back to single-intent with all domains on failure.
         """
-        messages = [
+        messages: List[Dict[str, Any]] = [
             {"role": "system", "content": INTENT_ANALYZER_SYSTEM_PROMPT},
-            {"role": "user", "content": user_message},
         ]
+
+        # Include last few turns of conversation so the classifier can see
+        # what the user is responding to (e.g. "ok" after a travel answer).
+        if conversation_history:
+            recent = [
+                m for m in conversation_history
+                if m.get("role") in ("user", "assistant")
+            ][-6:]  # last 3 exchanges max
+            messages.extend(recent)
+
+        messages.append({"role": "user", "content": user_message})
         try:
             response = await self.llm_client.chat_completion(
                 messages=messages,

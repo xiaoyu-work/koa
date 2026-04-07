@@ -104,13 +104,28 @@ class Usage:
     # Cost in USD (if available)
     cost: Optional[float] = None
 
+    # Prompt caching stats (Anthropic)
+    cache_read_tokens: int = 0
+    cache_creation_tokens: int = 0
+
+    @property
+    def cache_hit_rate(self) -> float:
+        """Percentage of prompt tokens served from cache (0.0–100.0)."""
+        if self.prompt_tokens <= 0:
+            return 0.0
+        return self.cache_read_tokens / self.prompt_tokens * 100
+
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        d = {
             "prompt_tokens": self.prompt_tokens,
             "completion_tokens": self.completion_tokens,
             "total_tokens": self.total_tokens,
             "cost": self.cost,
         }
+        if self.cache_read_tokens or self.cache_creation_tokens:
+            d["cache_read_tokens"] = self.cache_read_tokens
+            d["cache_creation_tokens"] = self.cache_creation_tokens
+        return d
 
 
 @dataclass

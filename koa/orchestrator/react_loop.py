@@ -344,8 +344,8 @@ class ReactLoopMixin:
             if not tool_calls:
                 text_response = getattr(response, "content", None) or ""
                 text_response = text_response.strip()
-                if text_response:
-                    # Case 1: LLM gave a real answer as plain text — accept it
+                if text_response and len(text_response) >= 10:
+                    # Case 1: LLM gave a substantive text answer — accept it
                     logger.info(
                         f"[ReAct] turn={turn} text-only response "
                         f"({len(text_response)} chars), treating as final answer"
@@ -359,7 +359,13 @@ class ReactLoopMixin:
                         yield event
                     break
 
-                # Case 2: No content and no tool calls — force retry
+                # Case 2: No content, or suspiciously short (< 10 chars like "k." / "ok")
+                # — force retry with complete_task so LLM gives a real answer
+                if text_response:
+                    logger.warning(
+                        f"[ReAct] turn={turn} text-only response too short "
+                        f"({len(text_response)} chars: {text_response!r}), forcing retry"
+                    )
                 max_retries = self._react_config.max_complete_task_retries
                 for retry in range(1, max_retries + 1):
                     logger.warning(
@@ -534,10 +540,10 @@ class ReactLoopMixin:
                         return TimedResult(result=exc, duration_ms=int((time.monotonic() - t0) * 1000))
                     return TimedResult(result=r, duration_ms=int((time.monotonic() - t0) * 1000))
 
-                timed_results = await asyncio.gather(
-                    *[_timed_execute(tc) for tc in tool_calls],
-                    return_exceptions=True,
-                )
+                # Execute tools eagerly: yield results as each completes
+                # instead of waiting for all to finish (asyncio.gather).
+                async def _timed_with_index(idx, tc):
+                    return (idx, await _timed_execute(tc))
 
                 # Token attribution for this turn
                 turn_tokens = None
@@ -550,7 +556,15 @@ class ReactLoopMixin:
                 loop_broken = False
                 loop_broken_text = None
 
-                for tc, timed in zip(tool_calls, timed_results):
+                # Ordered results for watchdog/passthrough downstream
+                timed_results = [None] * len(tool_calls)
+
+                for _coro in asyncio.as_completed(
+                    [_timed_with_index(i, tc) for i, tc in enumerate(tool_calls)]
+                ):
+                    _idx, timed = await _coro
+                    tc = tool_calls[_idx]
+                    timed_results[_idx] = timed
                     tc_name = tc.name
                     is_agent = self._is_agent_tool(tc_name)
                     kind = "agent" if is_agent else "tool"

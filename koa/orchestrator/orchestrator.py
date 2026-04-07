@@ -1214,7 +1214,8 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
         from .intent_analyzer import IntentAnalyzer
 
         analyzer = IntentAnalyzer(self.llm_client)
-        intent = await analyzer.analyze(message)
+        history = context.get("conversation_history", [])
+        intent = await analyzer.analyze(message, conversation_history=history)
 
         logger.info(
             f"[IntentAnalyzer] type={intent.intent_type}, "

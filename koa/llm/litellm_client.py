@@ -24,6 +24,7 @@ from .base import (
     Usage,
     StopReason,
 )
+from .prompt_caching import apply_anthropic_cache_control, is_anthropic_model
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +132,12 @@ class LiteLLMClient(BaseLLMClient):
             f"litellm_model={self._litellm_model}"
         )
 
+        # Anthropic prompt caching: auto-enabled for Claude models.
+        # Reduces input costs by ~90% on multi-turn conversations.
+        self._use_prompt_caching = is_anthropic_model(self.provider, self.config.model)
+        if self._use_prompt_caching:
+            logger.info("Prompt caching enabled (Anthropic)")
+
     # ------------------------------------------------------------------
     # Core API methods
     # ------------------------------------------------------------------
@@ -178,6 +185,10 @@ class LiteLLMClient(BaseLLMClient):
             f"messages={len(messages)}"
         )
 
+        # Apply Anthropic prompt caching: inject cache_control breakpoints
+        if self._use_prompt_caching:
+            params["messages"] = apply_anthropic_cache_control(messages)
+
         response = await litellm.acompletion(**params)
 
         # Parse response (ModelResponse follows OpenAI format)
@@ -201,11 +212,24 @@ class LiteLLMClient(BaseLLMClient):
         # Parse usage
         usage = None
         if response.usage:
+            # Cache stats (Anthropic returns these when prompt caching is active)
+            cache_read = getattr(response.usage, 'cache_read_input_tokens', 0) or 0
+            cache_creation = getattr(response.usage, 'cache_creation_input_tokens', 0) or 0
+
             usage = Usage(
                 prompt_tokens=response.usage.prompt_tokens,
                 completion_tokens=response.usage.completion_tokens,
                 total_tokens=response.usage.total_tokens,
+                cache_read_tokens=cache_read,
+                cache_creation_tokens=cache_creation,
             )
+
+            if self._use_prompt_caching and (cache_read or cache_creation):
+                hit_pct = cache_read / response.usage.prompt_tokens * 100 if response.usage.prompt_tokens else 0
+                logger.info(
+                    f"[LiteLLM] Cache: {cache_read:,}/{response.usage.prompt_tokens:,} "
+                    f"tokens ({hit_pct:.0f}% hit, {cache_creation:,} written)"
+                )
 
         # Cost tracking via litellm
         cost = None
@@ -264,22 +288,35 @@ class LiteLLMClient(BaseLLMClient):
             params.pop("top_p", None)
             params.pop("max_tokens", None)
 
-        response = await litellm.acompletion(**params)
+        # Apply Anthropic prompt caching
+        if self._use_prompt_caching:
+            params["messages"] = apply_anthropic_cache_control(messages)
 
-        # Track tool call deltas across chunks
+        response = await litellm.acompletion(**params)
         tool_call_deltas: Dict[int, Dict[str, Any]] = {}
 
         async for chunk in response:
             if not chunk.choices:
                 # Final chunk may carry only usage
                 if chunk.usage:
+                    cache_read = getattr(chunk.usage, 'cache_read_input_tokens', 0) or 0
+                    cache_creation = getattr(chunk.usage, 'cache_creation_input_tokens', 0) or 0
+                    prompt_tokens = chunk.usage.prompt_tokens
+                    if self._use_prompt_caching and (cache_read or cache_creation):
+                        hit_pct = cache_read / prompt_tokens * 100 if prompt_tokens else 0
+                        logger.info(
+                            f"[LiteLLM] Cache: {cache_read:,}/{prompt_tokens:,} "
+                            f"tokens ({hit_pct:.0f}% hit, {cache_creation:,} written)"
+                        )
                     yield StreamChunk(
                         content="",
                         is_final=True,
                         usage=Usage(
-                            prompt_tokens=chunk.usage.prompt_tokens,
+                            prompt_tokens=prompt_tokens,
                             completion_tokens=chunk.usage.completion_tokens,
                             total_tokens=chunk.usage.total_tokens,
+                            cache_read_tokens=cache_read,
+                            cache_creation_tokens=cache_creation,
                         ),
                     )
                 continue
