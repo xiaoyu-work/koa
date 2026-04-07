@@ -4,21 +4,23 @@
 
 ### What Koa Does
 
-<img src="https://lucide.dev/icons/mail.svg" width="16" height="16" /> **Email** — triages Gmail & Outlook, flags what's important, sends on your behalf
-<br><img src="https://lucide.dev/icons/calendar.svg" width="16" height="16" /> **Calendar** — manages Google Calendar & Outlook events, resolves conflicts, sets reminders
-<br><img src="https://lucide.dev/icons/check-square.svg" width="16" height="16" /> **Tasks & Todos** — Google Tasks, Microsoft To Do, Todoist — unified under one AI
-<br><img src="https://lucide.dev/icons/wallet.svg" width="16" height="16" /> **Expenses** — tracks spending, scans receipts, manages budgets
-<br><img src="https://lucide.dev/icons/package.svg" width="16" height="16" /> **Packages** — auto-detects tracking numbers from emails, monitors delivery status
-<br><img src="https://lucide.dev/icons/house.svg" width="16" height="16" /> **Smart Home** — controls Philips Hue lights & Sonos speakers by voice
-<br><img src="https://lucide.dev/icons/plane.svg" width="16" height="16" /> **Trip Planning** — builds itineraries, searches flights & hotels
-<br><img src="https://lucide.dev/icons/map-pin.svg" width="16" height="16" /> **Maps & Location** — directions, nearby places, commute estimates
-<br><img src="https://lucide.dev/icons/notebook.svg" width="16" height="16" /> **Notion** — reads and writes to your Notion workspace
-<br><img src="https://lucide.dev/icons/cloud.svg" width="16" height="16" /> **Cloud Storage** — Google Drive, OneDrive, Dropbox file management
-<br><img src="https://lucide.dev/icons/bell-ring.svg" width="16" height="16" /> **Subscriptions** — detects recurring charges, alerts on renewals
-<br><img src="https://lucide.dev/icons/newspaper.svg" width="16" height="16" /> **Daily Briefings** — morning digest of weather, calendar, emails, reminders
-<br><img src="https://lucide.dev/icons/image.svg" width="16" height="16" /> **Image Generation** — creates images via DALL·E, Gemini, or Azure
-<br><img src="https://lucide.dev/icons/zap.svg" width="16" height="16" /> **Proactive Intelligence** — learns your habits, reaches out before you ask
-<br><img src="https://lucide.dev/icons/glasses.svg" width="16" height="16" /> **AI Glasses** — delivers notifications and interacts through smart glasses
+| | Feature | Description |
+|---|---|---|
+| ✉️ | **Email** | Triages Gmail & Outlook, flags what's important, sends on your behalf |
+| 📅 | **Calendar** | Manages Google Calendar & Outlook events, resolves conflicts, sets reminders |
+| ☑️ | **Tasks** | Google Tasks, Microsoft To Do, Todoist — unified under one AI |
+| 💳 | **Expenses** | Tracks spending, scans receipts, manages budgets |
+| 📦 | **Packages** | Auto-detects tracking numbers from emails, monitors delivery status |
+| 🏠 | **Smart Home** | Controls Philips Hue lights & Sonos speakers by voice |
+| ✈️ | **Trips** | Builds itineraries, searches flights & hotels |
+| 📍 | **Maps** | Directions, nearby places, commute estimates |
+| 📓 | **Notion** | Reads and writes to your Notion workspace |
+| ☁️ | **Storage** | Google Drive, OneDrive, Dropbox file management |
+| 🔔 | **Subscriptions** | Detects recurring charges, alerts on renewals |
+| 📰 | **Briefings** | Morning digest of weather, calendar, emails, reminders |
+| 🖼️ | **Image Gen** | Creates images via DALL·E, Gemini, or Azure |
+| ⚡ | **Proactive** | Learns your habits, reaches out before you ask |
+| 🕶️ | **AI Glasses** | Delivers notifications and interacts through smart glasses |
 
 ### How It's Different
 
