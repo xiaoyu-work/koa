@@ -36,8 +36,14 @@ for a recurring subscription service, extract the subscription details.
 Examples: Netflix, Spotify, iCloud, T-Mobile, Adobe, YouTube Premium, etc.
 Do NOT include one-time purchases (e.g. buying a product on Amazon).
 
+TASK 3 — PROFILE UPDATE DETECTION:
+If this email contains information that updates the user's personal profile, extract it.
+Look for: insurance policy renewal dates, vehicle registration, loyalty program status changes,
+new address confirmations, job change announcements, membership upgrades.
+Only extract if the information is CLEARLY about the email recipient (not a promotion).
+
 Respond with ONLY this JSON (no markdown, no extra text):
-{"important": true/false, "reason": "brief reason", "summary": "one-line summary", "subscription": null}
+{"important": true/false, "reason": "brief reason", "summary": "one-line summary", "subscription": null, "profile_update": null}
 
 If a subscription is detected, replace null with:
 {"service_name": "Netflix", "category": "streaming", "amount": 15.99, "currency": "USD", "billing_cycle": "monthly", "status": "active"}
@@ -49,6 +55,14 @@ subscription fields:
 - currency: Currency code (default "USD")
 - billing_cycle: One of "monthly", "yearly", "weekly", "one-time", or null
 - status: "active" for receipts/renewals, "cancelled" for cancellation emails, "trial" for free trials
+
+If a profile update is detected, replace profile_update null with:
+{"section": "travel|lifestyle|identity", "field": "field_name", "value": "...", "detail": "brief description"}
+
+Examples:
+- Insurance renewal: {"section": "lifestyle", "field": "insurance_renewal", "value": "2026-08-15", "detail": "Auto insurance renews Aug 15"}
+- Loyalty upgrade: {"section": "travel", "field": "loyalty_status", "value": "Platinum", "detail": "United MileagePlus upgraded to Platinum"}
+- Address change: {"section": "identity", "field": "address", "value": "123 New St, Seattle", "detail": "New address confirmed"}
 """
 
 
@@ -106,6 +120,14 @@ class EmailEventHandler:
                 await self._upsert_subscription(tenant_id, sub_data, sender)
             except Exception as e:
                 logger.warning(f"Subscription upsert failed: {e}")
+
+        # Handle profile update if detected
+        profile_update = evaluation.get("profile_update")
+        if profile_update and isinstance(profile_update, dict) and self._database:
+            try:
+                await self._apply_profile_update(tenant_id, profile_update)
+            except Exception as e:
+                logger.warning(f"Profile update failed: {e}")
 
         # Handle importance
         if not evaluation.get("important", False):
@@ -173,6 +195,49 @@ class EmailEventHandler:
             now,
         )
         logger.info(f"Subscription detected: {sub['service_name']} for tenant {tenant_id}")
+
+    async def _apply_profile_update(self, tenant_id: str, update: Dict[str, Any]) -> None:
+        """Apply a lightweight profile update detected from an email."""
+        section = update.get("section", "")
+        field = update.get("field", "")
+        value = update.get("value", "")
+        detail = update.get("detail", "")
+
+        if not section or not field or not value:
+            return
+
+        from .cron.models import CronScheduleSpec, AgentTurnPayload, DeliveryConfig, DeliveryMode
+
+        # For insurance/registration renewals, also create a reminder
+        if "renewal" in field or "expir" in field:
+            try:
+                from datetime import datetime as _dt
+                renewal_date = _dt.strptime(value, "%Y-%m-%d")
+                # Create reminder 30 days before
+                remind_date = renewal_date.replace(day=max(1, renewal_date.day))
+                month = remind_date.month - 1 if remind_date.day > 1 else remind_date.month
+                day = remind_date.day
+                # Simple: just log it for now, cron creation needs CronService
+                logger.info(f"Profile update: {detail} — renewal {value} for tenant {tenant_id[:8]}")
+            except (ValueError, TypeError):
+                pass
+
+        # Merge into profile via JSONB path update
+        await self._database.execute(
+            """
+            UPDATE tenant_profiles
+            SET profile = jsonb_set(
+                COALESCE(profile, '{}'::jsonb),
+                $2::text[],
+                to_jsonb($3::text),
+                true
+            ),
+            updated_at = NOW()
+            WHERE tenant_id = $1
+            """,
+            tenant_id, [section, field], value,
+        )
+        logger.info(f"Profile updated from email: {section}.{field} = {value} for tenant {tenant_id[:8]}")
 
     async def _evaluate_email(
         self, sender: str, subject: str, snippet: str
