@@ -4,21 +4,21 @@
 
 ### What Koa Does
 
-![Email](https://img.shields.io/badge/Email-Gmail_%26_Outlook-4285F4?style=flat-square&logo=gmail&logoColor=white)
-![Calendar](https://img.shields.io/badge/Calendar-Google_%26_Outlook-0078D4?style=flat-square&logo=googlecalendar&logoColor=white)
-![Tasks](https://img.shields.io/badge/Tasks-Todoist_%26_Microsoft_To_Do-E44332?style=flat-square&logo=todoist&logoColor=white)
-![Expenses](https://img.shields.io/badge/Expenses-Receipts_%26_Budgets-16A34A?style=flat-square&logo=cashapp&logoColor=white)
-![Packages](https://img.shields.io/badge/Packages-Auto_Tracking-F59E0B?style=flat-square&logo=box&logoColor=white)
-![Smart Home](https://img.shields.io/badge/Smart_Home-Hue_%26_Sonos-E7A600?style=flat-square&logo=philipshue&logoColor=white)
-![Trips](https://img.shields.io/badge/Trips-Flights_%26_Hotels-0EA5E9?style=flat-square&logo=tripadvisor&logoColor=white)
-![Maps](https://img.shields.io/badge/Maps-Directions_%26_Places-34A853?style=flat-square&logo=googlemaps&logoColor=white)
-![Notion](https://img.shields.io/badge/Notion-Read_%26_Write-000000?style=flat-square&logo=notion&logoColor=white)
-![Cloud Storage](https://img.shields.io/badge/Storage-Drive_%26_Dropbox-2563EB?style=flat-square&logo=googledrive&logoColor=white)
-![Subscriptions](https://img.shields.io/badge/Subscriptions-Renewal_Alerts-8B5CF6?style=flat-square&logo=stripe&logoColor=white)
-![Briefings](https://img.shields.io/badge/Briefings-Daily_Digest-F97316?style=flat-square&logo=rss&logoColor=white)
-![Image Gen](https://img.shields.io/badge/Image_Gen-DALL·E_%26_Gemini-EC4899?style=flat-square&logo=openai&logoColor=white)
-![Proactive](https://img.shields.io/badge/Proactive-Reaches_You_First-DC2626?style=flat-square&logo=lightning&logoColor=white)
-![AI Glasses](https://img.shields.io/badge/AI_Glasses-Smart_Notifications-6366F1?style=flat-square&logo=meta&logoColor=white)
+<img src="https://lucide.dev/icons/mail.svg" width="16" height="16" /> **Email** — triages Gmail & Outlook, flags what's important, sends on your behalf
+<br><img src="https://lucide.dev/icons/calendar.svg" width="16" height="16" /> **Calendar** — manages Google Calendar & Outlook events, resolves conflicts, sets reminders
+<br><img src="https://lucide.dev/icons/check-square.svg" width="16" height="16" /> **Tasks & Todos** — Google Tasks, Microsoft To Do, Todoist — unified under one AI
+<br><img src="https://lucide.dev/icons/wallet.svg" width="16" height="16" /> **Expenses** — tracks spending, scans receipts, manages budgets
+<br><img src="https://lucide.dev/icons/package.svg" width="16" height="16" /> **Packages** — auto-detects tracking numbers from emails, monitors delivery status
+<br><img src="https://lucide.dev/icons/house.svg" width="16" height="16" /> **Smart Home** — controls Philips Hue lights & Sonos speakers by voice
+<br><img src="https://lucide.dev/icons/plane.svg" width="16" height="16" /> **Trip Planning** — builds itineraries, searches flights & hotels
+<br><img src="https://lucide.dev/icons/map-pin.svg" width="16" height="16" /> **Maps & Location** — directions, nearby places, commute estimates
+<br><img src="https://lucide.dev/icons/notebook.svg" width="16" height="16" /> **Notion** — reads and writes to your Notion workspace
+<br><img src="https://lucide.dev/icons/cloud.svg" width="16" height="16" /> **Cloud Storage** — Google Drive, OneDrive, Dropbox file management
+<br><img src="https://lucide.dev/icons/bell-ring.svg" width="16" height="16" /> **Subscriptions** — detects recurring charges, alerts on renewals
+<br><img src="https://lucide.dev/icons/newspaper.svg" width="16" height="16" /> **Daily Briefings** — morning digest of weather, calendar, emails, reminders
+<br><img src="https://lucide.dev/icons/image.svg" width="16" height="16" /> **Image Generation** — creates images via DALL·E, Gemini, or Azure
+<br><img src="https://lucide.dev/icons/zap.svg" width="16" height="16" /> **Proactive Intelligence** — learns your habits, reaches out before you ask
+<br><img src="https://lucide.dev/icons/glasses.svg" width="16" height="16" /> **AI Glasses** — delivers notifications and interacts through smart glasses
 
 ### How It's Different
 
