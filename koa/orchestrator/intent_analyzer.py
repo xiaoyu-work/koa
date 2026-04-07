@@ -44,7 +44,7 @@ MAX_SUB_TASKS = 5
 INTENT_ANALYZER_SYSTEM_PROMPT = """\
 You are an intent classifier for a personal AI assistant.
 
-Given a user message, determine:
+Given the conversation history and the user's latest message, determine:
 1. Whether it contains a single intent or multiple independent intents
 2. Which domain(s) are needed
 3. Whether long-term memory recall is needed
@@ -61,6 +61,7 @@ needs_memory rules:
 - false: for greetings, direct commands, factual questions, tool-based lookups, or anything that doesn't need past context (e.g. "hi", "search flights to NYC", "what's the weather", "log expense $15 lunch")
 
 Rules:
+- **CRITICAL: Follow-up messages** like "ok", "yes", "sure", "好的", "然后呢", "tell me more", "go ahead", "and?", "what else?" are CONTINUATIONS of the previous conversation. Classify them using the SAME domain(s) as the previous exchange. NEVER classify a follow-up as "general" — look at what the assistant was just talking about and use THAT domain.
 - For conditional logic ("if X then Y", "check X and based on that do Y"), classify as SINGLE intent — the execution engine handles conditions natively.
 - For multiple items targeting the same agent ("lunch $15, uber $12, coffee $5"), classify as SINGLE intent.
 - Only classify as MULTI when there are genuinely independent tasks that require DIFFERENT agents.
