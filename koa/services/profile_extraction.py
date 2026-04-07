@@ -543,6 +543,67 @@ Return ONLY valid JSON matching this structure (no explanation):
 
 
 # =============================================================================
+# Birthday → important_dates sync
+# =============================================================================
+
+async def _sync_birthday_reminders(db, tenant_id: str, profile: Dict[str, Any]):
+    """Sync relationship birthdays from profile into important_dates table.
+
+    Creates recurring yearly entries with remind_days_before=[5, 1, 0] so the
+    morning briefing and ImportantDateDigestAgent pick them up automatically.
+    """
+    relationships = profile.get("relationships", {})
+    family = relationships.get("family", [])
+    partner = relationships.get("significant_other")
+
+    people = list(family) if isinstance(family, list) else []
+    if partner and isinstance(partner, dict) and partner.get("birthday"):
+        people.append(partner)
+
+    if not people:
+        return
+
+    count = 0
+    for person in people:
+        birthday = person.get("birthday", "")
+        name = person.get("name", "")
+        rel = person.get("relationship", "")
+        if not birthday or not name:
+            continue
+
+        # Validate date format
+        try:
+            from datetime import datetime as _dt
+            _dt.strptime(birthday, "%Y-%m-%d")
+        except (ValueError, TypeError):
+            continue
+
+        title = f"{name}'s Birthday"
+        if rel:
+            title += f" ({rel})"
+
+        # Upsert into important_dates — avoid duplicates by matching tenant + title
+        await db.execute(
+            """
+            INSERT INTO important_dates (tenant_id, title, date, date_type, person_name, relationship, recurring, remind_days_before)
+            VALUES ($1, $2, $3::date, 'birthday', $4, $5, TRUE, '[5, 1, 0]'::jsonb)
+            ON CONFLICT (tenant_id, title) DO UPDATE SET
+                date = EXCLUDED.date,
+                person_name = EXCLUDED.person_name,
+                relationship = EXCLUDED.relationship,
+                remind_days_before = EXCLUDED.remind_days_before,
+                recurring = TRUE,
+                updated_at = NOW()
+            """,
+            tenant_id, title, birthday, name, rel or None,
+        )
+        count += 1
+
+    if count:
+        logger.info(f"Synced {count} birthday(s) to important_dates for tenant {tenant_id[:8]}")
+
+
+# =============================================================================
 # Profile Extraction Service
 # =============================================================================
 
@@ -1138,6 +1199,12 @@ class ProfileExtractionService:
 
                     await profile_repo.upsert_profile(tenant_id, final_profile)
                     logger.info(f"Profile saved to DB for tenant {tenant_id}")
+
+                    # Sync relationship birthdays → important_dates table
+                    try:
+                        await _sync_birthday_reminders(db, tenant_id, final_profile)
+                    except Exception as e:
+                        logger.warning(f"Birthday sync failed (non-critical): {e}")
                 except Exception as e:
                     logger.error(f"Failed to save profile to DB: {e}", exc_info=True)
                     final_profile = new_profile

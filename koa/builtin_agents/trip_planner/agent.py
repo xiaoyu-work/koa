@@ -96,11 +96,35 @@ Only execute write actions (calendar/todo) after explicit user consent.
         now, _ = self._user_now()
         from datetime import timedelta
         tomorrow = (now + timedelta(days=1)).strftime("%Y-%m-%d")
-        return self._SYSTEM_PROMPT_TEMPLATE.format(
+
+        prompt = self._SYSTEM_PROMPT_TEMPLATE.format(
             today=now.strftime("%Y-%m-%d"),
             weekday=now.strftime("%A"),
             tomorrow=tomorrow,
         )
+
+        # Inject loyalty programs / travel preferences from user profile
+        profile = self.context_hints.get("user_profile", {}) if self.context_hints else {}
+        travel = profile.get("travel", {})
+        loyalty = travel.get("loyalty_programs", [])
+        if loyalty:
+            lines = ["\n## User Travel Preferences"]
+            for prog in loyalty:
+                name = prog.get("program", "")
+                status = prog.get("status", "")
+                prog_type = prog.get("type", "")
+                if name:
+                    label = f"- {name}"
+                    if status:
+                        label += f" ({status})"
+                    if prog_type == "airline":
+                        label += " — prefer this airline when available"
+                    elif prog_type == "hotel":
+                        label += " — prefer this hotel chain when available"
+                    lines.append(label)
+            prompt += "\n".join(lines)
+
+        return prompt
 
     async def on_running(self, msg):
         return await super().on_running(msg)
