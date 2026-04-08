@@ -101,7 +101,9 @@ class ToolManagerMixin:
         from ..builtin_agents.tools.important_dates import IMPORTANT_DATES_TOOL_DEFS
         from ..builtin_agents.tools.user_tools import (
             get_user_accounts_executor, get_user_profile_executor,
+            update_user_profile_executor,
             GET_USER_ACCOUNTS_SCHEMA, GET_USER_PROFILE_SCHEMA,
+            UPDATE_USER_PROFILE_SCHEMA,
         )
         from ..builtin_agents.location import (
             get_user_location_executor, GET_USER_LOCATION_SCHEMA,
@@ -172,6 +174,20 @@ class ToolManagerMixin:
             parameters=GET_USER_PROFILE_SCHEMA,
             executor=get_user_profile_executor,
             category="user",
+        ))
+        tools.append(AgentTool(
+            name="update_user_profile",
+            description=(
+                "Save or update information in the user's profile. Use when the user tells you personal details "
+                "to remember: home/work address, company, preferences, etc. "
+                "Categories: identity (name), addresses (home/work/office locations), work (company, title), "
+                "ai_preferences (language, verbosity), lifestyle, travel, relationships, finance."
+            ),
+            parameters=UPDATE_USER_PROFILE_SCHEMA,
+            executor=update_user_profile_executor,
+            category="user",
+            read_only=False,
+            mutates_user_data=True,
         ))
 
         # Location tools
