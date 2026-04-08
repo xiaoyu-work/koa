@@ -350,13 +350,11 @@ class Koa:
         await self._cron_service.start()
         logger.info("CronService initialized and started (store: PostgreSQL)")
 
-        # ShipmentPoller — hourly background refresh with change notifications
-        from .services.shipment_poller import ShipmentPoller
-        self._shipment_poller = ShipmentPoller(
-            db=self._database,
-            notification=callback_notification,
-        )
-        await self._shipment_poller.start()
+        # ShipmentPoller — DISABLED: 17TRACK webhooks handle status updates in real-time.
+        # Keeping the code but not starting it to avoid unnecessary API calls.
+        # from .services.shipment_poller import ShipmentPoller
+        # self._shipment_poller = ShipmentPoller(db=self._database, notification=callback_notification)
+        # await self._shipment_poller.start()
 
         # Register executors with TriggerEngine
         orchestrator_executor = OrchestratorExecutor(self._orchestrator)
@@ -556,18 +554,20 @@ class Koa:
             if "Proactive: Weather Alert" not in existing_names:
                 jobs_to_create.append(CronJobCreate(
                     name="Proactive: Weather Alert",
-                    description="Weather warnings at key times of day.",
+                    description="Intelligent weather alerts based on forecast changes.",
                     user_id=tenant_id,
-                    schedule=CronScheduleSpec(expr="0 7,12,17 * * *"),
+                    schedule=CronScheduleSpec(expr="0 7,17 * * *"),
                     session_target=SessionTarget.ISOLATED,
                     wake_mode=WakeMode.NEXT_HEARTBEAT,
                     payload=AgentTurnPayload(
-                        message="Check the weather at the user's current location. "
-                                "Only notify if there's something actionable: "
-                                "rain/snow expected in next 4 hours (suggest umbrella/jacket), "
-                                "extreme heat >35°C or cold <0°C, "
-                                "or severe weather warnings. "
-                                "If weather is normal and pleasant, respond with nothing_to_report."
+                        message="Check the weather forecast at the user's location for the next 24 hours. "
+                                "Look for WEATHER CHANGES — specifically:\n"
+                                "1. If rain/snow starts later today, tell the user WHEN it starts (e.g. 'Rain starting around 3 PM, bring an umbrella')\n"
+                                "2. If temperature drops >10°C in next 12 hours, warn them\n"
+                                "3. Extreme heat >35°C or cold <0°C expected\n"
+                                "4. Severe weather warnings (storms, high winds)\n"
+                                "If weather is stable and pleasant all day, respond with nothing_to_report.\n"
+                                "Be specific about TIMING — 'rain at 3 PM' is useful, 'it might rain' is not."
                     ),
                     delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
                 ))
