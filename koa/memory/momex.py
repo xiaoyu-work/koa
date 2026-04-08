@@ -128,7 +128,7 @@ class MomexMemory:
             memory = self._get_memory(tenant_id)
             results = await memory.search(query_text=query, limit=limit)
             return [
-                {"text": item.text, "type": item.type, "score": item.score}
+                {"text": item.text, "type": item.type, "score": item.score, "timestamp": item.timestamp}
                 for item in results
             ]
         except Exception as e:
