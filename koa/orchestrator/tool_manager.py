@@ -156,7 +156,12 @@ class ToolManagerMixin:
         # User tools
         tools.append(AgentTool(
             name="get_user_accounts",
-            description="Get the user's connected accounts (email, calendar). Use this when user asks about their connected accounts.",
+            description=(
+                "Get the user's connected accounts (email, calendar, etc). "
+                "Use when user asks about connections, or before briefings to check what's available. "
+                "If user wants to connect a new service, tell them: 'Go to Me → Connections in the app.' "
+                "If user wants to disconnect, tell them: 'Go to Me → Connections, tap the service, and tap Disconnect.'"
+            ),
             parameters=GET_USER_ACCOUNTS_SCHEMA,
             executor=get_user_accounts_executor,
             category="user",
