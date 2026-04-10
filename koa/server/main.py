@@ -40,6 +40,19 @@ def main():
         help="Tenant ID for multi-tenant mode (default: 'default')",
     )
 
+    # koa connect
+    connect_parser = subparsers.add_parser("connect", help="Connect an account via OAuth")
+    connect_parser.add_argument(
+        "service",
+        nargs="?",
+        help="Service to connect (e.g. gmail, outlook, notion). Omit to list connected accounts.",
+    )
+    connect_parser.add_argument(
+        "--tenant-id",
+        default="default",
+        help="Tenant ID (default: 'default')",
+    )
+
     # Backward compat: bare `koa` or `koa --host/--port` starts server
     parser.add_argument("--host", default=None)
     parser.add_argument("--port", type=int, default=None)
@@ -48,6 +61,8 @@ def main():
 
     if args.command == "chat":
         _run_chat(args)
+    elif args.command == "connect":
+        _run_connect(args)
     else:
         _run_serve(args)
 
@@ -79,3 +94,17 @@ def _run_chat(args):
     url = f"http://localhost:{args.port or int(os.getenv('KOA_PORT', '8000'))}"
     api_key = os.getenv("KOA_API_KEY")
     chat_loop(url=url, api_key=api_key, tenant_id=args.tenant_id)
+
+
+def _run_connect(args):
+    """Connect an account via OAuth or list connected accounts."""
+    from .cli_connect import connect_account, list_accounts
+
+    port = int(os.getenv("KOA_PORT", "8000"))
+    url = f"http://localhost:{port}"
+    api_key = os.getenv("KOA_API_KEY")
+
+    if args.service:
+        connect_account(url=url, api_key=api_key, service=args.service, tenant_id=args.tenant_id)
+    else:
+        list_accounts(url=url, api_key=api_key, tenant_id=args.tenant_id)

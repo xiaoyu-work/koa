@@ -105,6 +105,10 @@ This starts both PostgreSQL and Koa. Chat with: `docker compose exec app koa cha
 |---------|-------------|
 | `koa serve` | Start the API server (default: `http://localhost:8000`) |
 | `koa chat` | Interactive chat with the running server |
+| `koa connect` | List connected accounts |
+| `koa connect google` | Connect Gmail, Calendar, Tasks, Drive via OAuth |
+| `koa connect microsoft` | Connect Outlook, Calendar, To Do, OneDrive via OAuth |
+| `koa connect notion` | Connect Notion via OAuth |
 | `koa serve --host 0.0.0.0 --port 9000` | Custom host/port |
 
 ## API

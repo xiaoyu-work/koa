@@ -1,42 +1,119 @@
+# ===========================================================================
+# Koa Configuration
+# ===========================================================================
+# ${VAR} references are replaced with environment variable values.
+# Copy this file to config.yaml and edit as needed.
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# Database (required)
+# ---------------------------------------------------------------------------
+# PostgreSQL connection URL. Set DATABASE_URL in .env or inline here.
 database: ${DATABASE_URL}
 
-# Supabase Storage — file uploads (receipts, user documents, etc.)
-# supabase:
-#   url: ${SUPABASE_URL}
-#   service_role_key: ${SUPABASE_SERVICE_ROLE_KEY}
-#   storage_bucket: koa-files        # bucket name in Supabase Dashboard
-
+# ---------------------------------------------------------------------------
+# LLM Provider (required)
+# ---------------------------------------------------------------------------
+# Supported: openai, anthropic, azure, dashscope, gemini, ollama
 llm:
-  provider: openai          # openai | anthropic | azure | dashscope | gemini | ollama
+  provider: openai
   model: gpt-4o
-  # api_key: ${OPENAI_API_KEY}
-  # base_url: https://your-endpoint.openai.azure.com/  # Azure only
+  # api_key: ${OPENAI_API_KEY}          # defaults to provider's env var
+  # base_url: https://your-endpoint/    # required for Azure
 
+# ---------------------------------------------------------------------------
+# Embedding (required for memory)
+# ---------------------------------------------------------------------------
+# Used for long-term memory (semantic search over past conversations).
 embedding:
-  provider: openai          # openai | azure
+  provider: openai
   model: text-embedding-3-small
   # api_key: ${OPENAI_API_KEY}          # defaults to llm.api_key if omitted
   # base_url: https://your-endpoint/    # Azure only
   # api_version: '2024-02-01'           # Azure only
 
-# Optional: custom persona
+# ---------------------------------------------------------------------------
+# System Prompt (optional)
+# ---------------------------------------------------------------------------
+# Customize the assistant personality.
+#
 # system_prompt: |
 #   Your name is Jarvis. You speak in a warm, butler-like tone.
 #
 # system_prompt_mode: append    # "append" (default) or "override"
-#   append  — system_prompt is added after the built-in Koa prompt
-#   override — system_prompt replaces the default preamble ("You are Koa...")
-#              while keeping all functional sections (tool routing, workflow, etc.)
+#   append   — added after the built-in Koa prompt
+#   override — replaces the default preamble ("You are Koa...")
 
 # ---------------------------------------------------------------------------
-# Model Routing — route requests to different LLMs based on complexity
-#
-# When enabled, a lightweight classifier scores each request (1-100) and
-# selects the best provider.  Simple tasks go to cheap/fast models; complex
-# tasks go to strong models.  This can dramatically reduce API costs.
-#
-# Requires llm_providers to define at least the providers referenced in rules.
+# Supabase Storage (optional)
 # ---------------------------------------------------------------------------
+# For file uploads (receipts, user documents, etc.)
+#
+# supabase:
+#   url: ${SUPABASE_URL}
+#   service_role_key: ${SUPABASE_SERVICE_ROLE_KEY}
+#   storage_bucket: koa-files
+
+# ===========================================================================
+# Account Connections (OAuth)
+# ===========================================================================
+# Connect accounts with: koa connect <service>
+# These require OAuth app credentials in your .env file.
+#
+# ┌──────────────┬──────────────────────────────┬──────────────────────────────┐
+# │ Service      │ What it enables              │ .env keys needed             │
+# ├──────────────┼──────────────────────────────┼──────────────────────────────┤
+# │ google       │ Gmail, Calendar, Tasks,      │ GOOGLE_CLIENT_ID             │
+# │              │ Drive                        │ GOOGLE_CLIENT_SECRET         │
+# ├──────────────┼──────────────────────────────┼──────────────────────────────┤
+# │ microsoft    │ Outlook, Calendar, To Do,    │ MICROSOFT_CLIENT_ID          │
+# │              │ OneDrive                     │ MICROSOFT_CLIENT_SECRET      │
+# │              │                              │ MICROSOFT_TENANT_ID          │
+# ├──────────────┼──────────────────────────────┼──────────────────────────────┤
+# │ todoist      │ Todoist tasks                │ TODOIST_CLIENT_ID            │
+# │              │                              │ TODOIST_CLIENT_SECRET        │
+# ├──────────────┼──────────────────────────────┼──────────────────────────────┤
+# │ notion       │ Notion workspace             │ NOTION_CLIENT_ID             │
+# │              │                              │ NOTION_CLIENT_SECRET         │
+# ├──────────────┼──────────────────────────────┼──────────────────────────────┤
+# │ dropbox      │ Dropbox file storage         │ (uses Google/Microsoft app)  │
+# ├──────────────┼──────────────────────────────┼──────────────────────────────┤
+# │ hue          │ Philips Hue smart lights     │ HUE_CLIENT_ID                │
+# │              │                              │ HUE_CLIENT_SECRET            │
+# ├──────────────┼──────────────────────────────┼──────────────────────────────┤
+# │ sonos        │ Sonos speakers               │ SONOS_CLIENT_ID              │
+# │              │                              │ SONOS_CLIENT_SECRET          │
+# ├──────────────┼──────────────────────────────┼──────────────────────────────┤
+# │ slack,       │ Via Composio platform         │ COMPOSIO_API_KEY             │
+# │ github,      │                              │                              │
+# │ spotify, ... │                              │                              │
+# └──────────────┴──────────────────────────────┴──────────────────────────────┘
+
+# ===========================================================================
+# Agent API Keys (optional — only for agents you want to use)
+# ===========================================================================
+# These go in your .env file, not here. Listed for reference.
+#
+# ┌──────────────────────────┬──────────────────────────────────────────────┐
+# │ .env Variable            │ Agent / Feature                              │
+# ├──────────────────────────┼──────────────────────────────────────────────┤
+# │ WEATHER_API_KEY          │ Weather forecasts                            │
+# │ GOOGLE_MAPS_API_KEY      │ Maps, directions, nearby places              │
+# │ GOOGLE_SEARCH_API_KEY    │ Web search                                   │
+# │ GOOGLE_SEARCH_ENGINE_ID  │ Web search (Programmable Search Engine ID)   │
+# │ JINA_API_KEY             │ Flight/hotel search (Jina Reader)            │
+# │ TRACK17_API_KEY          │ Package tracking (17TRACK)                   │
+# │ COMPOSIO_API_KEY         │ Slack, GitHub, Spotify, Discord, etc.        │
+# │ AMADEUS_API_KEY          │ Flight search (Amadeus)                      │
+# │ AMADEUS_API_SECRET       │ Flight search (Amadeus)                      │
+# └──────────────────────────┴──────────────────────────────────────────────┘
+
+# ===========================================================================
+# Model Routing (optional — route requests to different LLMs by complexity)
+# ===========================================================================
+# When enabled, a classifier scores each request (1-100) and selects
+# the best provider. Simple tasks → cheap models, complex tasks → strong.
+#
 # llm_providers:
 #   strong:
 #     provider: anthropic
@@ -53,23 +130,22 @@ embedding:
 #
 # model_routing:
 #   enabled: true
-#   classifier_provider: fast          # which provider scores the request
-#   default_provider: fast             # fallback if classifier fails
+#   classifier_provider: fast
+#   default_provider: fast
 #   rules:
-#     - score_range: [1, 30]           # trivial: greetings, quick Q&A
+#     - score_range: [1, 30]
 #       provider: cheap
-#     - score_range: [31, 70]          # standard: single-agent tasks
+#     - score_range: [31, 70]
 #       provider: fast
-#     - score_range: [71, 100]         # complex: multi-agent, trip planning
+#     - score_range: [71, 100]
 #       provider: strong
 
-# ---------------------------------------------------------------------------
-# MCP Servers — Model Context Protocol server connections
-#
+# ===========================================================================
+# MCP Servers (optional — Model Context Protocol tool servers)
+# ===========================================================================
 # Each entry defines an MCP server whose tools become available to agents.
-# Tools are auto-discovered and named "mcp__{server}__{tool}".
 # Supported transports: stdio, sse, streamable_http
-# ---------------------------------------------------------------------------
+#
 # mcp_servers:
 #   invokit:
 #     transport: streamable_http
@@ -82,44 +158,11 @@ embedding:
 #     transport: stdio
 #     command: npx
 #     args: ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/dir"]
-#
-#   my-api:
-#     transport: sse
-#     url: http://localhost:8080/sse
-#     headers:
-#       Authorization: "Bearer ${MCP_API_TOKEN:-}"
-#     timeout: 60
-#
-#   local-tool:
-#     transport: stdio
-#     command: python
-#     args: ["my_mcp_server.py"]
-#     env:
-#       MY_VAR: some-value
 
-# Callbacks — Koa POSTs notifications here (e.g. important emails, trigger results)
+# ===========================================================================
+# Callbacks (optional — webhook notifications)
+# ===========================================================================
+# Koa POSTs notifications here (e.g. important emails, trigger results).
+#
 # callbacks:
-#   notify_url: http://localhost:8001/webhook/onevalet/callback
-
-# ---------------------------------------------------------------------------
-# Credentials — flat key-value pairs loaded into environment variables.
-#
-# Keys are environment variable names. Values support ${VAR} syntax.
-# All fields are optional. Only configure the services you need.
-# Adding a new credential requires only a new line here — no code changes.
-# ---------------------------------------------------------------------------
-# credentials:
-#   COMPOSIO_API_KEY: ${COMPOSIO_API_KEY}
-#   NOTION_CLIENT_ID: ${NOTION_CLIENT_ID}
-#   NOTION_CLIENT_SECRET: ${NOTION_CLIENT_SECRET}
-#   GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY}
-#   GOOGLE_SEARCH_API_KEY: ${GOOGLE_SEARCH_API_KEY}
-#   GOOGLE_SEARCH_ENGINE_ID: ${GOOGLE_SEARCH_ENGINE_ID}
-#   AMADEUS_API_KEY: ${AMADEUS_API_KEY}
-#   AMADEUS_API_SECRET: ${AMADEUS_API_SECRET}
-#   WEATHER_API_KEY: ${WEATHER_API_KEY}
-#   GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-#   GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-#   MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID}
-#   MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET}
-#   MICROSOFT_TENANT_ID: ${MICROSOFT_TENANT_ID}
+#   notify_url: http://localhost:8001/webhook/koa/callback
