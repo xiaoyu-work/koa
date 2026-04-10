@@ -60,7 +60,8 @@ That's it. Go back to the chat and start talking.
 |----------|--------|-------------|
 | `/chat` | POST | Send message, get response |
 | `/stream` | POST | Send message, stream response (SSE) |
-| `/health` | GET | Health check |
+| `/health` | GET | Liveness probe (version, auth status) |
+| `/health/ready` | GET | Readiness probe (checks DB, LLM) |
 
 ```bash
 # Chat
@@ -77,6 +78,12 @@ curl -X POST http://localhost:8000/stream \
 curl -X POST http://localhost:8000/chat \
   -H "Content-Type: application/json" \
   -d '{"tenant_id": "user_123", "message": "What is on my calendar today?"}'
+
+# With API key authentication
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{"message": "Do I have any unread emails?"}'
 ```
 
 ## Config
@@ -84,20 +91,38 @@ curl -X POST http://localhost:8000/chat \
 `config.yaml` is created automatically via the settings page. You can also create it manually:
 
 ```yaml
-provider: openai          # openai / anthropic / azure / dashscope / gemini / ollama
-model: gpt-4o
-api_key: sk-...           # or omit to use provider's default env var
 database: postgresql://user:pass@host:5432/dbname
+
+llm:
+  provider: openai          # openai / anthropic / azure / dashscope / gemini / ollama
+  model: gpt-4o
+  api_key: sk-...           # or omit to use provider's default env var
+
+embedding:
+  provider: openai
+  model: text-embedding-3-small
 ```
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `provider` | Yes | LLM provider |
-| `model` | Yes | Model name |
 | `database` | Yes | PostgreSQL connection URL |
-| `api_key` | No | API key (defaults to provider env var) |
-| `base_url` | No | Custom endpoint (required for Azure) |
+| `llm.provider` | Yes | LLM provider |
+| `llm.model` | Yes | Model name |
+| `llm.api_key` | No | API key (defaults to provider env var) |
+| `llm.base_url` | No | Custom endpoint (required for Azure) |
+| `embedding.provider` | Yes | Embedding provider |
+| `embedding.model` | Yes | Embedding model name |
 | `system_prompt` | No | System prompt / personality |
+
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | Yes | PostgreSQL connection URL (used in config via `${DATABASE_URL}`) |
+| `KOA_API_KEY` | No | API key for endpoint authentication. **If not set, all endpoints are unauthenticated (dev mode only).** |
+| `KOA_SERVICE_KEY` | No | Service key for internal endpoints |
+| `KOA_CREDENTIAL_KEY` | No | AES-256 encryption key for credentials at rest. When set, OAuth tokens are encrypted in the database. |
+| `KOA_CORS_ORIGINS` | No | Comma-separated allowed CORS origins (default: `http://localhost:3000,http://localhost:5173`) |
 
 ## Model Routing
 
