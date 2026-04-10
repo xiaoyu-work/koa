@@ -9,12 +9,10 @@ The internal LLM decides which tools to call (search_places, get_directions,
 check_air_quality) based on the user's request.
 """
 
-from datetime import datetime
-
 from koa import valet
 from koa.standard_agent import StandardAgent
 
-from .tools import search_places, get_directions, check_air_quality
+from .tools import check_air_quality, get_directions, search_places
 
 
 @valet(domain="travel")
@@ -63,8 +61,8 @@ Response format for search_places results:
         if loc and isinstance(loc, dict) and loc.get("lat") is not None:
             location_block = f"User's current location: {loc['lat']}, {loc['lng']}\n\n"
         return self._SYSTEM_PROMPT_TEMPLATE.format(
-            today=now.strftime('%Y-%m-%d'),
-            weekday=now.strftime('%A'),
+            today=now.strftime("%Y-%m-%d"),
+            weekday=now.strftime("%A"),
             location_block=location_block,
         )
 

@@ -5,12 +5,12 @@ Agents are registered via @valet decorator only.
 """
 
 import logging
-from typing import Dict, List, Any, Optional, Set, Type, Callable
+from typing import Any, Callable, Dict, List, Optional, Set, Type
 
-from ..mcp.provider import MCPToolProvider, MCPManager
-from ..mcp.protocol import MCPClientProtocol
 from ..base_agent import BaseAgent
 from ..llm.registry import LLMRegistry
+from ..mcp.protocol import MCPClientProtocol
+from ..mcp.provider import MCPManager
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ class AgentRegistry:
     def __init__(
         self,
         llm_registry: Optional[LLMRegistry] = None,
-        mcp_client_factory: Optional[Callable[[Any], MCPClientProtocol]] = None
+        mcp_client_factory: Optional[Callable[[Any], MCPClientProtocol]] = None,
     ):
         """
         Initialize agent registry
@@ -83,6 +83,7 @@ class AgentRegistry:
     def _get_agent_registry(self) -> Dict[str, Any]:
         """Get the decorator-based agent registry"""
         from ..agents.decorator import AGENT_REGISTRY
+
         return AGENT_REGISTRY
 
     def get_agent_class(self, name: str) -> Optional[Type[BaseAgent]]:
@@ -111,11 +112,7 @@ class AgentRegistry:
         return self._get_agent_registry()
 
     def create_agent(
-        self,
-        name: str,
-        tenant_id: str = "default",
-        llm_client: Optional[Any] = None,
-        **kwargs
+        self, name: str, tenant_id: str = "default", llm_client: Optional[Any] = None, **kwargs
     ) -> Optional[BaseAgent]:
         """
         Create an agent instance
@@ -196,11 +193,11 @@ class AgentRegistry:
         credential_store: Optional[Any] = None,
     ) -> List[Dict[str, Any]]:
         """Return enhanced tool schemas for all agents with expose_as_tool=True."""
-        from ..agents.decorator import generate_tool_schema, enhance_agent_tool_schema
+        from ..agents.decorator import enhance_agent_tool_schema, generate_tool_schema
 
         schemas = []
         for name, metadata in self._get_agent_registry().items():
-            if not getattr(metadata, 'expose_as_tool', True):
+            if not getattr(metadata, "expose_as_tool", True):
                 continue
             schema = generate_tool_schema(metadata.agent_class)
             schema = enhance_agent_tool_schema(metadata.agent_class, schema)
@@ -222,7 +219,7 @@ class AgentRegistry:
         if "all" in domains:
             return await self.get_all_agent_tool_schemas(tenant_id, credential_store)
 
-        from ..agents.decorator import generate_tool_schema, enhance_agent_tool_schema
+        from ..agents.decorator import enhance_agent_tool_schema, generate_tool_schema
 
         domain_set = set(domains)
 
@@ -244,7 +241,9 @@ class AgentRegistry:
 
         logger.info(
             "[AgentRegistry] domain_filter=%s matched=%s skipped=%s",
-            domains, matched, skipped,
+            domains,
+            matched,
+            skipped,
         )
         return schemas
 
@@ -278,11 +277,11 @@ class AgentRegistry:
                 lines.append(f"  Domain: {metadata.domain}")
 
             # Tools available to this agent
-            agent_tools = getattr(metadata.agent_class, 'tools', ())
+            agent_tools = getattr(metadata.agent_class, "tools", ())
             if agent_tools:
                 tool_names = []
                 for t in agent_tools:
-                    tname = getattr(t, 'name', None) or getattr(t, '__name__', str(t))
+                    tname = getattr(t, "name", None) or getattr(t, "__name__", str(t))
                     tool_names.append(tname)
                 lines.append(f"  Tools: {', '.join(tool_names)}")
 

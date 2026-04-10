@@ -33,6 +33,7 @@ def configure(koiai_url: str = None, service_key: str = None):
 # get_user_location
 # =============================================================================
 
+
 async def get_user_location_executor(args: dict, context: AgentToolContext = None) -> str:
     """Get the user's current location (latitude, longitude, and place name)."""
     if not context:
@@ -66,6 +67,7 @@ GET_USER_LOCATION_SCHEMA = {
 # =============================================================================
 # set_location_reminder
 # =============================================================================
+
 
 async def set_location_reminder_executor(args: dict, context: AgentToolContext = None) -> str:
     """Set a location-based reminder that notifies the user when they arrive near a specific place."""

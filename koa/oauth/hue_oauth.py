@@ -49,9 +49,7 @@ class HueOAuth:
     async def exchange_code(code: str, redirect_uri: str) -> Dict[str, Any]:
         """Exchange authorization code for tokens."""
         client_id, client_secret, _ = HueOAuth.get_credentials()
-        basic_auth = base64.b64encode(
-            f"{client_id}:{client_secret}".encode()
-        ).decode()
+        basic_auth = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
 
         async with httpx.AsyncClient() as client:
             response = await client.post(

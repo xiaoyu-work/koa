@@ -64,9 +64,7 @@ def _is_safe_url(url: str) -> bool:
 # ---------------------------------------------------------------------------
 
 _MAX_CONTENT_CHARS = 12000
-_USER_AGENT = (
-    "Mozilla/5.0 (compatible; Koa/1.0; +https://github.com/withkoi/koa)"
-)
+_USER_AGENT = "Mozilla/5.0 (compatible; Koa/1.0; +https://github.com/withkoi/koa)"
 
 
 async def web_fetch_executor(args: dict, context: AgentToolContext = None) -> str:
@@ -135,6 +133,7 @@ async def web_fetch_executor(args: dict, context: AgentToolContext = None) -> st
         if not text or len(text.strip()) < 30:
             # Fallback to Jina Reader for JS-rendered pages
             from .jina_reader import jina_fetch
+
             jina_content = await jina_fetch(url)
             if jina_content:
                 _cache_set(url, jina_content)
@@ -150,11 +149,14 @@ async def web_fetch_executor(args: dict, context: AgentToolContext = None) -> st
 
         # Extract title if available
         metadata = trafilatura.extract(
-            raw_html, url=url, output_format="xmltei",
+            raw_html,
+            url=url,
+            output_format="xmltei",
         )
         title = ""
         if metadata:
             import re as _re
+
             m = _re.search(r"<title[^>]*>([^<]+)</title>", metadata)
             if m:
                 title = m.group(1).strip()

@@ -33,8 +33,7 @@ def validate_config(cfg: Dict[str, Any]) -> List[str]:
             errors.append("'llm.provider' is required")
         elif llm["provider"] not in _VALID_PROVIDERS:
             errors.append(
-                f"'llm.provider' must be one of {sorted(_VALID_PROVIDERS)}, "
-                f"got '{llm['provider']}'"
+                f"'llm.provider' must be one of {sorted(_VALID_PROVIDERS)}, got '{llm['provider']}'"
             )
         if not llm.get("model"):
             errors.append("'llm.model' is required")
@@ -61,10 +60,7 @@ def validate_config(cfg: Dict[str, Any]) -> List[str]:
                 curr = sorted_rules[i].get("score_range", [0, 0])
                 nxt = sorted_rules[i + 1].get("score_range", [0, 0])
                 if len(curr) == 2 and len(nxt) == 2 and curr[1] >= nxt[0]:
-                    errors.append(
-                        f"Model routing rules overlap: "
-                        f"{curr} and {nxt}"
-                    )
+                    errors.append(f"Model routing rules overlap: {curr} and {nxt}")
 
     if errors:
         for e in errors:

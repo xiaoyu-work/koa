@@ -95,14 +95,14 @@ class InputField:
         if obj is None:
             # Accessed on class, return descriptor itself
             return self
-        collected = getattr(obj, 'collected_fields', None)
+        collected = getattr(obj, "collected_fields", None)
         if collected is None:
             return self.default
         return collected.get(self.name, self.default)
 
     def __set__(self, obj: Any, value: Any) -> None:
         """Set the field value in collected_fields."""
-        collected = getattr(obj, 'collected_fields', None)
+        collected = getattr(obj, "collected_fields", None)
         if collected is not None:
             collected[self.name] = value
 
@@ -161,14 +161,14 @@ class OutputField:
         if obj is None:
             # Accessed on class, return descriptor itself
             return self
-        output_values = getattr(obj, '_output_values', None)
+        output_values = getattr(obj, "_output_values", None)
         if output_values is None:
             return None
         return output_values.get(self.name)
 
     def __set__(self, obj: Any, value: Any) -> None:
         """Set the output value."""
-        output_values = getattr(obj, '_output_values', None)
+        output_values = getattr(obj, "_output_values", None)
         if output_values is None:
             obj._output_values = {}
             output_values = obj._output_values

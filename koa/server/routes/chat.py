@@ -10,9 +10,10 @@ import httpx
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from koa.streaming.models import EventType
+
 from ..app import require_app, verify_api_key
 from ..models import ChatRequest, ChatResponse
-from koa.streaming.models import EventType
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,9 @@ _KOIAI_CALLBACK_URL = os.getenv("KOIAI_CALLBACK_URL", "")
 
 
 async def _post_stream_result(
-    tenant_id: str, final_response: str, tool_calls: list,
+    tenant_id: str,
+    final_response: str,
+    tool_calls: list,
 ) -> None:
     """POST the stream result back to koiai so it can persist chat history."""
     if not _KOIAI_CALLBACK_URL:
@@ -35,7 +38,8 @@ async def _post_stream_result(
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.post(
-                _KOIAI_CALLBACK_URL, json=payload,
+                _KOIAI_CALLBACK_URL,
+                json=payload,
                 headers={"X-Service-Key": os.getenv("KOA_SERVICE_KEY", "")},
             )
             if resp.status_code != 200:
@@ -100,7 +104,11 @@ async def stream(req: ChatRequest):
                 ed = execution_end_data_holder[0]
                 # ed is an AgentResult dataclass, not a dict
                 final_resp = getattr(ed, "raw_message", "") or ""
-                tool_calls = getattr(ed, "metadata", {}).get("tool_calls", []) if hasattr(ed, "metadata") else []
+                tool_calls = (
+                    getattr(ed, "metadata", {}).get("tool_calls", [])
+                    if hasattr(ed, "metadata")
+                    else []
+                )
                 await _post_stream_result(
                     tenant_id=req.tenant_id,
                     final_response=final_resp,
@@ -108,7 +116,7 @@ async def stream(req: ChatRequest):
                 )
 
     async def event_generator():
-        task = asyncio.create_task(_run_orchestrator())
+        asyncio.create_task(_run_orchestrator())
         try:
             while True:
                 event = await queue.get()
@@ -131,10 +139,14 @@ async def stream(req: ChatRequest):
                     except Exception:
                         return "<non-serializable>"
 
-                data = json.dumps({
-                    "type": event.type.value if event.type else "unknown",
-                    "data": event.data,
-                }, ensure_ascii=False, default=_default)
+                data = json.dumps(
+                    {
+                        "type": event.type.value if event.type else "unknown",
+                        "data": event.data,
+                    },
+                    ensure_ascii=False,
+                    default=_default,
+                )
                 yield f"data: {data}\n\n"
             yield "data: [DONE]\n\n"
         except (asyncio.CancelledError, GeneratorExit):
@@ -151,6 +163,7 @@ async def stream(req: ChatRequest):
 async def health():
     """Liveness probe — always returns 200 if the process is alive."""
     from koa import __version__
+
     return {
         "status": "ok",
         "version": __version__,
@@ -223,21 +236,25 @@ async def get_actions(tenant_id: str, limit: int = 50, offset: int = 0):
             ORDER BY created_at DESC
             LIMIT $2 OFFSET $3
             """,
-            tenant_id, limit, offset,
+            tenant_id,
+            limit,
+            offset,
         )
         actions = []
         for r in rows:
-            actions.append({
-                "id": str(r["id"]),
-                "tool_name": r["tool_name"],
-                "agent_name": r["agent_name"],
-                "summary": r["summary"],
-                "args_summary": r["args_summary"],
-                "success": r["success"],
-                "result_status": r["result_status"],
-                "duration_ms": r["duration_ms"],
-                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
-            })
+            actions.append(
+                {
+                    "id": str(r["id"]),
+                    "tool_name": r["tool_name"],
+                    "agent_name": r["agent_name"],
+                    "summary": r["summary"],
+                    "args_summary": r["args_summary"],
+                    "success": r["success"],
+                    "result_status": r["result_status"],
+                    "duration_ms": r["duration_ms"],
+                    "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+                }
+            )
         return {
             "actions": actions,
             "total": count or 0,

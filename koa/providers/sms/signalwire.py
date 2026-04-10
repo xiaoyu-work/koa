@@ -3,6 +3,7 @@ SignalWire SMS Provider - Sends SMS via SignalWire API
 """
 
 import logging
+
 from signalwire.rest import Client as SignalWireClient
 
 from .base import BaseSMSProvider

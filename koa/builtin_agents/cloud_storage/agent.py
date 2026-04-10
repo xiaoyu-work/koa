@@ -9,12 +9,13 @@ This agent handles cloud storage operations across Google Drive, OneDrive, and D
 - Share files (requires approval)
 - Check storage usage
 """
-import logging
-import json
-from typing import Dict, Any, List, Optional
-from datetime import datetime
 
-from koa import valet, StandardAgent, InputField, AgentStatus, AgentResult, Message, ApprovalResult
+import json
+import logging
+from datetime import datetime
+from typing import Any, Dict, List
+
+from koa import AgentResult, AgentStatus, ApprovalResult, InputField, Message, StandardAgent, valet
 from koa.constants import STORAGE_SERVICES
 
 logger = logging.getLogger(__name__)
@@ -92,7 +93,10 @@ JSON Output:"""
 
             result = await self.llm_client.chat_completion(
                 messages=[
-                    {"role": "system", "content": "You extract cloud storage actions from text and return JSON."},
+                    {
+                        "role": "system",
+                        "content": "You extract cloud storage actions from text and return JSON.",
+                    },
                     {"role": "user", "content": prompt},
                 ],
                 response_format="json_object",
@@ -234,8 +238,8 @@ JSON Output:"""
 
     async def on_running(self, msg: Message) -> AgentResult:
         """Execute the cloud storage action."""
-        from koa.providers.cloud_storage.resolver import CloudStorageResolver
         from koa.providers.cloud_storage.factory import CloudStorageProviderFactory
+        from koa.providers.cloud_storage.resolver import CloudStorageResolver
 
         fields = self.collected_fields
         action = fields.get("action", "search")
@@ -286,9 +290,7 @@ JSON Output:"""
 
     # ===== Action Executors =====
 
-    async def _execute_search(
-        self, accounts: List[dict], query: str, factory
-    ) -> AgentResult:
+    async def _execute_search(self, accounts: List[dict], query: str, factory) -> AgentResult:
         """Search files across providers."""
         if not query:
             return self.make_result(
@@ -318,7 +320,9 @@ JSON Output:"""
                         f["_provider_display"] = provider.get_provider_display_name()
                     all_files.extend(files)
                 else:
-                    failed_accounts.append(self._make_failed(account, "search_failed", result.get("error")))
+                    failed_accounts.append(
+                        self._make_failed(account, "search_failed", result.get("error"))
+                    )
             except Exception as e:
                 logger.error(f"Search failed on {account.get('provider')}: {e}", exc_info=True)
                 failed_accounts.append(self._make_failed(account, "query_failed", str(e)))
@@ -326,7 +330,9 @@ JSON Output:"""
         # Sort by modified date (newest first)
         all_files.sort(key=lambda f: f.get("modified", ""), reverse=True)
 
-        formatted = self._format_file_results(all_files, accounts, failed_accounts, f'search "{query}"')
+        formatted = self._format_file_results(
+            all_files, accounts, failed_accounts, f'search "{query}"'
+        )
         return self.make_result(status=AgentStatus.COMPLETED, raw_message=formatted)
 
     async def _execute_recent(self, accounts: List[dict], factory) -> AgentResult:
@@ -353,9 +359,13 @@ JSON Output:"""
                         f["_provider_display"] = provider.get_provider_display_name()
                     all_files.extend(files)
                 else:
-                    failed_accounts.append(self._make_failed(account, "list_failed", result.get("error")))
+                    failed_accounts.append(
+                        self._make_failed(account, "list_failed", result.get("error"))
+                    )
             except Exception as e:
-                logger.error(f"Recent files failed on {account.get('provider')}: {e}", exc_info=True)
+                logger.error(
+                    f"Recent files failed on {account.get('provider')}: {e}", exc_info=True
+                )
                 failed_accounts.append(self._make_failed(account, "query_failed", str(e)))
 
         all_files.sort(key=lambda f: f.get("modified", ""), reverse=True)
@@ -363,9 +373,7 @@ JSON Output:"""
         formatted = self._format_file_results(all_files, accounts, failed_accounts, "recent files")
         return self.make_result(status=AgentStatus.COMPLETED, raw_message=formatted)
 
-    async def _execute_info(
-        self, accounts: List[dict], query: str, factory
-    ) -> AgentResult:
+    async def _execute_info(self, accounts: List[dict], query: str, factory) -> AgentResult:
         """Get info about a file. First search, then get details."""
         if not query:
             return self.make_result(
@@ -403,9 +411,7 @@ JSON Output:"""
             raw_message=f'Could not find a file matching "{query}".',
         )
 
-    async def _execute_download(
-        self, accounts: List[dict], query: str, factory
-    ) -> AgentResult:
+    async def _execute_download(self, accounts: List[dict], query: str, factory) -> AgentResult:
         """Get a download link for a file."""
         if not query:
             return self.make_result(
@@ -440,7 +446,9 @@ JSON Output:"""
                                 raw_message=msg,
                             )
             except Exception as e:
-                logger.error(f"Download link failed on {account.get('provider')}: {e}", exc_info=True)
+                logger.error(
+                    f"Download link failed on {account.get('provider')}: {e}", exc_info=True
+                )
 
         return self.make_result(
             status=AgentStatus.COMPLETED,
@@ -530,7 +538,9 @@ JSON Output:"""
                     provider_name = provider.get_provider_display_name()
                     usage_parts.append(f"[{provider_name}] {used} / {total} ({percent:.1f}% used)")
                 else:
-                    failed_accounts.append(self._make_failed(account, "usage_failed", result.get("error")))
+                    failed_accounts.append(
+                        self._make_failed(account, "usage_failed", result.get("error"))
+                    )
             except Exception as e:
                 logger.error(f"Usage check failed on {account.get('provider')}: {e}", exc_info=True)
                 failed_accounts.append(self._make_failed(account, "query_failed", str(e)))
@@ -562,11 +572,14 @@ JSON Output:"""
         provider_name = ""
         if self._share_provider_account:
             from koa.providers.cloud_storage.factory import CloudStorageProviderFactory
+
             provider = CloudStorageProviderFactory.create_provider(self._share_provider_account)
             if provider:
                 provider_name = f" on {provider.get_provider_display_name()}"
 
-        return f"Share \"{file_name}\"{provider_name} with {target}?\n\n(yes / no / or describe changes)"
+        return (
+            f'Share "{file_name}"{provider_name} with {target}?\n\n(yes / no / or describe changes)'
+        )
 
     async def parse_approval_async(self, user_input: str):
         """Parse user's approval response using LLM."""
@@ -602,8 +615,8 @@ Return ONLY one word: APPROVED, REJECTED, or MODIFY"""
 
     async def _resolve_share_file(self):
         """Find the file to share so we can show details in approval."""
-        from koa.providers.cloud_storage.resolver import CloudStorageResolver
         from koa.providers.cloud_storage.factory import CloudStorageProviderFactory
+        from koa.providers.cloud_storage.resolver import CloudStorageResolver
 
         fields = self.collected_fields
         query = fields.get("query", "")
@@ -653,7 +666,9 @@ Return ONLY one word: APPROVED, REJECTED, or MODIFY"""
         multi_provider = len(searched_accounts) > 1
 
         if not files:
-            response_parts.append(f"No files found for {action_label}." if action_label else "No files found.")
+            response_parts.append(
+                f"No files found for {action_label}." if action_label else "No files found."
+            )
         else:
             response_parts.append(f"Found {len(files)} file(s):\n")
 
@@ -667,6 +682,7 @@ Return ONLY one word: APPROVED, REJECTED, or MODIFY"""
                 size_str = ""
                 if size is not None:
                     from koa.providers.cloud_storage.base import BaseCloudStorageProvider
+
                     size_str = f" - {BaseCloudStorageProvider.format_size(size)}"
 
                 # Format date
@@ -720,6 +736,7 @@ Return ONLY one word: APPROVED, REJECTED, or MODIFY"""
             return ""
         try:
             from dateutil import parser as date_parser
+
             dt = date_parser.parse(date_str)
             now = datetime.now()
             if dt.year == now.year:

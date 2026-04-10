@@ -8,27 +8,27 @@ This module provides:
 
 import asyncio
 import uuid
-from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Any, List, Optional, Callable, Protocol, Union
+from typing import Any, Callable, Dict, List, Optional, Protocol
 
-from .models import (
-    ExecutionPattern,
-    MergeStrategy,
-    GroupResult,
-    AgentExecutionResult,
-    GroupConfig,
-)
 from .merge import StateMerger
+from .models import (
+    AgentExecutionResult,
+    ExecutionPattern,
+    GroupResult,
+    MergeStrategy,
+)
 
 
 class GroupExecutionError(Exception):
     """Raised when group execution fails"""
+
     pass
 
 
 class AgentProtocol(Protocol):
     """Protocol for agents in a group"""
+
     agent_id: str
 
     async def reply(self, message: Any) -> Any: ...
@@ -38,10 +38,7 @@ class AgentFactoryProtocol(Protocol):
     """Protocol for creating agent instances"""
 
     async def create_agent(
-        self,
-        agent_type: str,
-        user_id: str,
-        context_hints: Optional[Dict[str, Any]] = None
+        self, agent_type: str, user_id: str, context_hints: Optional[Dict[str, Any]] = None
     ) -> AgentProtocol: ...
 
 
@@ -84,7 +81,7 @@ class AgentGroup:
         max_concurrency: int = 10,
         timeout_seconds: int = 300,
         continue_on_error: bool = True,
-        group_id: Optional[str] = None
+        group_id: Optional[str] = None,
     ):
         """
         Initialize agent group.
@@ -108,8 +105,7 @@ class AgentGroup:
 
         # Initialize merger for parallel execution
         self.merger = StateMerger(
-            merge_strategies=merge_strategy or {},
-            custom_merge_fns=custom_merge_fns or {}
+            merge_strategies=merge_strategy or {}, custom_merge_fns=custom_merge_fns or {}
         )
 
     async def execute(
@@ -118,7 +114,7 @@ class AgentGroup:
         user_id: str,
         factory: AgentFactoryProtocol,
         shared_inputs: Optional[Dict[str, Any]] = None,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Dict[str, Any]] = None,
     ) -> GroupResult:
         """
         Execute the agent group.
@@ -137,7 +133,7 @@ class AgentGroup:
             group_id=self.group_id,
             pattern=self.pattern,
             status="completed",
-            started_at=datetime.now()
+            started_at=datetime.now(),
         )
 
         try:
@@ -175,7 +171,7 @@ class AgentGroup:
         factory: AgentFactoryProtocol,
         shared_inputs: Optional[Dict[str, Any]],
         context: Optional[Dict[str, Any]],
-        result: GroupResult
+        result: GroupResult,
     ) -> None:
         """Execute agents sequentially, passing output to next"""
         current_message = message
@@ -190,7 +186,7 @@ class AgentGroup:
                 message=current_message,
                 user_id=user_id,
                 factory=factory,
-                context=accumulated_context
+                context=accumulated_context,
             )
 
             result.add_result(agent_result)
@@ -225,7 +221,7 @@ class AgentGroup:
         factory: AgentFactoryProtocol,
         shared_inputs: Optional[Dict[str, Any]],
         context: Optional[Dict[str, Any]],
-        result: GroupResult
+        result: GroupResult,
     ) -> None:
         """Execute agents in parallel and merge results"""
         semaphore = asyncio.Semaphore(self.max_concurrency)
@@ -237,7 +233,7 @@ class AgentGroup:
                     message=message,
                     user_id=user_id,
                     factory=factory,
-                    context={**(context or {}), **(shared_inputs or {})}
+                    context={**(context or {}), **(shared_inputs or {})},
                 )
 
         # Execute all agents in parallel
@@ -253,7 +249,7 @@ class AgentGroup:
                     agent_id=f"{self.agent_types[i]}_{i}",
                     agent_type=self.agent_types[i],
                     status="failed",
-                    error=str(res)
+                    error=str(res),
                 )
             else:
                 agent_result = res
@@ -285,7 +281,7 @@ class AgentGroup:
         factory: AgentFactoryProtocol,
         shared_inputs: Optional[Dict[str, Any]],
         context: Optional[Dict[str, Any]],
-        result: GroupResult
+        result: GroupResult,
     ) -> None:
         """Execute hierarchical pattern (first agent is manager, rest are workers)"""
         if len(self.agent_types) < 2:
@@ -302,7 +298,7 @@ class AgentGroup:
             message=message,
             user_id=user_id,
             factory=factory,
-            context={**(context or {}), **(shared_inputs or {})}
+            context={**(context or {}), **(shared_inputs or {})},
         )
         result.add_result(manager_result)
 
@@ -324,7 +320,11 @@ class AgentGroup:
                     message=worker_message,
                     user_id=user_id,
                     factory=factory,
-                    context={**(context or {}), **(shared_inputs or {}), **manager_result.collected_fields}
+                    context={
+                        **(context or {}),
+                        **(shared_inputs or {}),
+                        **manager_result.collected_fields,
+                    },
                 )
 
         tasks = [execute_worker(wt) for wt in worker_types]
@@ -338,7 +338,7 @@ class AgentGroup:
                     agent_id=f"{worker_types[i]}_{i}",
                     agent_type=worker_types[i],
                     status="failed",
-                    error=str(res)
+                    error=str(res),
                 )
             else:
                 agent_result = res
@@ -364,7 +364,7 @@ class AgentGroup:
         message: Any,
         user_id: str,
         factory: AgentFactoryProtocol,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Dict[str, Any]] = None,
     ) -> AgentExecutionResult:
         """Execute a single agent and return result"""
         agent_id = f"{agent_type}_{uuid.uuid4().hex[:8]}"
@@ -373,9 +373,7 @@ class AgentGroup:
         try:
             # Create agent
             agent = await factory.create_agent(
-                agent_type=agent_type,
-                user_id=user_id,
-                context_hints=context
+                agent_type=agent_type, user_id=user_id, context_hints=context
             )
 
             # Execute agent
@@ -385,12 +383,12 @@ class AgentGroup:
                 agent_id=agent_id,
                 agent_type=agent_type,
                 status="completed",
-                collected_fields=getattr(agent, 'collected_fields', {}),
-                execution_state=getattr(agent, 'execution_state', {}),
-                raw_message=getattr(reply, 'raw_message', str(reply)),
-                output=getattr(reply, 'data', reply),
+                collected_fields=getattr(agent, "collected_fields", {}),
+                execution_state=getattr(agent, "execution_state", {}),
+                raw_message=getattr(reply, "raw_message", str(reply)),
+                output=getattr(reply, "data", reply),
                 started_at=started_at,
-                completed_at=datetime.now()
+                completed_at=datetime.now(),
             )
 
         except Exception as e:
@@ -401,14 +399,11 @@ class AgentGroup:
                 error=str(e),
                 error_type=type(e).__name__,
                 started_at=started_at,
-                completed_at=datetime.now()
+                completed_at=datetime.now(),
             )
 
     def set_merge_strategy(
-        self,
-        field: str,
-        strategy: MergeStrategy,
-        custom_fn: Optional[Callable] = None
+        self, field: str, strategy: MergeStrategy, custom_fn: Optional[Callable] = None
     ) -> None:
         """Set merge strategy for a field"""
         self.merger.set_strategy(field, strategy, custom_fn)

@@ -5,10 +5,10 @@ Each calendar provider (Google Calendar, Outlook Calendar, etc.) must implement 
 Providers receive a credentials dict directly - they do not query any database.
 """
 
-from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, List, Optional
-from datetime import datetime, timedelta, timezone
 import logging
+from abc import ABC, abstractmethod
+from datetime import datetime, timedelta, timezone
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +122,7 @@ class BaseCalendarProvider(ABC):
 
         if isinstance(self.token_expiry, str):
             from dateutil import parser
+
             self.token_expiry = parser.parse(self.token_expiry)
 
         now = datetime.now(timezone.utc)

@@ -7,7 +7,7 @@ Each function takes (args: dict, context: AgentToolContext) -> str.
 
 import json
 import logging
-from typing import Annotated, Any, Dict, Optional, Tuple
+from typing import Annotated, Dict, Optional, Tuple
 
 from koa.models import AgentToolContext, ToolOutput
 from koa.tool_decorator import tool
@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 # Shared Helpers
 # =============================================================================
+
 
 async def _resolve_hue_provider(context: AgentToolContext):
     """Resolve Philips Hue credentials and return a ready provider, or None."""
@@ -97,11 +98,15 @@ def _temp_name_to_mirek(name: str) -> Optional[int]:
 # control_lights
 # =============================================================================
 
+
 @tool
 async def control_lights(
     action: Annotated[str, "The light control action to perform"],
     target: Annotated[str, "Light name, room name, or 'all' (default 'all')"] = "all",
-    value: Annotated[Optional[str], "Brightness (0-100), color name (red/blue/green/etc), temperature (warm/cool/neutral/daylight), or scene name"] = None,
+    value: Annotated[
+        Optional[str],
+        "Brightness (0-100), color name (red/blue/green/etc), temperature (warm/cool/neutral/daylight), or scene name",
+    ] = None,
     *,
     context: AgentToolContext,
 ) -> str:
@@ -129,7 +134,8 @@ async def control_lights(
 
             if target and target.lower() != "all":
                 light_list = [
-                    lt for lt in light_list
+                    lt
+                    for lt in light_list
                     if target.lower() in lt.get("name", "").lower()
                     or target.lower() in lt.get("room", "").lower()
                 ]
@@ -154,22 +160,26 @@ async def control_lights(
             # Build inline card for frontend rendering
             light_cards_data = []
             for lt in light_list:
-                light_cards_data.append({
-                    "name": lt.get("name", "Unknown"),
-                    "room": lt.get("room", ""),
-                    "state": "on" if lt.get("on") else "off",
-                    "brightness": lt.get("brightness"),
-                })
+                light_cards_data.append(
+                    {
+                        "name": lt.get("name", "Unknown"),
+                        "room": lt.get("room", ""),
+                        "state": "on" if lt.get("on") else "off",
+                        "brightness": lt.get("brightness"),
+                    }
+                )
             card = {
                 "card_type": "light_status",
                 "lights": light_cards_data,
             }
-            media = [{
-                "type": "inline_cards",
-                "data": json.dumps([card]),
-                "media_type": "application/json",
-                "metadata": {"for_storage": False},
-            }]
+            media = [
+                {
+                    "type": "inline_cards",
+                    "data": json.dumps([card]),
+                    "media_type": "application/json",
+                    "metadata": {"for_storage": False},
+                }
+            ]
 
             return ToolOutput(text=text_result, media=media)
 
@@ -200,7 +210,9 @@ async def control_lights(
                 return f'I couldn\'t understand "{value}" as a brightness level. Use a number from 0 to 100.'
 
             if target and target.lower() != "all":
-                result = await provider.control_room(room_name=target, on=True, brightness=brightness)
+                result = await provider.control_room(
+                    room_name=target, on=True, brightness=brightness
+                )
             else:
                 result = await provider.set_brightness(brightness=brightness)
 
@@ -303,6 +315,7 @@ async def control_lights(
 # control_speaker
 # =============================================================================
 
+
 def _find_group(groups: list, target: str | None) -> dict | None:
     """Find the matching speaker group by name, or return the first one."""
     if not groups:
@@ -322,8 +335,12 @@ def _find_group(groups: list, target: str | None) -> dict | None:
 @tool
 async def control_speaker(
     action: Annotated[str, "The speaker control action to perform"],
-    target: Annotated[Optional[str], "Speaker or room name (optional, defaults to first available)"] = None,
-    value: Annotated[Optional[str], "Volume level (0-100), 'up', 'down', or favorite/track name"] = None,
+    target: Annotated[
+        Optional[str], "Speaker or room name (optional, defaults to first available)"
+    ] = None,
+    value: Annotated[
+        Optional[str], "Volume level (0-100), 'up', 'down', or favorite/track name"
+    ] = None,
     *,
     context: AgentToolContext,
 ) -> str:
@@ -436,9 +453,13 @@ async def control_speaker(
             text_result = "\n".join(parts)
 
             # Build inline card for frontend rendering
-            display_state = "Playing" if playback_state == "PLAYBACK_STATE_PLAYING" else (
-                "Paused" if playback_state == "PLAYBACK_STATE_PAUSED" else (
-                    "Idle" if playback_state == "PLAYBACK_STATE_IDLE" else playback_state
+            display_state = (
+                "Playing"
+                if playback_state == "PLAYBACK_STATE_PLAYING"
+                else (
+                    "Paused"
+                    if playback_state == "PLAYBACK_STATE_PAUSED"
+                    else ("Idle" if playback_state == "PLAYBACK_STATE_IDLE" else playback_state)
                 )
             )
             card = {
@@ -455,12 +476,14 @@ async def control_speaker(
             if volume is not None:
                 card["volume"] = volume
 
-            media = [{
-                "type": "inline_cards",
-                "data": json.dumps([card]),
-                "media_type": "application/json",
-                "metadata": {"for_storage": False},
-            }]
+            media = [
+                {
+                    "type": "inline_cards",
+                    "data": json.dumps([card]),
+                    "media_type": "application/json",
+                    "metadata": {"for_storage": False},
+                }
+            ]
 
             return ToolOutput(text=text_result, media=media)
 
@@ -483,7 +506,9 @@ async def control_speaker(
 
             if not match:
                 available = ", ".join(f.get("name", "Unknown") for f in favorites[:10])
-                return f'I couldn\'t find a favorite matching "{value}". Your favorites: {available}'
+                return (
+                    f'I couldn\'t find a favorite matching "{value}". Your favorites: {available}'
+                )
 
             await provider.play_favorite(group_id, match.get("id"))
             return f'Playing "{match.get("name")}" on {group_name}.'

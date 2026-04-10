@@ -2,7 +2,6 @@
 
 import pytest
 
-from koa.fields import InputField, OutputField
 from koa.agents.decorator import (
     AGENT_REGISTRY,
     AgentMetadata,
@@ -13,7 +12,7 @@ from koa.agents.decorator import (
     is_valet,
     valet,
 )
-
+from koa.fields import InputField, OutputField
 
 # =========================================================================
 # _extract_fields
@@ -21,7 +20,6 @@ from koa.agents.decorator import (
 
 
 class TestExtractFields:
-
     def test_extracts_input_and_output_fields(self):
         class MyAgent:
             name = InputField("What's your name?")
@@ -75,7 +73,6 @@ class TestExtractFields:
 
 
 class TestValetDecorator:
-
     def setup_method(self):
         # Clean up registry between tests
         self._original = dict(AGENT_REGISTRY)
@@ -89,6 +86,7 @@ class TestValetDecorator:
         @valet
         class TestAgentBare:
             """A test agent"""
+
             query = InputField("query?")
 
         assert "TestAgentBare" in AGENT_REGISTRY
@@ -108,8 +106,8 @@ class TestValetDecorator:
     def test_docstring_cleanup(self):
         @valet
         class TestAgentDoc:
-            """  Multiple   spaces
-                 and indentation  """
+            """Multiple   spaces
+            and indentation"""
 
         meta = AGENT_REGISTRY["TestAgentDoc"]
         assert "  " not in meta.description
@@ -176,7 +174,6 @@ class TestValetDecorator:
 
 
 class TestMetadataHelpers:
-
     def test_get_metadata_decorated(self):
         @valet
         class DecoratedAgent:
@@ -212,7 +209,6 @@ class TestMetadataHelpers:
 
 
 class TestGenerateToolSchema:
-
     def setup_method(self):
         self._original = dict(AGENT_REGISTRY)
 
@@ -247,7 +243,6 @@ class TestGenerateToolSchema:
 
 
 class TestGetSchemaVersion:
-
     def setup_method(self):
         self._original = dict(AGENT_REGISTRY)
 
@@ -259,6 +254,7 @@ class TestGetSchemaVersion:
         @valet
         class VersionAgent:
             """test"""
+
             name = InputField("name?")
             age = InputField("age?", required=False, default=0)
 
@@ -271,11 +267,13 @@ class TestGetSchemaVersion:
         @valet
         class AgentA:
             """test"""
+
             name = InputField("name?")
 
         @valet
         class AgentB:
             """test"""
+
             email = InputField("email?")
 
         assert get_schema_version(AgentA) != get_schema_version(AgentB)

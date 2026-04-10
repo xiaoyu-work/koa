@@ -48,6 +48,7 @@ async def test_tool_selection(conversation, user_input, expected_tools):
 # Argument extraction
 # ---------------------------------------------------------------------------
 
+
 async def test_extracts_query_time_range(conversation):
     """query_events should receive an appropriate time_range for 'today'."""
     conv = await conversation()
@@ -56,17 +57,13 @@ async def test_extracts_query_time_range(conversation):
 
     args = conv.get_tool_args("query_events")[0]
     time_range = args.get("time_range", "").lower()
-    assert "today" in time_range, (
-        f"Expected time_range containing 'today', got '{time_range}'"
-    )
+    assert "today" in time_range, f"Expected time_range containing 'today', got '{time_range}'"
 
 
 async def test_extracts_create_event_fields(conversation):
     """create_event should receive summary and start from the user message."""
     conv = await conversation()
-    await conv.send_until_tool_called(
-        "Create a meeting called Team Sync tomorrow at 3pm"
-    )
+    await conv.send_until_tool_called("Create a meeting called Team Sync tomorrow at 3pm")
     conv.assert_tool_called("create_event")
 
     args = conv.get_tool_args("create_event")[0]
@@ -110,9 +107,7 @@ async def test_extracts_delete_event_query(conversation):
     if delete_calls:
         args = delete_calls[0]["arguments"]
         search_query = (
-            args.get("search_query", "")
-            or args.get("query", "")
-            or args.get("event_id", "")
+            args.get("search_query", "") or args.get("query", "") or args.get("event_id", "")
         ).lower()
         assert "dentist" in search_query or search_query, (
             f"Expected search_query containing 'dentist', got '{search_query}'"
@@ -122,6 +117,7 @@ async def test_extracts_delete_event_query(conversation):
 # ---------------------------------------------------------------------------
 # Response quality
 # ---------------------------------------------------------------------------
+
 
 async def test_response_quality_query(conversation, llm_judge):
     """Querying the calendar should produce a structured event listing."""
@@ -156,6 +152,7 @@ async def test_response_quality_create(conversation, llm_judge):
 # ---------------------------------------------------------------------------
 # Approval flow
 # ---------------------------------------------------------------------------
+
 
 async def test_create_event_triggers_approval(conversation):
     """create_event should pause for user approval before executing."""

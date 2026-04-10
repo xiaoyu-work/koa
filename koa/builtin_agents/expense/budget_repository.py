@@ -5,7 +5,7 @@ Manages per-category and total monthly budget limits for expense tracking.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
 from koa.db.repository import Repository
 
@@ -37,9 +37,7 @@ class BudgetRepository(Repository):
         )
         return dict(row) if row else None
 
-    async def get_budget(
-        self, tenant_id: str, category: str = "_total"
-    ) -> Optional[dict]:
+    async def get_budget(self, tenant_id: str, category: str = "_total") -> Optional[dict]:
         """Get a single budget for a tenant/category pair."""
         row = await self._db.fetchrow(
             "SELECT * FROM budgets WHERE tenant_id = $1 AND category = $2",

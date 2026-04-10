@@ -147,6 +147,4 @@ class CronRunLog:
         """List all job IDs that have run logs."""
         if not self._runs_dir.exists():
             return []
-        return [
-            p.stem for p in self._runs_dir.glob("*.jsonl")
-        ]
+        return [p.stem for p in self._runs_dir.glob("*.jsonl")]

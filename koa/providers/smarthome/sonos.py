@@ -7,8 +7,8 @@ Uses Sonos Cloud Control API v1 for speaker and playback control.
 import base64
 import logging
 import os
-from typing import Any, Callable, Dict, Optional
 from datetime import datetime, timedelta, timezone
+from typing import Any, Callable, Dict, Optional
 
 import httpx
 
@@ -45,7 +45,9 @@ class SonosProvider(BaseSmartHomeProvider):
                 )
 
                 if response.status_code == 401:
-                    logger.warning(f"401 Unauthorized - attempting to refresh token for {self.account_name}")
+                    logger.warning(
+                        f"401 Unauthorized - attempting to refresh token for {self.account_name}"
+                    )
                     if await self.ensure_valid_token(force_refresh=True):
                         response = await client.get(
                             f"{self.api_base_url}/households",
@@ -58,8 +60,7 @@ class SonosProvider(BaseSmartHomeProvider):
 
                 data = response.json()
                 households = [
-                    {"id": h["id"], "name": h.get("name", "")}
-                    for h in data.get("households", [])
+                    {"id": h["id"], "name": h.get("name", "")} for h in data.get("households", [])
                 ]
 
                 logger.info(f"Sonos listed {len(households)} households")
@@ -99,7 +100,9 @@ class SonosProvider(BaseSmartHomeProvider):
                 )
 
                 if response.status_code == 401:
-                    logger.warning(f"401 Unauthorized - attempting to refresh token for {self.account_name}")
+                    logger.warning(
+                        f"401 Unauthorized - attempting to refresh token for {self.account_name}"
+                    )
                     if await self.ensure_valid_token(force_refresh=True):
                         response = await client.get(
                             f"{self.api_base_url}/households/{household_id}/groups",
@@ -119,12 +122,14 @@ class SonosProvider(BaseSmartHomeProvider):
                             (p for p in data.get("players", []) if p["id"] == player_id),
                             None,
                         )
-                        players.append({
-                            "id": player_id,
-                            "name": player_info.get("name", "") if player_info else "",
-                            "group_id": group["id"],
-                            "is_coordinator": player_id == coordinator_id,
-                        })
+                        players.append(
+                            {
+                                "id": player_id,
+                                "name": player_info.get("name", "") if player_info else "",
+                                "group_id": group["id"],
+                                "is_coordinator": player_id == coordinator_id,
+                            }
+                        )
 
                 logger.info(f"Sonos listed {len(players)} players in household {household_id}")
                 return {"success": True, "data": players}
@@ -151,7 +156,9 @@ class SonosProvider(BaseSmartHomeProvider):
                 )
 
                 if response.status_code == 401:
-                    logger.warning(f"401 Unauthorized - attempting to refresh token for {self.account_name}")
+                    logger.warning(
+                        f"401 Unauthorized - attempting to refresh token for {self.account_name}"
+                    )
                     if await self.ensure_valid_token(force_refresh=True):
                         response = await client.get(
                             f"{self.api_base_url}/groups/{group_id}/playback",
@@ -216,7 +223,9 @@ class SonosProvider(BaseSmartHomeProvider):
                 )
 
                 if response.status_code == 401:
-                    logger.warning(f"401 Unauthorized - attempting to refresh token for {self.account_name}")
+                    logger.warning(
+                        f"401 Unauthorized - attempting to refresh token for {self.account_name}"
+                    )
                     if await self.ensure_valid_token(force_refresh=True):
                         response = await client.post(
                             f"{self.api_base_url}/groups/{group_id}/playback/{command}",
@@ -256,7 +265,9 @@ class SonosProvider(BaseSmartHomeProvider):
                 )
 
                 if response.status_code == 401:
-                    logger.warning(f"401 Unauthorized - attempting to refresh token for {self.account_name}")
+                    logger.warning(
+                        f"401 Unauthorized - attempting to refresh token for {self.account_name}"
+                    )
                     if await self.ensure_valid_token(force_refresh=True):
                         response = await client.post(
                             f"{self.api_base_url}/players/{player_id}/playerVolume",
@@ -293,7 +304,9 @@ class SonosProvider(BaseSmartHomeProvider):
                 )
 
                 if response.status_code == 401:
-                    logger.warning(f"401 Unauthorized - attempting to refresh token for {self.account_name}")
+                    logger.warning(
+                        f"401 Unauthorized - attempting to refresh token for {self.account_name}"
+                    )
                     if await self.ensure_valid_token(force_refresh=True):
                         response = await client.get(
                             f"{self.api_base_url}/players/{player_id}/playerVolume",
@@ -338,7 +351,9 @@ class SonosProvider(BaseSmartHomeProvider):
                 )
 
                 if response.status_code == 401:
-                    logger.warning(f"401 Unauthorized - attempting to refresh token for {self.account_name}")
+                    logger.warning(
+                        f"401 Unauthorized - attempting to refresh token for {self.account_name}"
+                    )
                     if await self.ensure_valid_token(force_refresh=True):
                         response = await client.post(
                             f"{self.api_base_url}/players/{player_id}/playerVolume",
@@ -380,7 +395,9 @@ class SonosProvider(BaseSmartHomeProvider):
                 )
 
                 if response.status_code == 401:
-                    logger.warning(f"401 Unauthorized - attempting to refresh token for {self.account_name}")
+                    logger.warning(
+                        f"401 Unauthorized - attempting to refresh token for {self.account_name}"
+                    )
                     if await self.ensure_valid_token(force_refresh=True):
                         response = await client.get(
                             f"{self.api_base_url}/households/{household_id}/favorites",
@@ -428,7 +445,9 @@ class SonosProvider(BaseSmartHomeProvider):
                 )
 
                 if response.status_code == 401:
-                    logger.warning(f"401 Unauthorized - attempting to refresh token for {self.account_name}")
+                    logger.warning(
+                        f"401 Unauthorized - attempting to refresh token for {self.account_name}"
+                    )
                     if await self.ensure_valid_token(force_refresh=True):
                         response = await client.post(
                             f"{self.api_base_url}/groups/{group_id}/favorites",
@@ -484,7 +503,10 @@ class SonosProvider(BaseSmartHomeProvider):
             client_secret = os.environ.get("SONOS_CLIENT_SECRET", "")
 
             if not client_id or not client_secret:
-                return {"success": False, "error": "SONOS_CLIENT_ID and SONOS_CLIENT_SECRET env vars required"}
+                return {
+                    "success": False,
+                    "error": "SONOS_CLIENT_ID and SONOS_CLIENT_SECRET env vars required",
+                }
 
             credentials_str = f"{client_id}:{client_secret}"
             basic_auth = base64.b64encode(credentials_str.encode()).decode()
@@ -504,7 +526,10 @@ class SonosProvider(BaseSmartHomeProvider):
                 )
 
                 if response.status_code != 200:
-                    return {"success": False, "error": f"Token refresh failed: {response.status_code} - {response.text}"}
+                    return {
+                        "success": False,
+                        "error": f"Token refresh failed: {response.status_code} - {response.text}",
+                    }
 
                 data = response.json()
                 expires_in = data.get("expires_in", 3600)

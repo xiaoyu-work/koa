@@ -21,7 +21,6 @@ def _make_tool(**overrides) -> AgentTool:
 
 
 class TestExecutionPolicyEngine:
-
     def test_blocks_denied_tool(self):
         engine = ExecutionPolicyEngine()
         decision = engine.evaluate(

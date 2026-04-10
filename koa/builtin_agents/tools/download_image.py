@@ -16,9 +16,7 @@ logger = logging.getLogger(__name__)
 
 _MAX_IMAGE_BYTES = 10_000_000  # 10 MB
 _TIMEOUT = 30.0
-_USER_AGENT = (
-    "Mozilla/5.0 (compatible; Koa/1.0; +https://github.com/withkoi/koa)"
-)
+_USER_AGENT = "Mozilla/5.0 (compatible; Koa/1.0; +https://github.com/withkoi/koa)"
 
 
 async def download_image_executor(args: dict, context: AgentToolContext = None):
@@ -36,6 +34,7 @@ async def download_image_executor(args: dict, context: AgentToolContext = None):
 
     # Block private networks
     import re
+
     _BLOCKED = re.compile(
         r"^https?://"
         r"(localhost|127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|0\.0\.0\.0|\[::1?\])",
@@ -67,16 +66,18 @@ async def download_image_executor(args: dict, context: AgentToolContext = None):
 
         return ToolOutput(
             text=f"Successfully downloaded image from {url} ({len(resp.content)} bytes, {mime}).",
-            media=[{
-                "type": "image",
-                "data": f"data:{mime};base64,{b64}",
-                "media_type": mime,
-                "metadata": {
-                    "source_url": url,
-                    "size_bytes": len(resp.content),
-                    "for_storage": True,
-                },
-            }],
+            media=[
+                {
+                    "type": "image",
+                    "data": f"data:{mime};base64,{b64}",
+                    "media_type": mime,
+                    "metadata": {
+                        "source_url": url,
+                        "size_bytes": len(resp.content),
+                        "for_storage": True,
+                    },
+                }
+            ],
         )
 
     except httpx.TimeoutException:

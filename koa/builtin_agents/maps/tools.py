@@ -5,7 +5,6 @@ Extracted from MapSearchAgent, DirectionsAgent, and AirQualityAgent.
 Each function takes (args: dict, context: AgentToolContext) -> str.
 """
 
-import html
 import json
 import logging
 import os
@@ -24,6 +23,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 # Shared Helpers
 # =============================================================================
+
 
 async def _geocode_location(location: str) -> Optional[Dict[str, Any]]:
     """Convert location name to coordinates using Google Geocoding API."""
@@ -58,7 +58,7 @@ def _parse_coords(location: str) -> Optional[tuple]:
     """Try to parse 'lat,lng' from a location string. Returns (lat, lng) or None."""
     if not location:
         return None
-    m = re.match(r'^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$', location.strip())
+    m = re.match(r"^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$", location.strip())
     if m:
         lat, lng = float(m.group(1)), float(m.group(2))
         if -90 <= lat <= 90 and -180 <= lng <= 180:
@@ -70,10 +70,14 @@ def _parse_coords(location: str) -> Optional[tuple]:
 # search_places
 # =============================================================================
 
+
 @tool
 async def search_places(
     query: Annotated[str, "What to search for (e.g., 'coffee shops', 'pizza', 'gas station')"],
-    location: Annotated[str, "Where to search — use 'lat,lng' coordinates (e.g., '47.7148,-122.1826') or a city/neighborhood name (e.g., 'Seattle')"] = "",
+    location: Annotated[
+        str,
+        "Where to search — use 'lat,lng' coordinates (e.g., '47.7148,-122.1826') or a city/neighborhood name (e.g., 'Seattle')",
+    ] = "",
     *,
     context: AgentToolContext,
 ) -> str:
@@ -124,17 +128,15 @@ async def search_places(
             }
 
         async with httpx.AsyncClient() as client:
-            response = await client.post(
-                url, headers=headers, json=request_body, timeout=15.0
-            )
+            response = await client.post(url, headers=headers, json=request_body, timeout=15.0)
             response.raise_for_status()
             data = response.json()
 
         places = data.get("places", [])
         if not places:
-            return f"No results found for \"{query}\" in \"{location}\"."
+            return f'No results found for "{query}" in "{location}".'
 
-        result_lines = [f"Found {len(places)} results for \"{query}\" in \"{location}\":\n"]
+        result_lines = [f'Found {len(places)} results for "{query}" in "{location}":\n']
         place_cards = []
 
         for i, place in enumerate(places, 1):
@@ -214,12 +216,14 @@ async def search_places(
         # Return ToolOutput with inline_cards media for frontend rendering
         media = []
         if place_cards:
-            media.append({
-                "type": "inline_cards",
-                "data": json.dumps(place_cards),
-                "media_type": "application/json",
-                "metadata": {"for_storage": False},
-            })
+            media.append(
+                {
+                    "type": "inline_cards",
+                    "data": json.dumps(place_cards),
+                    "media_type": "application/json",
+                    "metadata": {"for_storage": False},
+                }
+            )
 
         return ToolOutput(text=text_result, media=media)
 
@@ -239,9 +243,12 @@ async def search_places(
 # get_directions
 # =============================================================================
 
+
 @tool
 async def get_directions(
-    origin: Annotated[str, "Starting location (address or place name, or 'home' to use profile address)"],
+    origin: Annotated[
+        str, "Starting location (address or place name, or 'home' to use profile address)"
+    ],
     destination: Annotated[str, "Destination (address or place name)"],
     mode: Annotated[str, "Travel mode (default: driving)"] = "driving",
     *,
@@ -309,7 +316,9 @@ async def get_directions(
         end_address = leg["end_address"]
         steps = leg["steps"]
 
-        maps_link = f"https://www.google.com/maps/dir/?api=1&origin={origin}&destination={destination}"
+        maps_link = (
+            f"https://www.google.com/maps/dir/?api=1&origin={origin}&destination={destination}"
+        )
 
         result_lines = [
             f"Directions from {start_address} to {end_address}:",
@@ -335,12 +344,14 @@ async def get_directions(
             "duration": duration,
             "mapUrl": maps_link,
         }
-        media = [{
-            "type": "inline_cards",
-            "data": json.dumps([card]),
-            "media_type": "application/json",
-            "metadata": {"for_storage": False},
-        }]
+        media = [
+            {
+                "type": "inline_cards",
+                "data": json.dumps([card]),
+                "media_type": "application/json",
+                "metadata": {"for_storage": False},
+            }
+        ]
 
         return ToolOutput(text=text_result, media=media)
 
@@ -359,6 +370,7 @@ async def get_directions(
 # =============================================================================
 # check_air_quality
 # =============================================================================
+
 
 @tool
 async def check_air_quality(
@@ -438,12 +450,14 @@ async def check_air_quality(
             "pollutant": dominant_pollutant,
             "healthAdvice": general_population,
         }
-        media = [{
-            "type": "inline_cards",
-            "data": json.dumps([card]),
-            "media_type": "application/json",
-            "metadata": {"for_storage": False},
-        }]
+        media = [
+            {
+                "type": "inline_cards",
+                "data": json.dumps([card]),
+                "media_type": "application/json",
+                "metadata": {"for_storage": False},
+            }
+        ]
 
         return ToolOutput(text=text_result, media=media)
 

@@ -1,11 +1,10 @@
 """Tests for koa.app — config loading and env var mapping"""
 
 import os
+
 import pytest
-import tempfile
 
 from koa.app import Koa, _load_config
-
 
 # =========================================================================
 # _load_config — env var substitution
@@ -13,7 +12,6 @@ from koa.app import Koa, _load_config
 
 
 class TestLoadConfig:
-
     def test_substitutes_env_vars(self, monkeypatch, tmp_path):
         monkeypatch.setenv("TEST_DB_URL", "postgresql://localhost/test")
         config_file = tmp_path / "config.yaml"
@@ -57,9 +55,7 @@ class TestLoadConfig:
     def test_nested_yaml_structure(self, monkeypatch, tmp_path):
         monkeypatch.setenv("API_KEY", "sk-test")
         config_file = tmp_path / "config.yaml"
-        config_file.write_text(
-            "llm:\n  provider: openai\n  api_key: ${API_KEY}\n"
-        )
+        config_file.write_text("llm:\n  provider: openai\n  api_key: ${API_KEY}\n")
         cfg = _load_config(str(config_file))
         assert cfg["llm"]["api_key"] == "sk-test"
 
@@ -78,10 +74,12 @@ class TestCredentialsLoading:
         monkeypatch.delenv("WEATHER_API_KEY", raising=False)
 
         app = Koa.__new__(Koa)
-        app._config = {"credentials": {
-            "COMPOSIO_API_KEY": "test-composio-key",
-            "WEATHER_API_KEY": "test-weather-key",
-        }}
+        app._config = {
+            "credentials": {
+                "COMPOSIO_API_KEY": "test-composio-key",
+                "WEATHER_API_KEY": "test-weather-key",
+            }
+        }
         await app._load_credentials_to_env()
 
         assert os.environ.get("COMPOSIO_API_KEY") == "test-composio-key"

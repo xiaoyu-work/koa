@@ -12,7 +12,7 @@ Handles:
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from koa.constants import EMAIL_SERVICES
 
@@ -100,7 +100,10 @@ class AccountResolver:
         return creds
 
     async def _resolve_account_for_service(
-        self, tenant_id: str, service: str, account_spec: Optional[str] = None,
+        self,
+        tenant_id: str,
+        service: str,
+        account_spec: Optional[str] = None,
     ) -> Optional[dict]:
         """Resolve a single account for a specific service."""
         if not self.credential_store:
@@ -207,7 +210,11 @@ class AccountResolver:
             results = []
             for acc in all_accounts:
                 if "credentials" in acc:
-                    results.append(self._enrich(acc["credentials"], acc.get("account_name", "primary"), service))
+                    results.append(
+                        self._enrich(
+                            acc["credentials"], acc.get("account_name", "primary"), service
+                        )
+                    )
             logger.info(f"Resolved 'all' for {service}: {len(results)} accounts")
             return results
 

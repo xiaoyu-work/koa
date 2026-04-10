@@ -13,16 +13,17 @@ Scans user emails and extracts structured profile data using a hybrid approach:
 Target: ~3-4 minutes, comprehensive coverage
 """
 
-import json
-import logging
 import asyncio
 import base64
+import json
+import logging
 import re
 import uuid
-import httpx
-from typing import Dict, List, Any, Optional
-from datetime import datetime, timezone
 from collections import defaultdict
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
+import httpx
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 logger = logging.getLogger(__name__)
@@ -54,10 +55,26 @@ GMAIL_API_BASE = "https://gmail.googleapis.com/gmail/v1"
 # =============================================================================
 
 VALID_LOYALTY_STATUS = {
-    "gold", "platinum", "diamond", "silver", "premier", "executive",
-    "elite", "preferred elite", "titanium", "ambassador", "globalist",
-    "explorist", "discoverist", "1k", "premier 1k", "premier platinum",
-    "premier gold", "premier silver", "million miler", "platinum pro",
+    "gold",
+    "platinum",
+    "diamond",
+    "silver",
+    "premier",
+    "executive",
+    "elite",
+    "preferred elite",
+    "titanium",
+    "ambassador",
+    "globalist",
+    "explorist",
+    "discoverist",
+    "1k",
+    "premier 1k",
+    "premier platinum",
+    "premier gold",
+    "premier silver",
+    "million miler",
+    "platinum pro",
 }
 
 
@@ -252,47 +269,143 @@ def _merge_profiles(existing: dict, new_data: dict) -> dict:
 # =============================================================================
 
 IMPORTANT_DOMAINS = {
-    "bankofamerica", "chase", "wellsfargo", "citi", "citibank", "usbank",
-    "capitalone", "americanexpress", "amex", "discover", "pnc", "tdbank",
-    "schwab", "fidelity", "vanguard", "etrade", "robinhood", "coinbase",
-    "paypal", "venmo", "zelle", "wise",
-    "apple", "google", "microsoft", "amazon", "meta", "facebook",
-    "ebay", "etsy", "walmart", "target", "bestbuy", "costco",
-    "fedex", "ups", "usps", "dhl",
-    "united", "delta", "american", "southwest", "jetblue", "alaska",
-    "marriott", "hilton", "hyatt", "airbnb", "booking", "expedia",
-    "uber", "lyft", "doordash", "grubhub", "instacart",
-    "comcast", "xfinity", "att", "verizon", "tmobile", "spectrum",
-    "geico", "progressive", "statefarm", "allstate", "usaa",
-    "anthem", "bluecross", "kaiser", "cigna", "aetna",
-    "linkedin", "indeed", "glassdoor", "workday", "adp", "gusto",
-    "netflix", "spotify", "hulu", "disney", "adobe", "dropbox",
+    "bankofamerica",
+    "chase",
+    "wellsfargo",
+    "citi",
+    "citibank",
+    "usbank",
+    "capitalone",
+    "americanexpress",
+    "amex",
+    "discover",
+    "pnc",
+    "tdbank",
+    "schwab",
+    "fidelity",
+    "vanguard",
+    "etrade",
+    "robinhood",
+    "coinbase",
+    "paypal",
+    "venmo",
+    "zelle",
+    "wise",
+    "apple",
+    "google",
+    "microsoft",
+    "amazon",
+    "meta",
+    "facebook",
+    "ebay",
+    "etsy",
+    "walmart",
+    "target",
+    "bestbuy",
+    "costco",
+    "fedex",
+    "ups",
+    "usps",
+    "dhl",
+    "united",
+    "delta",
+    "american",
+    "southwest",
+    "jetblue",
+    "alaska",
+    "marriott",
+    "hilton",
+    "hyatt",
+    "airbnb",
+    "booking",
+    "expedia",
+    "uber",
+    "lyft",
+    "doordash",
+    "grubhub",
+    "instacart",
+    "comcast",
+    "xfinity",
+    "att",
+    "verizon",
+    "tmobile",
+    "spectrum",
+    "geico",
+    "progressive",
+    "statefarm",
+    "allstate",
+    "usaa",
+    "anthem",
+    "bluecross",
+    "kaiser",
+    "cigna",
+    "aetna",
+    "linkedin",
+    "indeed",
+    "glassdoor",
+    "workday",
+    "adp",
+    "gusto",
+    "netflix",
+    "spotify",
+    "hulu",
+    "disney",
+    "adobe",
+    "dropbox",
 }
 
 SKIP_SENDER_PATTERNS = [
     r"noreply.*@.*linkedin\.com",
     r"notification.*@.*facebook",
-    r"marketing@", r"newsletter@", r"promo@", r"deals@",
-    r"mailer-daemon", r"postmaster@",
+    r"marketing@",
+    r"newsletter@",
+    r"promo@",
+    r"deals@",
+    r"mailer-daemon",
+    r"postmaster@",
 ]
 
 SKIP_SUBJECT_PATTERNS = [
-    r"\d+% off", r"flash sale", r"limited time offer",
-    r"act now", r"don't miss out", r"last chance",
-    r"weekly digest", r"daily digest",
+    r"\d+% off",
+    r"flash sale",
+    r"limited time offer",
+    r"act now",
+    r"don't miss out",
+    r"last chance",
+    r"weekly digest",
+    r"daily digest",
 ]
 
 HIGH_VALUE_KEYWORDS = [
-    r"order confirm", r"order shipped", r"delivery",
-    r"receipt", r"invoice", r"payment",
-    r"statement", r"balance", r"direct deposit",
-    r"booking confirm", r"reservation", r"itinerary",
-    r"welcome to", r"account created", r"verify",
-    r"password reset", r"security alert",
-    r"job offer", r"offer letter", r"interview",
-    r"lease", r"rental", r"rent",
-    r"insurance", r"policy", r"claim",
-    r"flight", r"boarding", r"check-in",
+    r"order confirm",
+    r"order shipped",
+    r"delivery",
+    r"receipt",
+    r"invoice",
+    r"payment",
+    r"statement",
+    r"balance",
+    r"direct deposit",
+    r"booking confirm",
+    r"reservation",
+    r"itinerary",
+    r"welcome to",
+    r"account created",
+    r"verify",
+    r"password reset",
+    r"security alert",
+    r"job offer",
+    r"offer letter",
+    r"interview",
+    r"lease",
+    r"rental",
+    r"rent",
+    r"insurance",
+    r"policy",
+    r"claim",
+    r"flight",
+    r"boarding",
+    r"check-in",
 ]
 
 
@@ -302,7 +415,7 @@ def _extract_domain(email_addr: str) -> str:
         domain = match.group(1)
         for prefix in ["mail.", "email.", "e.", "mx."]:
             if domain.startswith(prefix):
-                domain = domain[len(prefix):]
+                domain = domain[len(prefix) :]
         parts = domain.split(".")
         return parts[-2] if len(parts) >= 2 else parts[0]
     return ""
@@ -348,14 +461,16 @@ def _split_emails_by_rules(emails: List[Dict[str, Any]]) -> tuple:
             rule_matched.append(email)
         else:
             needs_llm.append(email)
-    logger.info(f"Rule split: {len(rule_matched)} matched, {len(needs_llm)} need LLM, {skipped} skipped")
+    logger.info(
+        f"Rule split: {len(rule_matched)} matched, {len(needs_llm)} need LLM, {skipped} skipped"
+    )
     return rule_matched, needs_llm
 
 
 def _select_diverse_emails(
     emails: List[Dict[str, Any]], max_total: int, max_per_sender: int
 ) -> List[Dict[str, Any]]:
-    selected = []
+    selected: List[Dict[str, Any]] = []
     sender_counts: Dict[str, int] = defaultdict(int)
     for email in emails:
         if len(selected) >= max_total:
@@ -546,6 +661,7 @@ Return ONLY valid JSON matching this structure (no explanation):
 # Birthday → important_dates sync
 # =============================================================================
 
+
 async def _sync_birthday_reminders(db, tenant_id: str, profile: Dict[str, Any]):
     """Sync relationship birthdays from profile into important_dates table.
 
@@ -574,6 +690,7 @@ async def _sync_birthday_reminders(db, tenant_id: str, profile: Dict[str, Any]):
         # Validate date format
         try:
             from datetime import datetime as _dt
+
             _dt.strptime(birthday, "%Y-%m-%d")
         except (ValueError, TypeError):
             continue
@@ -595,7 +712,11 @@ async def _sync_birthday_reminders(db, tenant_id: str, profile: Dict[str, Any]):
                 recurring = TRUE,
                 updated_at = NOW()
             """,
-            tenant_id, title, birthday, name, rel or None,
+            tenant_id,
+            title,
+            birthday,
+            name,
+            rel or None,
         )
         count += 1
 
@@ -606,6 +727,7 @@ async def _sync_birthday_reminders(db, tenant_id: str, profile: Dict[str, Any]):
 # =============================================================================
 # Profile Extraction Service
 # =============================================================================
+
 
 class ProfileExtractionService:
     """
@@ -644,7 +766,11 @@ class ProfileExtractionService:
         return response.content or ""
 
     async def _llm_merge(
-        self, llm_client, existing_profile: Dict, new_profile: Dict, email_account: str,
+        self,
+        llm_client,
+        existing_profile: Dict,
+        new_profile: Dict,
+        email_account: str,
     ) -> Dict:
         """Use LLM to intelligently merge existing profile with new extraction."""
         prompt = LLM_MERGE_PROMPT.format(
@@ -668,14 +794,19 @@ class ProfileExtractionService:
     # -----------------------------------------------------------------
 
     async def _llm_filter_emails(
-        self, llm_client, emails: List[Dict], job_id: str,
+        self,
+        llm_client,
+        emails: List[Dict],
+        job_id: str,
     ) -> List[Dict]:
         if not emails:
             return []
 
         total = len(emails)
         relevant: List[Dict] = []
-        batches = [emails[i:i + LLM_FILTER_BATCH_SIZE] for i in range(0, total, LLM_FILTER_BATCH_SIZE)]
+        batches = [
+            emails[i : i + LLM_FILTER_BATCH_SIZE] for i in range(0, total, LLM_FILTER_BATCH_SIZE)
+        ]
         logger.info(f"LLM filtering {total} emails in {len(batches)} batches...")
 
         async def process_batch(batch: List[Dict]) -> List[Dict]:
@@ -702,21 +833,24 @@ class ProfileExtractionService:
                 return []
 
         for i in range(0, len(batches), LLM_FILTER_PARALLEL):
-            parallel = batches[i:i + LLM_FILTER_PARALLEL]
+            parallel = batches[i : i + LLM_FILTER_PARALLEL]
             batch_results = await asyncio.gather(*[process_batch(b) for b in parallel])
             for matches in batch_results:
                 relevant.extend(matches)
 
             processed = min((i + LLM_FILTER_PARALLEL) * LLM_FILTER_BATCH_SIZE, total)
             logger.info(f"LLM filtered {processed}/{total}, found {len(relevant)} relevant")
-            self._update_job(job_id, {
-                "progress": {
-                    "phase": "llm_filtering",
-                    "filtered": processed,
-                    "total": total,
-                    "relevant_found": len(relevant),
+            self._update_job(
+                job_id,
+                {
+                    "progress": {
+                        "phase": "llm_filtering",
+                        "filtered": processed,
+                        "total": total,
+                        "relevant_found": len(relevant),
+                    },
                 },
-            })
+            )
 
         logger.info(f"LLM filter complete: {len(relevant)} relevant from {total}")
         return relevant
@@ -726,10 +860,16 @@ class ProfileExtractionService:
     # -----------------------------------------------------------------
 
     async def _extract_profiles_batch(
-        self, llm_client, email_contents: List[Dict], job_id: str, user_email: str,
+        self,
+        llm_client,
+        email_contents: List[Dict],
+        job_id: str,
+        user_email: str,
     ) -> List[Dict]:
         total = len(email_contents)
-        batches = [email_contents[i:i + EXTRACT_BATCH_SIZE] for i in range(0, total, EXTRACT_BATCH_SIZE)]
+        batches = [
+            email_contents[i : i + EXTRACT_BATCH_SIZE] for i in range(0, total, EXTRACT_BATCH_SIZE)
+        ]
         logger.info(f"Extracting from {total} emails in {len(batches)} batches...")
 
         all_profiles: List[Dict] = []
@@ -754,7 +894,7 @@ class ProfileExtractionService:
                 return {}
 
         for i in range(0, len(batches), EXTRACT_PARALLEL_LIMIT):
-            parallel = batches[i:i + EXTRACT_PARALLEL_LIMIT]
+            parallel = batches[i : i + EXTRACT_PARALLEL_LIMIT]
             results = await asyncio.gather(*[process_batch(b) for b in parallel])
             for profile in results:
                 if profile:
@@ -762,9 +902,12 @@ class ProfileExtractionService:
 
             processed = min((i + EXTRACT_PARALLEL_LIMIT) * EXTRACT_BATCH_SIZE, total)
             logger.info(f"Extracted {processed}/{total}")
-            self._update_job(job_id, {
-                "progress": {"phase": "extracting", "extracted": processed, "total": total},
-            })
+            self._update_job(
+                job_id,
+                {
+                    "progress": {"phase": "extracting", "extracted": processed, "total": total},
+                },
+            )
 
         return all_profiles
 
@@ -799,12 +942,18 @@ class ProfileExtractionService:
 
     @staticmethod
     async def _gmail_fetch_ids(
-        client: httpx.AsyncClient, access_token: str, query: str, max_results: int,
+        client: httpx.AsyncClient,
+        access_token: str,
+        query: str,
+        max_results: int,
     ) -> List[str]:
         message_ids: List[str] = []
         page_token = None
         while len(message_ids) < max_results:
-            params: Dict[str, Any] = {"q": query, "maxResults": min(500, max_results - len(message_ids))}
+            params: Dict[str, Any] = {
+                "q": query,
+                "maxResults": min(500, max_results - len(message_ids)),
+            }
             if page_token:
                 params["pageToken"] = page_token
             resp = await client.get(
@@ -827,20 +976,27 @@ class ProfileExtractionService:
 
     @staticmethod
     async def _gmail_fetch_metadata_batch(
-        client: httpx.AsyncClient, access_token: str, message_ids: List[str],
+        client: httpx.AsyncClient,
+        access_token: str,
+        message_ids: List[str],
     ) -> List[Dict]:
         async def fetch_one(msg_id: str):
             try:
                 resp = await client.get(
                     f"{GMAIL_API_BASE}/users/me/messages/{msg_id}",
                     headers={"Authorization": f"Bearer {access_token}"},
-                    params={"format": "metadata", "metadataHeaders": ["From", "Subject", "Date", "To"]},
+                    params={
+                        "format": "metadata",
+                        "metadataHeaders": ["From", "Subject", "Date", "To"],
+                    },
                     timeout=30.0,
                 )
                 if resp.status_code != 200:
                     return None
                 data = resp.json()
-                headers = {h["name"]: h["value"] for h in data.get("payload", {}).get("headers", [])}
+                headers = {
+                    h["name"]: h["value"] for h in data.get("payload", {}).get("headers", [])
+                }
                 return {
                     "id": msg_id,
                     "subject": headers.get("Subject", ""),
@@ -852,12 +1008,16 @@ class ProfileExtractionService:
             except Exception:
                 return None
 
-        results = await asyncio.gather(*[fetch_one(mid) for mid in message_ids], return_exceptions=True)
+        results = await asyncio.gather(
+            *[fetch_one(mid) for mid in message_ids], return_exceptions=True
+        )
         return [r for r in results if isinstance(r, dict)]
 
     @staticmethod
     async def _gmail_fetch_content(
-        client: httpx.AsyncClient, access_token: str, msg_id: str,
+        client: httpx.AsyncClient,
+        access_token: str,
+        msg_id: str,
     ) -> Optional[Dict]:
         try:
             resp = await client.get(
@@ -874,16 +1034,24 @@ class ProfileExtractionService:
 
             body = ""
             if payload.get("body", {}).get("data"):
-                body = base64.urlsafe_b64decode(payload["body"]["data"]).decode("utf-8", errors="ignore")
+                body = base64.urlsafe_b64decode(payload["body"]["data"]).decode(
+                    "utf-8", errors="ignore"
+                )
             if not body and "parts" in payload:
                 for part in payload["parts"]:
                     if part.get("mimeType") == "text/plain" and part.get("body", {}).get("data"):
-                        body = base64.urlsafe_b64decode(part["body"]["data"]).decode("utf-8", errors="ignore")
+                        body = base64.urlsafe_b64decode(part["body"]["data"]).decode(
+                            "utf-8", errors="ignore"
+                        )
                         break
                     if "parts" in part:
                         for nested in part["parts"]:
-                            if nested.get("mimeType") == "text/plain" and nested.get("body", {}).get("data"):
-                                body = base64.urlsafe_b64decode(nested["body"]["data"]).decode("utf-8", errors="ignore")
+                            if nested.get("mimeType") == "text/plain" and nested.get(
+                                "body", {}
+                            ).get("data"):
+                                body = base64.urlsafe_b64decode(nested["body"]["data"]).decode(
+                                    "utf-8", errors="ignore"
+                                )
                                 break
 
             if len(body) > 3000:
@@ -910,11 +1078,16 @@ class ProfileExtractionService:
                 return []
 
             async with httpx.AsyncClient(limits=httpx.Limits(max_connections=50)) as client:
-                queries = ["category:primary in:inbox", "category:primary -in:inbox -in:trash -in:spam"]
+                queries = [
+                    "category:primary in:inbox",
+                    "category:primary -in:inbox -in:trash -in:spam",
+                ]
                 all_ids: List[str] = []
 
                 for query in queries:
-                    ids = await self._gmail_fetch_ids(client, provider.access_token, query, max_emails // 2)
+                    ids = await self._gmail_fetch_ids(
+                        client, provider.access_token, query, max_emails // 2
+                    )
                     for mid in ids:
                         if mid not in seen_ids:
                             seen_ids.add(mid)
@@ -924,11 +1097,15 @@ class ProfileExtractionService:
                 logger.info(f"Total: {len(all_ids)} message IDs")
 
                 for i in range(0, len(all_ids), METADATA_BATCH_SIZE):
-                    batch = all_ids[i:i + METADATA_BATCH_SIZE]
-                    metadata = await self._gmail_fetch_metadata_batch(client, provider.access_token, batch)
+                    batch = all_ids[i : i + METADATA_BATCH_SIZE]
+                    metadata = await self._gmail_fetch_metadata_batch(
+                        client, provider.access_token, batch
+                    )
                     all_metadata.extend(metadata)
                     if (i + METADATA_BATCH_SIZE) % 500 == 0:
-                        logger.info(f"Metadata: {min(i + METADATA_BATCH_SIZE, len(all_ids))}/{len(all_ids)}")
+                        logger.info(
+                            f"Metadata: {min(i + METADATA_BATCH_SIZE, len(all_ids))}/{len(all_ids)}"
+                        )
 
             logger.info(f"Scanned {len(all_metadata)} emails")
             return all_metadata
@@ -945,15 +1122,20 @@ class ProfileExtractionService:
 
             async with httpx.AsyncClient(limits=httpx.Limits(max_connections=30)) as client:
                 for i in range(0, len(emails), CONTENT_BATCH_SIZE):
-                    batch = emails[i:i + CONTENT_BATCH_SIZE]
+                    batch = emails[i : i + CONTENT_BATCH_SIZE]
                     results = await asyncio.gather(
-                        *[self._gmail_fetch_content(client, provider.access_token, e["id"]) for e in batch],
+                        *[
+                            self._gmail_fetch_content(client, provider.access_token, e["id"])
+                            for e in batch
+                        ],
                     )
                     for r in results:
                         if isinstance(r, dict) and r.get("body"):
                             all_contents.append(r)
                     if (i + CONTENT_BATCH_SIZE) % 100 == 0:
-                        logger.info(f"Content: {min(i + CONTENT_BATCH_SIZE, len(emails))}/{len(emails)}")
+                        logger.info(
+                            f"Content: {min(i + CONTENT_BATCH_SIZE, len(emails))}/{len(emails)}"
+                        )
 
             logger.info(f"Fetched {len(all_contents)} contents")
             return all_contents
@@ -966,8 +1148,13 @@ class ProfileExtractionService:
     # -----------------------------------------------------------------
 
     def start_extraction(
-        self, tenant_id: str, providers: list, llm_client,
-        profile_repo=None, callback_url: str = "", callback_headers: Optional[Dict[str, str]] = None,
+        self,
+        tenant_id: str,
+        providers: list,
+        llm_client,
+        profile_repo=None,
+        callback_url: str = "",
+        callback_headers: Optional[Dict[str, str]] = None,
         database=None,
     ) -> str:
         """
@@ -997,11 +1184,18 @@ class ProfileExtractionService:
             "completed_at": None,
         }
 
-        asyncio.create_task(self._run_extraction(
-            job_id, tenant_id, providers, llm_client, profile_repo,
-            callback_url=callback_url, callback_headers=callback_headers,
-            database=database,
-        ))
+        asyncio.create_task(
+            self._run_extraction(
+                job_id,
+                tenant_id,
+                providers,
+                llm_client,
+                profile_repo,
+                callback_url=callback_url,
+                callback_headers=callback_headers,
+                database=database,
+            )
+        )
         return job_id
 
     def get_job_status(self, job_id: str) -> Optional[Dict]:
@@ -1012,8 +1206,14 @@ class ProfileExtractionService:
     # -----------------------------------------------------------------
 
     async def _run_extraction(
-        self, job_id: str, tenant_id: str, providers: list, llm_client, profile_repo=None,
-        callback_url: str = "", callback_headers: Optional[Dict[str, str]] = None,
+        self,
+        job_id: str,
+        tenant_id: str,
+        providers: list,
+        llm_client,
+        profile_repo=None,
+        callback_url: str = "",
+        callback_headers: Optional[Dict[str, str]] = None,
         database=None,
     ):
         start_time = datetime.now(timezone.utc)
@@ -1045,11 +1245,14 @@ class ProfileExtractionService:
             logger.info(f"Scanned {len(all_metadata)} emails in {scan_time:.1f}s")
 
             if not all_metadata:
-                self._update_job(job_id, {
-                    "status": "completed",
-                    "profile": {},
-                    "completed_at": datetime.now(timezone.utc).isoformat(),
-                })
+                self._update_job(
+                    job_id,
+                    {
+                        "status": "completed",
+                        "profile": {},
+                        "completed_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
                 return
 
             # Phase 2: Rule-based split
@@ -1057,10 +1260,17 @@ class ProfileExtractionService:
             rule_matched, needs_llm = _split_emails_by_rules(all_metadata)
             rule_matched = _select_diverse_emails(rule_matched, MAX_RULE_MATCHED, MAX_PER_SENDER)
 
-            self._update_job(job_id, {
-                "status": "llm_filtering",
-                "progress": {"phase": "llm_filtering", "rule_matched": len(rule_matched), "needs_llm": len(needs_llm)},
-            })
+            self._update_job(
+                job_id,
+                {
+                    "status": "llm_filtering",
+                    "progress": {
+                        "phase": "llm_filtering",
+                        "rule_matched": len(rule_matched),
+                        "needs_llm": len(needs_llm),
+                    },
+                },
+            )
 
             # Phase 3: LLM filter remaining
             logger.info("Phase 3: LLM filtering remaining emails...")
@@ -1086,17 +1296,23 @@ class ProfileExtractionService:
             logger.info(f"Total selected: {len(merged_selection)} emails")
 
             if not merged_selection:
-                self._update_job(job_id, {
-                    "status": "completed",
-                    "profile": {},
-                    "completed_at": datetime.now(timezone.utc).isoformat(),
-                })
+                self._update_job(
+                    job_id,
+                    {
+                        "status": "completed",
+                        "profile": {},
+                        "completed_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
                 return
 
-            self._update_job(job_id, {
-                "status": "fetching",
-                "progress": {"phase": "fetching", "selected": len(merged_selection)},
-            })
+            self._update_job(
+                job_id,
+                {
+                    "status": "fetching",
+                    "progress": {"phase": "fetching", "selected": len(merged_selection)},
+                },
+            )
 
             # Phase 5: Fetch content (use first Gmail provider)
             logger.info("Phase 5: Fetching content...")
@@ -1112,22 +1328,30 @@ class ProfileExtractionService:
             logger.info(f"Fetched {len(email_contents)} contents in {fetch_time:.1f}s")
 
             if not email_contents:
-                self._update_job(job_id, {
-                    "status": "completed",
-                    "profile": {},
-                    "completed_at": datetime.now(timezone.utc).isoformat(),
-                })
+                self._update_job(
+                    job_id,
+                    {
+                        "status": "completed",
+                        "profile": {},
+                        "completed_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
                 return
 
-            self._update_job(job_id, {
-                "status": "extracting",
-                "progress": {"phase": "extracting", "emails": len(email_contents)},
-            })
+            self._update_job(
+                job_id,
+                {
+                    "status": "extracting",
+                    "progress": {"phase": "extracting", "emails": len(email_contents)},
+                },
+            )
 
             # Phase 6: Extract
             logger.info("Phase 6: Extracting profiles...")
             extract_start = datetime.now(timezone.utc)
-            profiles = await self._extract_profiles_batch(llm_client, email_contents, job_id, user_email)
+            profiles = await self._extract_profiles_batch(
+                llm_client, email_contents, job_id, user_email
+            )
             extract_time = (datetime.now(timezone.utc) - extract_start).total_seconds()
             logger.info(f"Extracted {len(profiles)} profiles in {extract_time:.1f}s")
 
@@ -1144,7 +1368,8 @@ class ProfileExtractionService:
                         continue
                     try:
                         now = datetime.now(timezone.utc)
-                        await database.execute("""
+                        await database.execute(
+                            """
                             INSERT INTO subscriptions (
                                 tenant_id, service_name, category, amount, currency,
                                 billing_cycle, status, detected_from, updated_at
@@ -1169,9 +1394,13 @@ class ProfileExtractionService:
                         )
                         sub_count += 1
                     except Exception as e:
-                        logger.warning(f"Failed to save subscription {sub.get('service_name')}: {e}")
+                        logger.warning(
+                            f"Failed to save subscription {sub.get('service_name')}: {e}"
+                        )
                 if sub_count:
-                    logger.info(f"Saved {sub_count} subscriptions from extraction for tenant {tenant_id}")
+                    logger.info(
+                        f"Saved {sub_count} subscriptions from extraction for tenant {tenant_id}"
+                    )
 
             # Phase 8: Save raw extraction & LLM merge with existing profile
             if profile_repo and new_profile:
@@ -1186,12 +1415,18 @@ class ProfileExtractionService:
                     if existing_profile:
                         # LLM merge existing + new
                         logger.info("Phase 8: LLM merging with existing profile...")
-                        self._update_job(job_id, {
-                            "status": "merging",
-                            "progress": {"phase": "merging"},
-                        })
+                        self._update_job(
+                            job_id,
+                            {
+                                "status": "merging",
+                                "progress": {"phase": "merging"},
+                            },
+                        )
                         final_profile = await self._llm_merge(
-                            llm_client, existing_profile, new_profile, user_email,
+                            llm_client,
+                            existing_profile,
+                            new_profile,
+                            user_email,
                         )
                     else:
                         # First extraction — use directly
@@ -1202,7 +1437,7 @@ class ProfileExtractionService:
 
                     # Sync relationship birthdays → important_dates table
                     try:
-                        await _sync_birthday_reminders(db, tenant_id, final_profile)
+                        await _sync_birthday_reminders(database, tenant_id, final_profile)
                     except Exception as e:
                         logger.warning(f"Birthday sync failed (non-critical): {e}")
                 except Exception as e:
@@ -1212,24 +1447,27 @@ class ProfileExtractionService:
                 final_profile = new_profile
 
             total_time = (datetime.now(timezone.utc) - start_time).total_seconds()
-            self._update_job(job_id, {
-                "status": "completed",
-                "profile": final_profile,
-                "completed_at": datetime.now(timezone.utc).isoformat(),
-                "progress": {
-                    "phase": "completed",
-                    "emails_scanned": len(all_metadata),
-                    "rule_matched": len(rule_matched),
-                    "llm_matched": len(llm_matched),
-                    "total_selected": len(merged_selection),
-                    "emails_processed": len(email_contents),
-                    "total_time_seconds": total_time,
-                    "scan_time": scan_time,
-                    "filter_time": filter_time,
-                    "fetch_time": fetch_time,
-                    "extract_time": extract_time,
+            self._update_job(
+                job_id,
+                {
+                    "status": "completed",
+                    "profile": final_profile,
+                    "completed_at": datetime.now(timezone.utc).isoformat(),
+                    "progress": {
+                        "phase": "completed",
+                        "emails_scanned": len(all_metadata),
+                        "rule_matched": len(rule_matched),
+                        "llm_matched": len(llm_matched),
+                        "total_selected": len(merged_selection),
+                        "emails_processed": len(email_contents),
+                        "total_time_seconds": total_time,
+                        "scan_time": scan_time,
+                        "filter_time": filter_time,
+                        "fetch_time": fetch_time,
+                        "extract_time": extract_time,
+                    },
                 },
-            })
+            )
             logger.info(f"Extraction completed in {total_time:.1f}s")
 
             # Callback to notify caller with the extracted profile
@@ -1238,14 +1476,20 @@ class ProfileExtractionService:
 
         except Exception as e:
             logger.error(f"Extraction failed: {e}", exc_info=True)
-            self._update_job(job_id, {
-                "status": "failed",
-                "error": str(e),
-                "completed_at": datetime.now(timezone.utc).isoformat(),
-            })
+            self._update_job(
+                job_id,
+                {
+                    "status": "failed",
+                    "error": str(e),
+                    "completed_at": datetime.now(timezone.utc).isoformat(),
+                },
+            )
 
     async def _send_callback(
-        self, url: str, tenant_id: str, profile: Dict[str, Any],
+        self,
+        url: str,
+        tenant_id: str,
+        profile: Dict[str, Any],
         headers: Optional[Dict[str, str]] = None,
     ):
         """POST extracted profile to callback URL."""

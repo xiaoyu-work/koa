@@ -9,21 +9,18 @@ The internal LLM decides which tools to call (query_tasks, create_task, update_t
 delete_task, set_reminder, manage_reminders) based on the user's request.
 """
 
-from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
-
 from koa import valet
 from koa.constants import TODO_SERVICES
 from koa.standard_agent import StandardAgent
 
 from .tools import (
-    query_tasks,
-    create_task,
-    update_task,
-    delete_task,
-    set_reminder,
-    manage_reminders,
     check_overdue_tasks,
+    create_task,
+    delete_task,
+    manage_reminders,
+    query_tasks,
+    set_reminder,
+    update_task,
 )
 
 
@@ -62,10 +59,18 @@ in your text response WITHOUT calling any tools.
     def get_system_prompt(self) -> str:
         now, tz_name = self._user_now()
         return self._SYSTEM_PROMPT_TEMPLATE.format(
-            today=now.strftime('%Y-%m-%d'),
-            weekday=now.strftime('%A'),
-            current_time=now.strftime('%H:%M'),
+            today=now.strftime("%Y-%m-%d"),
+            weekday=now.strftime("%A"),
+            current_time=now.strftime("%H:%M"),
             timezone=tz_name,
         )
 
-    tools = (query_tasks, create_task, update_task, delete_task, set_reminder, manage_reminders, check_overdue_tasks)
+    tools = (
+        query_tasks,
+        create_task,
+        update_task,
+        delete_task,
+        set_reminder,
+        manage_reminders,
+        check_overdue_tasks,
+    )

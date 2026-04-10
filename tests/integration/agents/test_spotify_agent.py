@@ -49,7 +49,10 @@ TOOL_SELECTION_CASES = [
     ("Set Spotify to repeat this track", ["set_repeat"]),
     ("Set the Spotify volume to 50%", ["set_volume"]),
     ("Save this song to my Spotify library", ["save_tracks"]),
-    ("Recommend me songs similar to what I listen to", ["get_recommendations", "get_recently_played", "get_top_tracks"]),
+    (
+        "Recommend me songs similar to what I listen to",
+        ["get_recommendations", "get_recently_played", "get_top_tracks"],
+    ),
     ("What Spotify devices are available?", ["get_available_devices"]),
     ("Create a new Spotify playlist called Road Trip", ["create_playlist"]),
     ("Show me my liked songs on Spotify", ["get_saved_tracks"]),
@@ -74,6 +77,7 @@ async def test_tool_selection(orchestrator_factory, user_input, expected_tools):
 # Argument extraction
 # ---------------------------------------------------------------------------
 
+
 async def test_extracts_search_query(orchestrator_factory):
     """search_music should receive the correct query and type."""
     orch, recorder = await orchestrator_factory()
@@ -96,12 +100,11 @@ async def test_extracts_search_query(orchestrator_factory):
 # Response quality
 # ---------------------------------------------------------------------------
 
+
 async def test_response_quality_playlists(orchestrator_factory, llm_judge):
     """Getting playlists should produce a readable list of playlists."""
     orch, recorder = await orchestrator_factory()
-    result = await orch.handle_message(
-        "test_user", "Show me my Spotify playlists"
-    )
+    result = await orch.handle_message("test_user", "Show me my Spotify playlists")
 
     passed = await llm_judge(
         "Show me my Spotify playlists",

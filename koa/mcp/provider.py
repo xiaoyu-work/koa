@@ -6,11 +6,11 @@ Automatically converts MCP tools to AgentTool instances.
 
 import json
 import logging
-from typing import List, Dict, Any, Optional
+from typing import Dict, List, Optional
 
 from ..models import AgentTool, AgentToolContext
-from .protocol import MCPClientProtocol
 from .models import MCPTool
+from .protocol import MCPClientProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -31,11 +31,7 @@ class MCPToolProvider:
         # tools is List[AgentTool] — add to orchestrator's builtin_tools
     """
 
-    def __init__(
-        self,
-        client: MCPClientProtocol,
-        tool_prefix: str = "mcp"
-    ):
+    def __init__(self, client: MCPClientProtocol, tool_prefix: str = "mcp"):
         self.client = client
         self.tool_prefix = tool_prefix
         self._tools: List[AgentTool] = []
@@ -69,9 +65,7 @@ class MCPToolProvider:
             List of AgentTool instances
         """
         if not self.client.is_connected:
-            raise ConnectionError(
-                f"MCP client not connected. Call client.connect() first."
-            )
+            raise ConnectionError("MCP client not connected. Call client.connect() first.")
 
         mcp_tools = await self.client.list_tools()
         logger.info(f"Found {len(mcp_tools)} tools from MCP server: {self.client.server_name}")
@@ -104,10 +98,7 @@ class MCPToolProvider:
         return await self.discover_tools()
 
     def __repr__(self) -> str:
-        return (
-            f"MCPToolProvider(server='{self.client.server_name}', "
-            f"tools={len(self._tools)})"
-        )
+        return f"MCPToolProvider(server='{self.client.server_name}', tools={len(self._tools)})"
 
 
 class MCPManager:
@@ -123,11 +114,7 @@ class MCPManager:
     def __init__(self):
         self._providers: Dict[str, MCPToolProvider] = {}
 
-    async def add_server(
-        self,
-        client: MCPClientProtocol,
-        connect: bool = True
-    ) -> MCPToolProvider:
+    async def add_server(self, client: MCPClientProtocol, connect: bool = True) -> MCPToolProvider:
         """Add an MCP server and discover its tools."""
         server_name = client.server_name
 

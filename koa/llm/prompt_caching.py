@@ -38,9 +38,7 @@ def _apply_cache_marker(msg: dict, marker: dict) -> None:
         return
 
     if isinstance(content, str):
-        msg["content"] = [
-            {"type": "text", "text": content, "cache_control": marker}
-        ]
+        msg["content"] = [{"type": "text", "text": content, "cache_control": marker}]
         return
 
     if isinstance(content, list) and content:
@@ -84,9 +82,7 @@ def apply_anthropic_cache_control(
 
     # Breakpoints 2-4: last N non-system messages
     remaining = 4 - breakpoints_used
-    non_sys_indices = [
-        i for i in range(len(messages)) if messages[i].get("role") != "system"
-    ]
+    non_sys_indices = [i for i in range(len(messages)) if messages[i].get("role") != "system"]
     for idx in non_sys_indices[-remaining:]:
         _apply_cache_marker(messages[idx], marker)
 

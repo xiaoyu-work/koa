@@ -4,12 +4,11 @@ Modular prompt system: each section is a function that returns a string.
 Sections are composed in build_system_prompt() based on runtime configuration.
 """
 
-from typing import Dict, List, Optional
-
 
 # ---------------------------------------------------------------------------
 # Section renderers — each returns a prompt fragment or empty string
 # ---------------------------------------------------------------------------
+
 
 def render_preamble() -> str:
     return (
@@ -284,6 +283,7 @@ def render_negative_rules() -> str:
 # ---------------------------------------------------------------------------
 # Composer — assembles the final system prompt
 # ---------------------------------------------------------------------------
+
 
 def build_system_prompt(
     *,

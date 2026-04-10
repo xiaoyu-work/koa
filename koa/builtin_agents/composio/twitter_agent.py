@@ -7,8 +7,8 @@ bookmarks, direct messages, and user tweet history
 using the Composio OAuth proxy platform.
 """
 
-import os
 import logging
+import os
 from typing import Annotated, List, Optional
 
 from koa import valet
@@ -51,6 +51,7 @@ def _check_api_key() -> Optional[str]:
 # Approval preview functions
 # =============================================================================
 
+
 async def _post_tweet_preview(args: dict, context) -> str:
     text = args.get("text", "")
     preview = text[:100] + "..." if len(text) > 100 else text
@@ -60,6 +61,7 @@ async def _post_tweet_preview(args: dict, context) -> str:
 # =============================================================================
 # Tool executors
 # =============================================================================
+
 
 @tool(needs_approval=True, risk_level="write", get_preview=_post_tweet_preview)
 async def post_tweet(
@@ -77,8 +79,8 @@ async def post_tweet(
     try:
         client = ComposioClient()
         data = await client.execute_action(
-            _ACTION_CREATE_POST,
-            params={"text": text}, entity_id=context.tenant_id or "default")
+            _ACTION_CREATE_POST, params={"text": text}, entity_id=context.tenant_id or "default"
+        )
         result = ComposioClient.format_action_result(data)
         if data.get("successfull") or data.get("successful"):
             return f"Tweet posted successfully.\n\n{result}"
@@ -103,7 +105,9 @@ async def get_timeline(
         client = ComposioClient()
         data = await client.execute_action(
             _ACTION_HOME_TIMELINE,
-            params={"max_results": limit}, entity_id=context.tenant_id or "default")
+            params={"max_results": limit},
+            entity_id=context.tenant_id or "default",
+        )
         result = ComposioClient.format_action_result(data)
         if data.get("successfull") or data.get("successful"):
             return f"Home timeline tweets:\n\n{result}"
@@ -131,7 +135,9 @@ async def search_tweets(
         client = ComposioClient()
         data = await client.execute_action(
             _ACTION_RECENT_SEARCH,
-            params={"query": query, "max_results": limit}, entity_id=context.tenant_id or "default")
+            params={"query": query, "max_results": limit},
+            entity_id=context.tenant_id or "default",
+        )
         result = ComposioClient.format_action_result(data)
         if data.get("successfull") or data.get("successful"):
             return f"Tweets matching '{query}':\n\n{result}"
@@ -158,7 +164,9 @@ async def lookup_user(
         client = ComposioClient()
         data = await client.execute_action(
             _ACTION_USER_LOOKUP,
-            params={"username": username}, entity_id=context.tenant_id or "default")
+            params={"username": username},
+            entity_id=context.tenant_id or "default",
+        )
         result = ComposioClient.format_action_result(data)
         if data.get("successfull") or data.get("successful"):
             return f"User @{username}:\n\n{result}"
@@ -585,6 +593,7 @@ async def connect_twitter(
 # =============================================================================
 # Agent
 # =============================================================================
+
 
 @valet(domain="communication")
 class TwitterComposioAgent(StandardAgent):

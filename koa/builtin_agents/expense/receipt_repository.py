@@ -6,7 +6,7 @@ for the expense tracking feature.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from koa.db.repository import Repository
 
@@ -52,9 +52,7 @@ class ReceiptRepository(Repository):
         )
         return dict(row) if row else None
 
-    async def search_by_text(
-        self, tenant_id: str, query: str, limit: int = 20
-    ) -> list[dict]:
+    async def search_by_text(self, tenant_id: str, query: str, limit: int = 20) -> list[dict]:
         """Search receipts by OCR text or file name using ILIKE."""
         pattern = f"%{query}%"
         rows = await self._db.fetch(

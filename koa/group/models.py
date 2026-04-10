@@ -9,14 +9,15 @@ This module defines:
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Any, List, Optional, Literal, Callable
 from enum import Enum
+from typing import Any, Callable, Dict, List, Literal, Optional
 
 
 class ExecutionPattern(str, Enum):
     """Pattern for executing agents in a group"""
-    SEQUENTIAL = "sequential"      # A → B → C
-    PARALLEL = "parallel"          # A, B, C all at once
+
+    SEQUENTIAL = "sequential"  # A → B → C
+    PARALLEL = "parallel"  # A, B, C all at once
     HIERARCHICAL = "hierarchical"  # Manager delegates to workers
 
 
@@ -36,19 +37,21 @@ class MergeStrategy(str, Enum):
     | FIRST    | Any        | [1, 2, 3] → 1 |
     | CUSTOM   | Any        | Use custom function |
     """
-    REPLACE = "replace"    # Last write wins (default)
-    ADD = "add"           # Concatenate lists or add numbers
-    MERGE = "merge"       # Merge dictionaries
-    MAX = "max"           # Keep maximum value
-    MIN = "min"           # Keep minimum value
-    UNION = "union"       # Set union (unique values)
-    FIRST = "first"       # Keep first non-null value
-    CUSTOM = "custom"     # Use custom merge function
+
+    REPLACE = "replace"  # Last write wins (default)
+    ADD = "add"  # Concatenate lists or add numbers
+    MERGE = "merge"  # Merge dictionaries
+    MAX = "max"  # Keep maximum value
+    MIN = "min"  # Keep minimum value
+    UNION = "union"  # Set union (unique values)
+    FIRST = "first"  # Keep first non-null value
+    CUSTOM = "custom"  # Use custom merge function
 
 
 @dataclass
 class AgentExecutionResult:
     """Result from executing a single agent within a group"""
+
     agent_id: str
     agent_type: str
     status: Literal["completed", "failed", "skipped"]
@@ -85,6 +88,7 @@ class AgentExecutionResult:
 @dataclass
 class GroupResult:
     """Result from executing an agent group"""
+
     group_id: str
     pattern: ExecutionPattern
     status: Literal["completed", "partial", "failed"]
@@ -141,18 +145,20 @@ class GroupResult:
 @dataclass
 class MergeConfig:
     """Configuration for field merging"""
+
     field_name: str
     strategy: MergeStrategy
     custom_fn: Optional[Callable] = None
 
     # Options for specific strategies
     default_value: Any = None  # Default if all values are None
-    ignore_none: bool = True   # Skip None values when merging
+    ignore_none: bool = True  # Skip None values when merging
 
 
 @dataclass
 class GroupConfig:
     """Configuration for an agent group"""
+
     group_id: str
     pattern: ExecutionPattern = ExecutionPattern.PARALLEL
 
@@ -176,8 +182,4 @@ class GroupConfig:
         strategy = self.merge_strategies.get(field_name, MergeStrategy.REPLACE)
         custom_fn = self.custom_merge_fns.get(field_name)
 
-        return MergeConfig(
-            field_name=field_name,
-            strategy=strategy,
-            custom_fn=custom_fn
-        )
+        return MergeConfig(field_name=field_name, strategy=strategy, custom_fn=custom_fn)

@@ -43,10 +43,13 @@ async def test_tool_selection(orchestrator_factory, user_input, expected_tools):
 # Argument extraction
 # ---------------------------------------------------------------------------
 
+
 async def test_cron_add_extracts_schedule(orchestrator_factory):
     """cron_add should receive a cron expression or schedule value for 'every morning at 8am'."""
     orch, recorder = await orchestrator_factory()
-    await orch.handle_message("test_user", "Schedule a reminder every morning at 8am to drink water")
+    await orch.handle_message(
+        "test_user", "Schedule a reminder every morning at 8am to drink water"
+    )
 
     add_calls = [c for c in recorder.tool_calls if c["tool_name"] == "cron_add"]
     assert add_calls, "Expected cron_add to be called"
@@ -79,12 +82,11 @@ async def test_cron_add_conditional_flag(orchestrator_factory):
 # Response quality
 # ---------------------------------------------------------------------------
 
+
 async def test_response_quality_create_job(orchestrator_factory, llm_judge):
     """After creating a cron job, the response should confirm the schedule."""
     orch, recorder = await orchestrator_factory()
-    result = await orch.handle_message(
-        "test_user", "Set up a daily briefing every morning at 8am"
-    )
+    result = await orch.handle_message("test_user", "Set up a daily briefing every morning at 8am")
     response = result.raw_message if hasattr(result, "raw_message") else str(result)
 
     passed = await llm_judge(

@@ -3,12 +3,13 @@ MCP Models - Data structures for MCP integration
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional
 from enum import Enum
+from typing import Any, Dict, List, Optional
 
 
 class MCPTransportType(str, Enum):
     """MCP transport types"""
+
     STDIO = "stdio"
     SSE = "sse"
     STREAMABLE_HTTP = "streamable_http"
@@ -44,6 +45,7 @@ class MCPServerConfig:
             url="http://localhost:8080/mcp"
         )
     """
+
     name: str
     transport: MCPTransportType = MCPTransportType.STDIO
     command: Optional[str] = None
@@ -71,6 +73,7 @@ class MCPTool:
         input_schema: JSON Schema for tool parameters
         server_name: Name of the MCP server providing this tool
     """
+
     name: str
     description: str
     input_schema: Dict[str, Any]
@@ -88,8 +91,8 @@ class MCPTool:
             "function": {
                 "name": self.full_name,
                 "description": f"[MCP:{self.server_name}] {self.description}",
-                "parameters": self.input_schema
-            }
+                "parameters": self.input_schema,
+            },
         }
 
 
@@ -105,6 +108,7 @@ class MCPResource:
         mime_type: MIME type of the resource
         server_name: Name of the MCP server providing this resource
     """
+
     uri: str
     name: str
     description: Optional[str] = None
@@ -115,6 +119,7 @@ class MCPResource:
 @dataclass
 class MCPCallResult:
     """Result from calling an MCP tool"""
+
     content: Any
     is_error: bool = False
     error_message: Optional[str] = None
@@ -131,6 +136,7 @@ class MCPPrompt:
         arguments: List of argument definitions
         server_name: Name of the MCP server
     """
+
     name: str
     description: Optional[str] = None
     arguments: List[Dict[str, Any]] = field(default_factory=list)

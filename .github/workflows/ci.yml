@@ -24,10 +24,10 @@ jobs:
           uv pip install -r requirements-dev.txt
         
       - name: Run ruff check
-        run: uv run ruff check koa/ tests/ || true
+        run: uv run ruff check koa/ tests/
         
       - name: Run ruff format check
-        run: uv run ruff format --check koa/ tests/ || true
+        run: uv run ruff format --check koa/ tests/
 
   type-check:
     runs-on: ubuntu-latest
@@ -46,7 +46,7 @@ jobs:
           uv pip install -r requirements-dev.txt
         
       - name: Run mypy
-        run: uv run mypy koa/ --ignore-missing-imports || true
+        run: uv run mypy koa/ --ignore-missing-imports
 
   test:
     runs-on: ubuntu-latest

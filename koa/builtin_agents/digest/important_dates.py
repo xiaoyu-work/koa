@@ -4,10 +4,11 @@ Important Date Digest Agent - Get today's important date reminders
 For morning digest: checks which dates need reminding today based on
 remind_days_before settings (e.g., remind 7 days before, 1 day before, on the day).
 """
-import logging
-from typing import Dict, Any, List
 
-from koa import valet, StandardAgent, AgentStatus, AgentResult, Message
+import logging
+
+from koa import AgentResult, AgentStatus, Message, StandardAgent, valet
+
 from .important_dates_repo import ImportantDatesRepository
 
 logger = logging.getLogger(__name__)
@@ -18,11 +19,7 @@ class ImportantDateDigestAgent(StandardAgent):
     """Check for upcoming birthdays, anniversaries, and important dates. Use for daily reminders or when the user asks about special dates."""
 
     def __init__(self, tenant_id: str = "", llm_client=None, **kwargs):
-        super().__init__(
-            tenant_id=tenant_id,
-            llm_client=llm_client,
-            **kwargs
-        )
+        super().__init__(tenant_id=tenant_id, llm_client=llm_client, **kwargs)
 
     def needs_approval(self) -> bool:
         return False
@@ -32,7 +29,7 @@ class ImportantDateDigestAgent(StandardAgent):
         db = self.context_hints.get("db")
         if not db:
             return None
-        if not hasattr(self, '_dates_repo'):
+        if not hasattr(self, "_dates_repo"):
             self._dates_repo = ImportantDatesRepository(db)
         return self._dates_repo
 
@@ -41,18 +38,12 @@ class ImportantDateDigestAgent(StandardAgent):
         try:
             repo = self._get_repo()
             if not repo:
-                return self.make_result(
-                    status=AgentStatus.COMPLETED,
-                    raw_message=""
-                )
+                return self.make_result(status=AgentStatus.COMPLETED, raw_message="")
 
             dates = await repo.get_today_important_dates(self.tenant_id)
 
             if not dates:
-                return self.make_result(
-                    status=AgentStatus.COMPLETED,
-                    raw_message=""
-                )
+                return self.make_result(status=AgentStatus.COMPLETED, raw_message="")
 
             lines = []
             for d in dates:
@@ -69,22 +60,16 @@ class ImportantDateDigestAgent(StandardAgent):
                 else:
                     lines.append(f"{icon} {title} in {days_until} days")
 
-            return self.make_result(
-                status=AgentStatus.COMPLETED,
-                raw_message="\n".join(lines)
-            )
+            return self.make_result(status=AgentStatus.COMPLETED, raw_message="\n".join(lines))
 
         except Exception as e:
             logger.error(f"ImportantDateDigestAgent failed: {e}", exc_info=True)
-            return self.make_result(
-                status=AgentStatus.COMPLETED,
-                raw_message=""
-            )
+            return self.make_result(status=AgentStatus.COMPLETED, raw_message="")
 
     def _get_icon(self, date_type: str) -> str:
         return {
             "birthday": "[birthday]",
             "anniversary": "[anniversary]",
             "holiday": "[holiday]",
-            "custom": "[date]"
+            "custom": "[date]",
         }.get(date_type, "[date]")

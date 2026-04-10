@@ -36,7 +36,9 @@ async def recall_recent_actions_executor(args: dict, context: AgentToolContext =
                 ORDER BY created_at DESC
                 LIMIT $3
                 """,
-                context.tenant_id, agent_filter, limit,
+                context.tenant_id,
+                agent_filter,
+                limit,
             )
         else:
             rows = await db.fetch(
@@ -48,7 +50,8 @@ async def recall_recent_actions_executor(args: dict, context: AgentToolContext =
                 ORDER BY created_at DESC
                 LIMIT $2
                 """,
-                context.tenant_id, limit,
+                context.tenant_id,
+                limit,
             )
 
         if not rows:

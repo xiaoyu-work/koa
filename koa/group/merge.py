@@ -6,14 +6,15 @@ This module provides:
 - merge_values: Apply merge strategy to a list of values
 """
 
-from typing import Dict, Any, List, Optional, Callable, Union, Set
 from collections import defaultdict
+from typing import Any, Callable, Dict, List, Optional, Set
 
-from .models import MergeStrategy, MergeConfig
+from .models import MergeStrategy
 
 
 class MergeError(Exception):
     """Raised when merging fails"""
+
     pass
 
 
@@ -21,7 +22,7 @@ def merge_values(
     values: List[Any],
     strategy: MergeStrategy,
     custom_fn: Optional[Callable] = None,
-    ignore_none: bool = True
+    ignore_none: bool = True,
 ) -> Any:
     """
     Merge a list of values using the specified strategy.
@@ -108,13 +109,13 @@ def merge_values(
 
     elif strategy == MergeStrategy.UNION:
         # Set union (unique values)
-        result: Set = set()
+        union_result: Set = set()
         for v in values:
             if isinstance(v, (list, tuple, set)):
-                result.update(v)
+                union_result.update(v)
             else:
-                result.add(v)
-        return result
+                union_result.add(v)
+        return union_result
 
     elif strategy == MergeStrategy.CUSTOM:
         # Use custom function
@@ -158,7 +159,7 @@ class StateMerger:
         merge_strategies: Optional[Dict[str, MergeStrategy]] = None,
         custom_merge_fns: Optional[Dict[str, Callable]] = None,
         default_strategy: MergeStrategy = MergeStrategy.REPLACE,
-        ignore_none: bool = True
+        ignore_none: bool = True,
     ):
         """
         Initialize state merger.
@@ -177,7 +178,7 @@ class StateMerger:
     def merge(
         self,
         states: List[Dict[str, Any]],
-        additional_strategies: Optional[Dict[str, MergeStrategy]] = None
+        additional_strategies: Optional[Dict[str, MergeStrategy]] = None,
     ) -> Dict[str, Any]:
         """
         Merge multiple state dictionaries.
@@ -211,18 +212,12 @@ class StateMerger:
             custom_fn = self.custom_merge_fns.get(field)
 
             result[field] = merge_values(
-                values=values,
-                strategy=strategy,
-                custom_fn=custom_fn,
-                ignore_none=self.ignore_none
+                values=values, strategy=strategy, custom_fn=custom_fn, ignore_none=self.ignore_none
             )
 
         return result
 
-    def merge_collected_fields(
-        self,
-        agent_results: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+    def merge_collected_fields(self, agent_results: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Merge collected_fields from agent results.
 
@@ -232,18 +227,11 @@ class StateMerger:
         Returns:
             Merged collected_fields
         """
-        states = [
-            r.get("collected_fields", {})
-            for r in agent_results
-            if isinstance(r, dict)
-        ]
+        states = [r.get("collected_fields", {}) for r in agent_results if isinstance(r, dict)]
         return self.merge(states)
 
     def set_strategy(
-        self,
-        field: str,
-        strategy: MergeStrategy,
-        custom_fn: Optional[Callable] = None
+        self, field: str, strategy: MergeStrategy, custom_fn: Optional[Callable] = None
     ) -> None:
         """Set merge strategy for a field"""
         self.merge_strategies[field] = strategy

@@ -6,7 +6,7 @@ the credentials dict's provider field (gmail, outlook, etc.)
 """
 
 import logging
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from .base import BaseEmailProvider
 
@@ -101,6 +101,7 @@ def _register_providers():
     """Auto-register all available email providers."""
     try:
         from .gmail import GmailProvider
+
         EmailProviderFactory.register_provider("google", GmailProvider)
         EmailProviderFactory.register_provider("gmail", GmailProvider)
     except ImportError as e:
@@ -108,6 +109,7 @@ def _register_providers():
 
     try:
         from .outlook import OutlookProvider
+
         EmailProviderFactory.register_provider("outlook", OutlookProvider)
         EmailProviderFactory.register_provider("microsoft", OutlookProvider)
     except ImportError as e:

@@ -20,8 +20,7 @@ from ..result import AgentResult
 logger = logging.getLogger(__name__)
 
 UNSCHEDULED_REMINDER_NOTE = (
-    "Note: I did not schedule a reminder in this turn, "
-    "so this will not trigger automatically."
+    "Note: I did not schedule a reminder in this turn, so this will not trigger automatically."
 )
 
 # Patterns that indicate the AI committed to scheduling a reminder/alert
@@ -87,8 +86,6 @@ async def reminder_guard_hook(
         return result
 
     # AI promised a reminder but didn't actually create one
-    logger.warning(
-        "Reminder guard triggered: response claims reminder but no cron tool was called"
-    )
+    logger.warning("Reminder guard triggered: response claims reminder but no cron tool was called")
     result.raw_message = f"{result.raw_message.rstrip()}\n\n{UNSCHEDULED_REMINDER_NOTE}"
     return result

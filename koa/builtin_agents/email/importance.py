@@ -5,9 +5,9 @@ Combines system default rules and user custom rules to evaluate email importance
 """
 
 import logging
-from typing import Dict, Any, List
+from typing import Any, Dict
 
-from koa import valet, StandardAgent, InputField
+from koa import InputField, StandardAgent, valet
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,7 @@ class EmailImportanceAgent(StandardAgent):
                     "is_important": False,
                     "rule_type": "none",
                     "matched_rule": "",
-                    "reason": "No email data provided"
+                    "reason": "No email data provided",
                 }
 
             # Get user's custom importance rules from context_hints
@@ -96,9 +96,9 @@ Determine if this email is important and requires immediate notification to the 
 {user_rules if user_rules else "User has not set custom rules. Use system rules only."}
 
 [EMAIL INFORMATION]
-From: {email.get('sender', 'Unknown')}
-Subject: {email.get('subject', '(No subject)')}
-Preview: {email.get('snippet', '')[:300]}
+From: {email.get("sender", "Unknown")}
+Subject: {email.get("subject", "(No subject)")}
+Preview: {email.get("snippet", "")[:300]}
 
 EVALUATION CRITERIA:
 1. If the email matches ANY user custom rule, it is IMPORTANT (user rules have highest priority)
@@ -123,14 +123,18 @@ Examples:
             # Call LLM for evaluation
             result = await self.llm_client.chat_completion(
                 messages=[
-                    {"role": "system", "content": "You evaluate email importance. Return JSON only."},
-                    {"role": "user", "content": prompt}
+                    {
+                        "role": "system",
+                        "content": "You evaluate email importance. Return JSON only.",
+                    },
+                    {"role": "user", "content": prompt},
                 ],
                 response_format="json_object",
-                enable_thinking=False
+                enable_thinking=False,
             )
 
             import json
+
             evaluated = json.loads(result.content.strip())
 
             logger.info(
@@ -142,7 +146,7 @@ Examples:
                 "is_important": evaluated.get("is_important", False),
                 "rule_type": evaluated.get("rule_type", "none"),
                 "matched_rule": evaluated.get("matched_rule", ""),
-                "reason": evaluated.get("reason", "")
+                "reason": evaluated.get("reason", ""),
             }
 
         except Exception as e:
@@ -152,5 +156,5 @@ Examples:
                 "is_important": False,
                 "rule_type": "error",
                 "matched_rule": "",
-                "reason": f"Error: {str(e)}"
+                "reason": f"Error: {str(e)}",
             }

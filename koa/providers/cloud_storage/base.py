@@ -5,10 +5,10 @@ Each provider (Google Drive, OneDrive, Dropbox) must implement this interface.
 Providers use OAuth2 tokens (same pattern as BaseTodoProvider).
 """
 
-from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, List, Optional
-from datetime import datetime, timedelta, timezone
 import logging
+from abc import ABC, abstractmethod
+from datetime import datetime, timedelta, timezone
+from typing import Any, Callable, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -164,6 +164,7 @@ class BaseCloudStorageProvider(ABC):
 
         if isinstance(self.token_expiry, str):
             from dateutil import parser
+
             self.token_expiry = parser.parse(self.token_expiry)
 
         now = datetime.now(timezone.utc)

@@ -52,19 +52,20 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timezone
-from typing import List, Dict, Optional, Callable, Any, AsyncIterator, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, AsyncIterator, Callable, Dict, List, Optional, Tuple
 from uuid import uuid4
 
 from .base_agent import BaseAgent
-from .constants import COMPLETE_TASK_TOOL_NAME, COMPLETE_TASK_SCHEMA
+from .constants import COMPLETE_TASK_SCHEMA, COMPLETE_TASK_TOOL_NAME
 from .fields import InputField
-from .llm.base import LLMResponse, ToolCall as LLMToolCall
+from .llm.base import LLMResponse
+from .llm.base import ToolCall as LLMToolCall
 from .message import Message
-from .models import RequiredField, AgentToolContext, AgentTool, ToolOutput
+from .models import AgentTool, AgentToolContext, RequiredField, ToolOutput
 from .protocols import LLMClientProtocol
 from .result import AgentResult, AgentStatus, ApprovalResult
 from .streaming.engine import StreamEngine
-from .streaming.models import StreamMode, EventType, AgentEvent
+from .streaming.models import AgentEvent, EventType, StreamMode
 
 if TYPE_CHECKING:
     from .agents.decorator import InputSpec, OutputSpec
@@ -91,14 +92,14 @@ STATE_TRANSITIONS = {
         AgentStatus.WAITING_FOR_APPROVAL,
         AgentStatus.PAUSED,
         AgentStatus.COMPLETED,
-        AgentStatus.ERROR
+        AgentStatus.ERROR,
     ],
     AgentStatus.RUNNING: [
         AgentStatus.COMPLETED,
         AgentStatus.ERROR,
         AgentStatus.PAUSED,
         AgentStatus.WAITING_FOR_INPUT,
-        AgentStatus.WAITING_FOR_APPROVAL
+        AgentStatus.WAITING_FOR_APPROVAL,
     ],
     AgentStatus.WAITING_FOR_INPUT: [
         AgentStatus.RUNNING,
@@ -106,7 +107,7 @@ STATE_TRANSITIONS = {
         AgentStatus.PAUSED,
         AgentStatus.COMPLETED,
         AgentStatus.ERROR,
-        AgentStatus.WAITING_FOR_INPUT
+        AgentStatus.WAITING_FOR_INPUT,
     ],
     AgentStatus.WAITING_FOR_APPROVAL: [
         AgentStatus.RUNNING,
@@ -115,7 +116,7 @@ STATE_TRANSITIONS = {
         AgentStatus.PAUSED,
         AgentStatus.COMPLETED,
         AgentStatus.CANCELLED,
-        AgentStatus.ERROR
+        AgentStatus.ERROR,
     ],
     AgentStatus.PAUSED: [
         AgentStatus.INITIALIZING,  # Resume to any previous state
@@ -123,11 +124,11 @@ STATE_TRANSITIONS = {
         AgentStatus.WAITING_FOR_INPUT,
         AgentStatus.WAITING_FOR_APPROVAL,
         AgentStatus.CANCELLED,
-        AgentStatus.ERROR
+        AgentStatus.ERROR,
     ],
     AgentStatus.COMPLETED: [],  # Terminal state
     AgentStatus.ERROR: [AgentStatus.CANCELLED],
-    AgentStatus.CANCELLED: []  # Terminal state
+    AgentStatus.CANCELLED: [],  # Terminal state
 }
 
 
@@ -185,7 +186,7 @@ class StandardAgent(BaseAgent):
         llm_client: Optional[LLMClientProtocol] = None,
         orchestrator_callback: Optional[Callable] = None,
         context_hints: Optional[Dict[str, Any]] = None,
-        **kwargs
+        **kwargs,
     ):
         """
         Initialize StandardAgent
@@ -196,7 +197,7 @@ class StandardAgent(BaseAgent):
             orchestrator_callback: Callback function for events
             context_hints: Pre-extracted fields from orchestrator
         """
-        super().__init__(name=kwargs.get('name'))
+        super().__init__(name=kwargs.get("name"))
 
         # Core attributes
         self.tenant_id = tenant_id
@@ -259,22 +260,27 @@ class StandardAgent(BaseAgent):
                     continue
                 if field_def.validator:
                     if not field_def.validator(str(value)):
-                        logger.debug(f"context_hints field '{field_name}' failed validation, skipping")
+                        logger.debug(
+                            f"context_hints field '{field_name}' failed validation, skipping"
+                        )
                         continue
                 self.collected_fields[field_name] = value
-            logger.debug(f"Pre-populated fields from context_hints: {list(self.collected_fields.keys())}")
+            logger.debug(
+                f"Pre-populated fields from context_hints: {list(self.collected_fields.keys())}"
+            )
 
         # Initialize optional fields with defaults
         self._init_optional_fields()
 
         # Built-in streaming engine
         self._stream_engine = StreamEngine(
-            agent_id=self.agent_id,
-            agent_type=self.__class__.__name__
+            agent_id=self.agent_id, agent_type=self.__class__.__name__
         )
         self._streaming_enabled = False
 
-        logger.debug(f"Initialized {self.__class__.__name__} (ID: {self.agent_id}, Tenant: {tenant_id})")
+        logger.debug(
+            f"Initialized {self.__class__.__name__} (ID: {self.agent_id}, Tenant: {tenant_id})"
+        )
 
     def _user_now(self) -> tuple:
         """Return (datetime, tz_name) in user's timezone from context_hints.
@@ -283,6 +289,7 @@ class StandardAgent(BaseAgent):
         if tz_str and tz_str != "UTC":
             try:
                 from zoneinfo import ZoneInfo
+
                 tz = ZoneInfo(tz_str)
                 return datetime.now(tz), tz_str
             except Exception:
@@ -292,7 +299,7 @@ class StandardAgent(BaseAgent):
     def _build_required_fields(self) -> List[RequiredField]:
         """Build RequiredField list from InputField specs or legacy method."""
         # First check for InputField specs from decorator
-        input_specs = getattr(self.__class__, '_input_specs', [])
+        input_specs = getattr(self.__class__, "_input_specs", [])
         if input_specs:
             return [
                 RequiredField(
@@ -312,6 +319,7 @@ class StandardAgent(BaseAgent):
         Wrap a validator that returns error message into one that returns bool.
         Store the error message for later use.
         """
+
         def wrapped(value: str) -> bool:
             result = validator(value)
             if result is None:
@@ -320,11 +328,12 @@ class StandardAgent(BaseAgent):
             else:
                 self._validation_error = result
                 return False
+
         return wrapped
 
     def _init_optional_fields(self) -> None:
         """Initialize optional fields with their defaults."""
-        input_specs = getattr(self.__class__, '_input_specs', [])
+        input_specs = getattr(self.__class__, "_input_specs", [])
         for spec in input_specs:
             if not spec.required and spec.default is not None:
                 if spec.name not in self.collected_fields:
@@ -436,14 +445,13 @@ class StandardAgent(BaseAgent):
             return self.make_result(
                 status=AgentStatus.WAITING_FOR_INPUT,
                 raw_message=self._get_next_prompt(),
-                missing_fields=missing
+                missing_fields=missing,
             )
 
         # All fields collected - check approval
         if self.needs_approval():
             return self.make_result(
-                status=AgentStatus.WAITING_FOR_APPROVAL,
-                raw_message=self.get_approval_prompt()
+                status=AgentStatus.WAITING_FOR_APPROVAL, raw_message=self.get_approval_prompt()
             )
 
         # No approval needed - go directly to running
@@ -481,7 +489,7 @@ class StandardAgent(BaseAgent):
                 return self.make_result(
                     status=AgentStatus.WAITING_FOR_INPUT,
                     raw_message=error_message,
-                    missing_fields=self._get_missing_fields()
+                    missing_fields=self._get_missing_fields(),
                 )
 
         missing = self._get_missing_fields()
@@ -490,14 +498,13 @@ class StandardAgent(BaseAgent):
             return self.make_result(
                 status=AgentStatus.WAITING_FOR_INPUT,
                 raw_message=self._get_next_prompt(),
-                missing_fields=missing
+                missing_fields=missing,
             )
 
         # All fields collected - check approval
         if self.needs_approval():
             return self.make_result(
-                status=AgentStatus.WAITING_FOR_APPROVAL,
-                raw_message=self.get_approval_prompt()
+                status=AgentStatus.WAITING_FOR_APPROVAL, raw_message=self.get_approval_prompt()
             )
 
         # No approval needed - execute
@@ -535,11 +542,13 @@ class StandardAgent(BaseAgent):
             # MODIFY
             self._pending_tool_call = None
             self._remaining_tool_calls = []
-            self._tool_trace.append({
-                "tool": "approval",
-                "status": "modified",
-                "summary": f"User requested modification: {user_input[:180]}",
-            })
+            self._tool_trace.append(
+                {
+                    "tool": "approval",
+                    "status": "modified",
+                    "summary": f"User requested modification: {user_input[:180]}",
+                }
+            )
             return self.make_result(
                 status=AgentStatus.CANCELLED,
                 raw_message=f"Operation cancelled. User said: {user_input}",
@@ -569,13 +578,12 @@ class StandardAgent(BaseAgent):
                 return self.make_result(
                     status=AgentStatus.WAITING_FOR_INPUT,
                     raw_message=self._get_next_prompt(),
-                    missing_fields=missing
+                    missing_fields=missing,
                 )
 
             # Still have all fields, ask for approval again
             return self.make_result(
-                status=AgentStatus.WAITING_FOR_APPROVAL,
-                raw_message=self.get_approval_prompt()
+                status=AgentStatus.WAITING_FOR_APPROVAL, raw_message=self.get_approval_prompt()
             )
 
     async def on_running(self, msg: Message) -> AgentResult:
@@ -622,9 +630,7 @@ class StandardAgent(BaseAgent):
             return await self._run_react()
 
         # Default for non-domain subclasses (they override this)
-        return self.make_result(
-            status=AgentStatus.COMPLETED
-        )
+        return self.make_result(status=AgentStatus.COMPLETED)
 
     async def on_error(self, msg: Message) -> AgentResult:
         """
@@ -632,10 +638,7 @@ class StandardAgent(BaseAgent):
 
         Override to implement error recovery logic.
         """
-        return self.make_result(
-            status=AgentStatus.ERROR,
-            error_message=self.error_message
-        )
+        return self.make_result(status=AgentStatus.ERROR, error_message=self.error_message)
 
     async def on_paused(self, msg: Message) -> AgentResult:
         """
@@ -669,7 +672,7 @@ class StandardAgent(BaseAgent):
             AgentStatus.RUNNING,
             AgentStatus.WAITING_FOR_INPUT,
             AgentStatus.WAITING_FOR_APPROVAL,
-            AgentStatus.INITIALIZING
+            AgentStatus.INITIALIZING,
         }
 
         if self.status not in pauseable_states:
@@ -721,13 +724,11 @@ class StandardAgent(BaseAgent):
         # Return appropriate result based on restored status
         if previous_status == AgentStatus.WAITING_FOR_INPUT:
             return self.make_result(
-                status=AgentStatus.WAITING_FOR_INPUT,
-                raw_message=self._get_next_prompt() or ""
+                status=AgentStatus.WAITING_FOR_INPUT, raw_message=self._get_next_prompt() or ""
             )
         elif previous_status == AgentStatus.WAITING_FOR_APPROVAL:
             return self.make_result(
-                status=AgentStatus.WAITING_FOR_APPROVAL,
-                raw_message=self.get_approval_prompt()
+                status=AgentStatus.WAITING_FOR_APPROVAL, raw_message=self.get_approval_prompt()
             )
         else:
             return self.make_result(status=previous_status)
@@ -748,7 +749,7 @@ class StandardAgent(BaseAgent):
         raw_message: str = "",
         data: Optional[Dict[str, Any]] = None,
         missing_fields: Optional[List[str]] = None,
-        **kwargs
+        **kwargs,
     ) -> AgentResult:
         """
         Factory method to create AgentResult with auto-filled agent_type and agent_id.
@@ -778,7 +779,7 @@ class StandardAgent(BaseAgent):
             raw_message=raw_message,
             data=data if data is not None else self.collected_fields,
             missing_fields=missing_fields,
-            **kwargs
+            **kwargs,
         )
 
     # ===== Approval Control =====
@@ -931,9 +932,7 @@ class StandardAgent(BaseAgent):
         return {}
 
     async def _extract_fields_with_llm(
-        self,
-        user_input: str,
-        missing_fields: List[str]
+        self, user_input: str, missing_fields: List[str]
     ) -> Dict[str, Any]:
         """Use LLM to extract field values from user input."""
         # Build field descriptions
@@ -945,14 +944,17 @@ class StandardAgent(BaseAgent):
 
         # Build context from original request and already-collected fields
         context_parts = []
-        task_instr = self.collected_fields.get("task_instruction") or self.context_hints.get("task_instruction")
+        task_instr = self.collected_fields.get("task_instruction") or self.context_hints.get(
+            "task_instruction"
+        )
         if task_instr:
-            context_parts.append(f"Original request: \"{task_instr}\"")
+            context_parts.append(f'Original request: "{task_instr}"')
         known_field_names = {f.name for f in self.required_fields}
-        collected = {k: v for k, v in self.collected_fields.items()
-                     if k in known_field_names and v}
+        collected = {k: v for k, v in self.collected_fields.items() if k in known_field_names and v}
         if collected:
-            context_parts.append("Already collected: " + ", ".join(f"{k}={v}" for k, v in collected.items()))
+            context_parts.append(
+                "Already collected: " + ", ".join(f"{k}={v}" for k, v in collected.items())
+            )
         context_block = "\n".join(context_parts) + "\n" if context_parts else ""
 
         prompt = f"""Extract field values from the user message AND infer related values from context.
@@ -974,16 +976,15 @@ Return JSON only."""
 
         response = await self.llm_client.chat_completion(
             messages=[{"role": "user", "content": prompt}],
-            config={"response_format": {"type": "json_object"}}
+            config={"response_format": {"type": "json_object"}},
         )
 
         # Parse JSON response
-        content = response.content if hasattr(response, 'content') else str(response)
+        content = response.content if hasattr(response, "content") else str(response)
         try:
             return json.loads(content)
         except json.JSONDecodeError:
             return {}
-
 
     # ===== Approval Parsing =====
 
@@ -1006,8 +1007,11 @@ Return JSON only."""
 
     def _get_missing_fields(self) -> List[str]:
         """Get list of missing required field names."""
-        return [f.name for f in self.required_fields
-                if f.required and f.name not in self.collected_fields]
+        return [
+            f.name
+            for f in self.required_fields
+            if f.required and f.name not in self.collected_fields
+        ]
 
     def _get_next_prompt(self) -> Optional[str]:
         """Get the next question to ask user."""
@@ -1029,7 +1033,7 @@ Return JSON only."""
             "missing_fields": missing,
             "next_prompt": self._get_next_prompt() if missing else None,
             "last_active": self.last_active.isoformat(),
-            "error_message": self.error_message
+            "error_message": self.error_message,
         }
 
     def is_completed(self) -> bool:
@@ -1074,9 +1078,9 @@ Return JSON only."""
         if self._streaming_enabled:
             try:
                 loop = asyncio.get_running_loop()
-                task = loop.create_task(self._stream_engine.emit_state_change(
-                    old_status.value, new_status.value
-                ))
+                task = loop.create_task(
+                    self._stream_engine.emit_state_change(old_status.value, new_status.value)
+                )
                 task.add_done_callback(_log_task_exception)
             except RuntimeError:
                 pass  # No running loop
@@ -1086,9 +1090,7 @@ Return JSON only."""
     # ===== Streaming Support =====
 
     async def stream(
-        self,
-        msg: Message = None,
-        mode: StreamMode = StreamMode.EVENTS
+        self, msg: Message = None, mode: StreamMode = StreamMode.EVENTS
     ) -> AsyncIterator[AgentEvent]:
         """
         Stream agent execution events.
@@ -1132,7 +1134,7 @@ Return JSON only."""
                             {
                                 "status": result.status.value,
                                 "raw_message": result.raw_message,
-                            }
+                            },
                         )
                     break
 
@@ -1149,7 +1151,7 @@ Return JSON only."""
                 "agent_id": self.agent_id,
                 "agent_type": self.__class__.__name__,
                 "status": self.status.value,
-            }
+            },
         )
 
         # Execute reply
@@ -1176,10 +1178,7 @@ Return JSON only."""
             await self._stream_engine.emit_message_chunk(chunk)
 
     async def emit_tool_call(
-        self,
-        tool_name: str,
-        tool_input: Dict[str, Any],
-        call_id: Optional[str] = None
+        self, tool_name: str, tool_input: Dict[str, Any], call_id: Optional[str] = None
     ) -> None:
         """
         Emit a tool call event during streaming.
@@ -1198,7 +1197,7 @@ Return JSON only."""
         result: Any,
         success: bool = True,
         error: Optional[str] = None,
-        call_id: Optional[str] = None
+        call_id: Optional[str] = None,
     ) -> None:
         """
         Emit a tool result event during streaming.
@@ -1211,16 +1210,9 @@ Return JSON only."""
             call_id: Optional call identifier
         """
         if self._streaming_enabled:
-            await self._stream_engine.emit_tool_result(
-                tool_name, result, success, error, call_id
-            )
+            await self._stream_engine.emit_tool_result(tool_name, result, success, error, call_id)
 
-    async def emit_progress(
-        self,
-        current: int,
-        total: int,
-        message: Optional[str] = None
-    ) -> None:
+    async def emit_progress(self, current: int, total: int, message: Optional[str] = None) -> None:
         """
         Emit a progress event during streaming.
 
@@ -1339,13 +1331,15 @@ Return JSON only."""
                         f"grace retry {retry}/{max_retries}"
                     )
                     messages.append(self._format_assistant_msg(response))
-                    messages.append({
-                        "role": "user",
-                        "content": (
-                            "You must call the `complete_task` tool with your final "
-                            "response in the `result` parameter to finish. Call it now."
-                        ),
-                    })
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": (
+                                "You must call the `complete_task` tool with your final "
+                                "response in the `result` parameter to finish. Call it now."
+                            ),
+                        }
+                    )
                     try:
                         response = await self.llm_client.chat_completion(
                             messages=messages,
@@ -1360,8 +1354,7 @@ Return JSON only."""
                         return self.make_result(
                             status=AgentStatus.ERROR,
                             raw_message=(
-                                "Internal error: failed to complete the task. "
-                                "Please try again."
+                                "Internal error: failed to complete the task. Please try again."
                             ),
                             metadata={
                                 "tool_trace": list(self._tool_trace),
@@ -1379,14 +1372,16 @@ Return JSON only."""
                         f"grace retries, LLM still did not call complete_task"
                     )
                     messages.append(self._format_assistant_msg(response))
-                    messages.append({
-                        "role": "user",
-                        "content": (
-                            "There was an internal issue processing your request. "
-                            "Generate a short, friendly apology to the user in "
-                            "their language, and suggest they try again later."
-                        ),
-                    })
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": (
+                                "There was an internal issue processing your request. "
+                                "Generate a short, friendly apology to the user in "
+                                "their language, and suggest they try again later."
+                            ),
+                        }
+                    )
                     try:
                         fallback_resp = await self.llm_client.chat_completion(
                             messages=messages,
@@ -1418,15 +1413,17 @@ Return JSON only."""
             f"[{self.__class__.__name__}:{self.name}] exhausted {self.max_turns} turns, "
             f"asking LLM to summarize partial results"
         )
-        messages.append({
-            "role": "user",
-            "content": (
-                "You have run out of allowed steps. Summarize whatever information "
-                "you have gathered so far and present it to the user. "
-                "If some tool calls failed, briefly note what didn't work. "
-                "Do NOT say you failed — give the user what you have."
-            ),
-        })
+        messages.append(
+            {
+                "role": "user",
+                "content": (
+                    "You have run out of allowed steps. Summarize whatever information "
+                    "you have gathered so far and present it to the user. "
+                    "If some tool calls failed, briefly note what didn't work. "
+                    "Do NOT say you failed — give the user what you have."
+                ),
+            }
+        )
         try:
             summary_resp = await self.llm_client.chat_completion(
                 messages=messages,
@@ -1463,16 +1460,20 @@ Return JSON only."""
             # Intercept complete_task — extract result and finish
             if tc.name == COMPLETE_TASK_TOOL_NAME:
                 try:
-                    args = tc.arguments if isinstance(tc.arguments, dict) else json.loads(tc.arguments)
+                    args = (
+                        tc.arguments if isinstance(tc.arguments, dict) else json.loads(tc.arguments)
+                    )
                 except (json.JSONDecodeError, TypeError):
                     args = {}
                 result_text = args.get("result", "")
                 if result_text:
-                    self._tool_trace.append({
-                        "tool": COMPLETE_TASK_TOOL_NAME,
-                        "status": "ok",
-                        "summary": result_text[:240],
-                    })
+                    self._tool_trace.append(
+                        {
+                            "tool": COMPLETE_TASK_TOOL_NAME,
+                            "status": "ok",
+                            "summary": result_text[:240],
+                        }
+                    )
                     logger.info(
                         f"[{self.__class__.__name__}:{self.name}] complete_task called "
                         f"({len(result_text)} chars)"
@@ -1488,19 +1489,19 @@ Return JSON only."""
                     )
                 else:
                     # Missing result — append error and continue
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tc.id,
-                        "content": 'Error: "result" argument is required for complete_task.',
-                    })
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "content": 'Error: "result" argument is required for complete_task.',
+                        }
+                    )
                     continue
 
             tool = self._find_tool(tc.name)
             if tool is None:
                 error_text = f"Error: Unknown tool '{tc.name}'"
-                self._tool_trace.append(
-                    {"tool": tc.name, "status": "error", "summary": error_text}
-                )
+                self._tool_trace.append({"tool": tc.name, "status": "error", "summary": error_text})
                 messages.append(
                     {
                         "role": "tool",
@@ -1536,9 +1537,7 @@ Return JSON only."""
 
             policy_decision = self._evaluate_tool_policy(tool, args)
             if policy_decision is not None and not policy_decision.allowed:
-                error_text = (
-                    f"Permission denied for tool '{tc.name}': {policy_decision.reason}"
-                )
+                error_text = f"Permission denied for tool '{tc.name}': {policy_decision.reason}"
                 self._tool_trace.append(
                     {"tool": tc.name, "status": "denied", "summary": error_text[:240]}
                 )
@@ -1562,7 +1561,9 @@ Return JSON only."""
                         preview = await tool.get_preview(args, self._build_tool_context())
                     except Exception as e:
                         logger.error(f"Preview generation failed for {tc.name}: {e}")
-                        preview = f"About to execute: {tc.name}({json.dumps(args, ensure_ascii=False)})"
+                        preview = (
+                            f"About to execute: {tc.name}({json.dumps(args, ensure_ascii=False)})"
+                        )
                 else:
                     preview = f"About to execute: {tc.name}({json.dumps(args, ensure_ascii=False)})"
                 if tool.risk_level == "destructive":
@@ -1644,13 +1645,17 @@ Return JSON only."""
         if not self.llm_client or not user_input.strip():
             return ApprovalResult.MODIFY
         try:
-            response = await self.llm_client.chat_completion(messages=[{
-                "role": "user",
-                "content": (
-                    f'The user was asked to approve an action. They replied: "{user_input}"\n'
-                    "Classify their intent as exactly one word: APPROVE, REJECT, or MODIFY."
-                ),
-            }])
+            response = await self.llm_client.chat_completion(
+                messages=[
+                    {
+                        "role": "user",
+                        "content": (
+                            f'The user was asked to approve an action. They replied: "{user_input}"\n'
+                            "Classify their intent as exactly one word: APPROVE, REJECT, or MODIFY."
+                        ),
+                    }
+                ]
+            )
             result = (response.content or "").strip().upper()
             if "APPROVE" in result:
                 return ApprovalResult.APPROVED
@@ -1729,10 +1734,18 @@ Return JSON only."""
             return True
         # Common question patterns in Chinese and English
         question_signals = [
-            "\u8bf7\u63d0\u4f9b", "\u8bf7\u544a\u8bc9", "\u8bf7\u95ee",
-            "\u80fd\u5426\u63d0\u4f9b", "\u9700\u8981\u4f60\u63d0\u4f9b",
-            "what is", "what's", "could you", "can you", "please provide",
-            "what email", "which email",
+            "\u8bf7\u63d0\u4f9b",
+            "\u8bf7\u544a\u8bc9",
+            "\u8bf7\u95ee",
+            "\u80fd\u5426\u63d0\u4f9b",
+            "\u9700\u8981\u4f60\u63d0\u4f9b",
+            "what is",
+            "what's",
+            "could you",
+            "can you",
+            "please provide",
+            "what email",
+            "which email",
         ]
         t_lower = t.lower()
         return any(s in t_lower for s in question_signals)

@@ -5,16 +5,17 @@ Supports text, image, audio, video, and tool call content blocks.
 """
 
 from dataclasses import dataclass, field
-from typing import Literal, List, Union, Optional
 from datetime import datetime
+from typing import List, Literal, Optional, Union
 from uuid import uuid4
 
-
 # ===== Content Blocks =====
+
 
 @dataclass
 class TextBlock:
     """Text content block"""
+
     text: str
     type: Literal["text"] = "text"
 
@@ -22,6 +23,7 @@ class TextBlock:
 @dataclass
 class ImageBlock:
     """Image content block"""
+
     source: dict  # {"type": "base64", "data": "..."} or {"type": "url", "url": "..."}
     type: Literal["image"] = "image"
 
@@ -29,6 +31,7 @@ class ImageBlock:
 @dataclass
 class AudioBlock:
     """Audio content block"""
+
     source: dict  # {"type": "base64", "data": "..."} or {"type": "url", "url": "..."}
     type: Literal["audio"] = "audio"
 
@@ -36,6 +39,7 @@ class AudioBlock:
 @dataclass
 class VideoBlock:
     """Video content block"""
+
     source: dict
     type: Literal["video"] = "video"
 
@@ -43,6 +47,7 @@ class VideoBlock:
 @dataclass
 class ToolUseBlock:
     """Tool call request block"""
+
     name: str
     input: dict
     id: str = ""
@@ -56,6 +61,7 @@ class ToolUseBlock:
 @dataclass
 class ToolResultBlock:
     """Tool call result block"""
+
     tool_use_id: str
     content: str
     is_error: bool = False
@@ -67,6 +73,7 @@ ContentBlock = Union[TextBlock, ImageBlock, AudioBlock, VideoBlock, ToolUseBlock
 
 
 # ===== Message =====
+
 
 @dataclass
 class Message:
@@ -89,6 +96,7 @@ class Message:
             role="user"
         )
     """
+
     name: str
     content: Union[str, List[ContentBlock]]
     role: Literal["user", "assistant", "system"]
@@ -131,8 +139,12 @@ class Message:
             blocks = self.content or []
 
         if block_type:
-            return [b for b in blocks if getattr(b, 'type', None) == block_type or
-                    (isinstance(b, dict) and b.get('type') == block_type)]
+            return [
+                b
+                for b in blocks
+                if getattr(b, "type", None) == block_type
+                or (isinstance(b, dict) and b.get("type") == block_type)
+            ]
 
         return blocks
 
@@ -146,7 +158,7 @@ class Message:
         if isinstance(self.content, list):
             content = []
             for block in self.content:
-                if hasattr(block, '__dict__'):
+                if hasattr(block, "__dict__"):
                     content.append({k: v for k, v in block.__dict__.items()})
                 else:
                     content.append(block)
@@ -157,7 +169,7 @@ class Message:
             "content": content,
             "role": self.role,
             "metadata": self.metadata,
-            "timestamp": self.timestamp
+            "timestamp": self.timestamp,
         }
 
     @classmethod
@@ -169,9 +181,11 @@ class Message:
             role=data["role"],
             metadata=data.get("metadata"),
             id=data.get("id", uuid4().hex[:12]),
-            timestamp=data.get("timestamp", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            timestamp=data.get("timestamp", datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
         )
 
     def __repr__(self) -> str:
-        content_preview = self.get_text()[:50] + "..." if len(self.get_text()) > 50 else self.get_text()
+        content_preview = (
+            self.get_text()[:50] + "..." if len(self.get_text()) > 50 else self.get_text()
+        )
         return f"Message(name='{self.name}', role='{self.role}', content='{content_preview}')"

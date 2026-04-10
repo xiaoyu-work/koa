@@ -8,17 +8,23 @@ This module provides:
 """
 
 import asyncio
+import logging
+import uuid
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import (
-    Dict, Any, List, Optional, Callable, Awaitable,
-    AsyncIterator, Set, TypeVar, Generic
+    Any,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Set,
 )
-from collections import deque
-import uuid
-import logging
 
-from .models import StreamMode, EventType, AgentEvent
+from .models import AgentEvent, EventType, StreamMode
 
 logger = logging.getLogger(__name__)
 
@@ -119,20 +125,14 @@ class EventEmitter:
                 try:
                     await handler(event)
                 except Exception as e:
-                    logger.warning(
-                        f"Event handler error for {event.type}: {e}",
-                        exc_info=True
-                    )
+                    logger.warning(f"Event handler error for {event.type}: {e}", exc_info=True)
 
         # Call global handlers
         for handler in self._global_handlers:
             try:
                 await handler(event)
             except Exception as e:
-                logger.warning(
-                    f"Global event handler error: {e}",
-                    exc_info=True
-                )
+                logger.warning(f"Global event handler error: {e}", exc_info=True)
 
     def clear(self) -> None:
         """Remove all handlers"""
@@ -165,7 +165,7 @@ class StreamEngine:
         self,
         buffer_size: int = 1000,
         agent_id: Optional[str] = None,
-        agent_type: Optional[str] = None
+        agent_type: Optional[str] = None,
     ):
         self.buffer = StreamBuffer(max_size=buffer_size)
         self.emitter = EventEmitter()
@@ -177,12 +177,7 @@ class StreamEngine:
         self._stream_queues: Dict[str, asyncio.Queue] = {}
         self._is_closed = False
 
-    async def emit(
-        self,
-        event_type: EventType,
-        data: Dict[str, Any],
-        **kwargs
-    ) -> AgentEvent:
+    async def emit(self, event_type: EventType, data: Dict[str, Any], **kwargs) -> AgentEvent:
         """
         Emit an event.
 
@@ -213,33 +208,18 @@ class StreamEngine:
 
         return event
 
-    async def emit_state_change(
-        self,
-        old_status: str,
-        new_status: str
-    ) -> AgentEvent:
+    async def emit_state_change(self, old_status: str, new_status: str) -> AgentEvent:
         """Emit a state change event"""
         return await self.emit(
-            EventType.STATE_CHANGE,
-            {"old_status": old_status, "new_status": new_status}
+            EventType.STATE_CHANGE, {"old_status": old_status, "new_status": new_status}
         )
 
-    async def emit_message_chunk(
-        self,
-        chunk: str,
-        message_id: Optional[str] = None
-    ) -> AgentEvent:
+    async def emit_message_chunk(self, chunk: str, message_id: Optional[str] = None) -> AgentEvent:
         """Emit a message chunk event"""
-        return await self.emit(
-            EventType.MESSAGE_CHUNK,
-            {"chunk": chunk, "message_id": message_id}
-        )
+        return await self.emit(EventType.MESSAGE_CHUNK, {"chunk": chunk, "message_id": message_id})
 
     async def emit_tool_call(
-        self,
-        tool_name: str,
-        tool_input: Dict[str, Any],
-        call_id: Optional[str] = None
+        self, tool_name: str, tool_input: Dict[str, Any], call_id: Optional[str] = None
     ) -> AgentEvent:
         """Emit a tool call start event"""
         return await self.emit(
@@ -247,8 +227,8 @@ class StreamEngine:
             {
                 "tool_name": tool_name,
                 "tool_input": tool_input,
-                "call_id": call_id or uuid.uuid4().hex[:8]
-            }
+                "call_id": call_id or uuid.uuid4().hex[:8],
+            },
         )
 
     async def emit_tool_result(
@@ -257,7 +237,7 @@ class StreamEngine:
         result: Any,
         success: bool = True,
         error: Optional[str] = None,
-        call_id: Optional[str] = None
+        call_id: Optional[str] = None,
     ) -> AgentEvent:
         """Emit a tool result event"""
         return await self.emit(
@@ -267,48 +247,30 @@ class StreamEngine:
                 "result": result,
                 "success": success,
                 "error": error,
-                "call_id": call_id
-            }
+                "call_id": call_id,
+            },
         )
 
     async def emit_progress(
-        self,
-        current: int,
-        total: int,
-        message: Optional[str] = None
+        self, current: int, total: int, message: Optional[str] = None
     ) -> AgentEvent:
         """Emit a progress update event"""
         percentage = (current / total) * 100 if total > 0 else 0
         return await self.emit(
             EventType.PROGRESS_UPDATE,
-            {
-                "current": current,
-                "total": total,
-                "percentage": percentage,
-                "message": message
-            }
+            {"current": current, "total": total, "percentage": percentage, "message": message},
         )
 
     async def emit_error(
-        self,
-        error: str,
-        error_type: Optional[str] = None,
-        recoverable: bool = False
+        self, error: str, error_type: Optional[str] = None, recoverable: bool = False
     ) -> AgentEvent:
         """Emit an error event"""
         return await self.emit(
-            EventType.ERROR,
-            {
-                "error": error,
-                "error_type": error_type,
-                "recoverable": recoverable
-            }
+            EventType.ERROR, {"error": error, "error_type": error_type, "recoverable": recoverable}
         )
 
     async def stream(
-        self,
-        mode: StreamMode = StreamMode.EVENTS,
-        include_history: bool = False
+        self, mode: StreamMode = StreamMode.EVENTS, include_history: bool = False
     ) -> AsyncIterator[AgentEvent]:
         """
         Create an async iterator for streaming events.
@@ -348,11 +310,7 @@ class StreamEngine:
             self._active_streams.discard(stream_id)
             del self._stream_queues[stream_id]
 
-    def _should_yield_event(
-        self,
-        event: AgentEvent,
-        mode: StreamMode
-    ) -> bool:
+    def _should_yield_event(self, event: AgentEvent, mode: StreamMode) -> bool:
         """Determine if an event should be yielded based on mode"""
         if mode == StreamMode.EVENTS:
             # Yield all events
@@ -387,9 +345,7 @@ class StreamEngine:
         self._is_closed = True
 
     def get_history(
-        self,
-        event_type: Optional[EventType] = None,
-        since_sequence: Optional[int] = None
+        self, event_type: Optional[EventType] = None, since_sequence: Optional[int] = None
     ) -> List[AgentEvent]:
         """Get buffered event history"""
         if since_sequence is not None:
@@ -418,7 +374,7 @@ class StreamContext:
         self,
         engine: StreamEngine,
         context_type: str = "execution",
-        context_id: Optional[str] = None
+        context_id: Optional[str] = None,
     ):
         self.engine = engine
         self.context_type = context_type
@@ -432,8 +388,8 @@ class StreamContext:
             {
                 "context_type": self.context_type,
                 "context_id": self.context_id,
-                "start_time": self._start_time.isoformat()
-            }
+                "start_time": self._start_time.isoformat(),
+            },
         )
         return self
 
@@ -443,9 +399,7 @@ class StreamContext:
 
         if exc_type is not None:
             await self.engine.emit_error(
-                str(exc_val),
-                error_type=exc_type.__name__,
-                recoverable=False
+                str(exc_val), error_type=exc_type.__name__, recoverable=False
             )
 
         await self.engine.emit(
@@ -455,15 +409,12 @@ class StreamContext:
                 "context_id": self.context_id,
                 "end_time": end_time.isoformat(),
                 "duration_seconds": duration,
-                "success": exc_type is None
-            }
+                "success": exc_type is None,
+            },
         )
 
     async def emit_progress(
-        self,
-        current: int,
-        total: int,
-        message: Optional[str] = None
+        self, current: int, total: int, message: Optional[str] = None
     ) -> AgentEvent:
         """Emit progress within this context"""
         return await self.engine.emit_progress(current, total, message)

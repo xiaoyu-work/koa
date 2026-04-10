@@ -1,7 +1,7 @@
 """Google OAuth token helper for ReAct tools and agents."""
 
-import os
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
 
@@ -54,6 +54,7 @@ async def get_google_token(context: AgentToolContext) -> Tuple[Optional[str], Op
     if token_expiry_str:
         try:
             from dateutil import parser
+
             token_expiry = parser.parse(token_expiry_str)
             if token_expiry <= datetime.now(timezone.utc) + REFRESH_BUFFER:
                 needs_refresh = True
@@ -62,15 +63,18 @@ async def get_google_token(context: AgentToolContext) -> Tuple[Optional[str], Op
 
     if needs_refresh:
         if not refresh_token:
-            return None, "Google token expired and no refresh token. Please reconnect Google in Settings."
+            return (
+                None,
+                "Google token expired and no refresh token. Please reconnect Google in Settings.",
+            )
 
         new_token, error = await _refresh_token(refresh_token)
         if error:
             return None, error
 
         # Update credential store
-        creds["access_token"] = new_token["access_token"]
-        creds["token_expiry"] = new_token["token_expiry"]
+        creds["access_token"] = new_token["access_token"]  # type: ignore[index]
+        creds["token_expiry"] = new_token["token_expiry"]  # type: ignore[index]
         try:
             for svc in ("gmail", "google_calendar", "google_tasks", "google_drive"):
                 await context.credentials.save(
@@ -82,7 +86,7 @@ async def get_google_token(context: AgentToolContext) -> Tuple[Optional[str], Op
         except Exception as e:
             logger.warning(f"Failed to persist refreshed token: {e}")
 
-        return new_token["access_token"], None
+        return new_token["access_token"], None  # type: ignore[index]
 
     return access_token, None
 
@@ -129,6 +133,7 @@ async def get_google_token_for_agent(tenant_id: str) -> Tuple[Optional[str], Opt
     if token_expiry_str:
         try:
             from dateutil import parser
+
             token_expiry = parser.parse(token_expiry_str)
             if token_expiry <= datetime.now(timezone.utc) + REFRESH_BUFFER:
                 needs_refresh = True
@@ -137,7 +142,10 @@ async def get_google_token_for_agent(tenant_id: str) -> Tuple[Optional[str], Opt
 
     if needs_refresh:
         if not refresh_token:
-            return None, "Google token expired and no refresh token. Please reconnect Google in Settings."
+            return (
+                None,
+                "Google token expired and no refresh token. Please reconnect Google in Settings.",
+            )
 
         new_token, error = await _refresh_token(refresh_token)
         if error:
@@ -157,7 +165,7 @@ async def get_google_token_for_agent(tenant_id: str) -> Tuple[Optional[str], Opt
         except Exception as e:
             logger.warning(f"Failed to persist refreshed token: {e}")
 
-        return new_token["access_token"], None
+        return new_token["access_token"], None  # type: ignore[index]
 
     return access_token, None
 

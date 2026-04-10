@@ -6,9 +6,10 @@ Replaces GoogleDocsCreateAgent + GoogleSheetsWriteAgent + 3 standalone tools
 that has its own mini ReAct loop.
 """
 
+import builtins
 import json
 import logging
-from typing import Annotated, Any, Dict, List, Optional
+from typing import Annotated, Optional
 
 from koa import valet
 from koa.constants import SERVICE_GMAIL
@@ -25,15 +26,18 @@ logger = logging.getLogger(__name__)
 # Auth helper
 # =============================================================================
 
+
 async def _get_token(context: AgentToolContext):
     """Get Google OAuth token using the agent-style helper."""
     from .auth import get_google_token_for_agent
+
     return await get_google_token_for_agent(context.tenant_id)
 
 
 # =============================================================================
 # Tool executors
 # =============================================================================
+
 
 @tool
 async def google_drive_search(
@@ -53,7 +57,11 @@ async def google_drive_search(
         files = await client.drive_search(query=query, file_type=file_type, page_size=page_size)
 
         if not files:
-            return f'No files found in Google Drive for "{query}".' if query else "No files found in Google Drive."
+            return (
+                f'No files found in Google Drive for "{query}".'
+                if query
+                else "No files found in Google Drive."
+            )
 
         items = []
         for i, f in enumerate(files, 1):
@@ -62,9 +70,15 @@ async def google_drive_search(
             mime = f.get("mimeType", "")
             modified = f.get("modifiedTime", "")[:10]
             file_type_label = client.format_mime_type(mime)
-            items.append(f'{i}. "{name}" (id: {file_id}, type: {file_type_label}, modified: {modified})')
+            items.append(
+                f'{i}. "{name}" (id: {file_id}, type: {file_type_label}, modified: {modified})'
+            )
 
-        header = f'Found {len(files)} files for "{query}":' if query else f"Google Drive files ({len(files)}):"
+        header = (
+            f'Found {len(files)} files for "{query}":'
+            if query
+            else f"Google Drive files ({len(files)}):"
+        )
         return header + "\n" + "\n".join(items)
     except Exception as e:
         logger.error(f"Google Drive search failed: {e}", exc_info=True)
@@ -143,8 +157,9 @@ async def google_sheets_read(
         lines = []
         for i, row in enumerate(values):
             cells = []
-            for j in range(col_count):
-                val = str(row[j]) if j < len(row) else ""
+            for j in builtins.range(col_count):
+                cell_value = row[j] if j < len(row) else ""
+                val = builtins.str(cell_value)
                 cells.append(val.ljust(col_widths[j]))
             lines.append("| " + " | ".join(cells) + " |")
             if i == 0:
@@ -162,6 +177,7 @@ async def google_sheets_read(
 # Approval preview functions
 # =============================================================================
 
+
 async def _docs_create_preview(args: dict, context) -> str:
     title = args.get("title", "Untitled")
     content = args.get("content", "")
@@ -173,7 +189,9 @@ async def _sheets_write_preview(args: dict, context) -> str:
     name = args.get("spreadsheet_name", "")
     range_ = args.get("range", "")
     values = args.get("values", "[]")
-    preview = values[:300] + "..." if isinstance(values, str) and len(values) > 300 else str(values)[:300]
+    preview = (
+        values[:300] + "..." if isinstance(values, str) and len(values) > 300 else str(values)[:300]
+    )
     return f"Write to Google Sheet?\n\nSpreadsheet: {name}\nRange: {range_}\nData:\n{preview}"
 
 
@@ -233,7 +251,9 @@ async def google_sheets_write(
         client = GoogleWorkspaceClient(token)
 
         # Resolve spreadsheet ID by name
-        files = await client.drive_search(query=spreadsheet_name, file_type="spreadsheet", page_size=3)
+        files = await client.drive_search(
+            query=spreadsheet_name, file_type="spreadsheet", page_size=3
+        )
         if not files:
             return f'Couldn\'t find a spreadsheet matching "{spreadsheet_name}".'
 
@@ -241,7 +261,9 @@ async def google_sheets_write(
         resolved_name = files[0].get("name", spreadsheet_name)
 
         result = await client.sheets_update_values(
-            spreadsheet_id=spreadsheet_id, range_=range_, values=values,
+            spreadsheet_id=spreadsheet_id,
+            range_=range_,
+            values=values,
         )
         updated_range = result.get("updatedRange", range_)
         updated_cells = result.get("updatedCells", len(values))
@@ -255,6 +277,7 @@ async def google_sheets_write(
 # =============================================================================
 # Agent
 # =============================================================================
+
 
 @valet(domain="productivity", requires_service=[SERVICE_GMAIL])
 class GoogleWorkspaceAgent(StandardAgent):

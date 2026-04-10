@@ -6,9 +6,9 @@ Providers receive a credentials dict with API key and configuration.
 Unlike OAuth-based providers, image providers use static API keys (no token refresh needed).
 """
 
+import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
-import logging
 
 logger = logging.getLogger(__name__)
 

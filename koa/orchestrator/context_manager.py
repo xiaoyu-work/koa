@@ -7,7 +7,7 @@ Defense 3 -- Force trim to safe range (after a context overflow error).
 """
 
 import logging
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from .constants import (
     IMAGE_TOKEN_ESTIMATE,
@@ -69,6 +69,7 @@ class ContextManager:
                         total += len(args) // JSON_CHARS_PER_TOKEN
                     elif isinstance(args, dict):
                         import json
+
                         total += len(json.dumps(args)) // JSON_CHARS_PER_TOKEN
         return total
 
@@ -82,7 +83,9 @@ class ContextManager:
         sample_len = min(len(text), JSON_DETECTION_SAMPLE_SIZE)
         special = sum(1 for c in text[:sample_len] if c in '{}[]":,')
         ratio = special / sample_len if text else 0
-        chars_per_token = JSON_CHARS_PER_TOKEN if ratio > JSON_DETECTION_RATIO else TEXT_CHARS_PER_TOKEN
+        chars_per_token = (
+            JSON_CHARS_PER_TOKEN if ratio > JSON_DETECTION_RATIO else TEXT_CHARS_PER_TOKEN
+        )
         return len(text) // chars_per_token
 
     # ------------------------------------------------------------------
@@ -203,10 +206,12 @@ class ContextManager:
     ) -> List[Dict[str, Any]]:
         """Rebuild the message list with a summary replacing old messages."""
         result = list(system_msgs)
-        result.append({
-            "role": "user",
-            "content": f"[Conversation summary of earlier messages]\n{summary_text}",
-        })
+        result.append(
+            {
+                "role": "user",
+                "content": f"[Conversation summary of earlier messages]\n{summary_text}",
+            }
+        )
         result.extend(recent_msgs)
         return result
 

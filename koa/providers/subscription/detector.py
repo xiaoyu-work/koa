@@ -11,9 +11,8 @@ This keeps LLM costs low — 90%+ of emails skip LLM entirely.
 import json
 import logging
 import re
-from dataclasses import dataclass, field
-from datetime import date
-from typing import Any, Dict, List, Optional
+from dataclasses import dataclass
+from typing import Any, Dict, Optional
 
 from .known_services import KNOWN_SERVICES, SUBSCRIPTION_KEYWORDS
 
@@ -45,6 +44,7 @@ Respond with ONLY this JSON (no markdown, no extra text):
 @dataclass
 class SubscriptionInfo:
     """Detected subscription data."""
+
     service_name: str
     category: str = "other"
     amount: Optional[float] = None
@@ -151,13 +151,18 @@ class SubscriptionDetector:
             return None
 
         prompt = _EXTRACTION_PROMPT.format(
-            sender=sender, subject=subject, snippet=snippet,
+            sender=sender,
+            subject=subject,
+            snippet=snippet,
         )
 
         try:
             response = await self._llm_client.chat_completion(
                 messages=[
-                    {"role": "system", "content": "You extract subscription data from emails. Respond with JSON only."},
+                    {
+                        "role": "system",
+                        "content": "You extract subscription data from emails. Respond with JSON only.",
+                    },
                     {"role": "user", "content": prompt},
                 ],
             )

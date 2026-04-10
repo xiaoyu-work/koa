@@ -33,6 +33,7 @@ BRIEFING_INSTRUCTION = (
 # Helpers
 # =============================================================================
 
+
 def _get_cron_service(context: AgentToolContext):
     """Get CronService from context hints."""
     if context.context_hints:
@@ -81,6 +82,7 @@ def _format_relative(ms) -> str:
     if ms is None:
         return "not scheduled"
     import time as _time
+
     now = int(_time.time() * 1000)
     diff_s = (ms - now) / 1000
     if diff_s < 0:
@@ -97,6 +99,7 @@ def _format_relative(ms) -> str:
 # =============================================================================
 # Profile birthday helper
 # =============================================================================
+
 
 def _check_profile_birthdays(profile: dict, now: datetime, sections: list):
     """Check user profile relationships for upcoming birthdays within 7 days."""
@@ -153,6 +156,7 @@ def _check_profile_birthdays(profile: dict, now: datetime, sections: list):
 # get_briefing
 # =============================================================================
 
+
 @tool
 async def get_briefing(*, context: AgentToolContext) -> str:
     """Generate a daily briefing with calendar events, pending tasks, important dates, and unread emails."""
@@ -162,8 +166,9 @@ async def get_briefing(*, context: AgentToolContext) -> str:
 
     # 1. Calendar events today
     try:
-        from koa.providers.calendar.resolver import CalendarAccountResolver
         from koa.providers.calendar.factory import CalendarProviderFactory
+        from koa.providers.calendar.resolver import CalendarAccountResolver
+
         account = await CalendarAccountResolver.resolve_account(tenant_id, "primary")
         if account:
             cal = CalendarProviderFactory.create_provider(account)
@@ -184,8 +189,9 @@ async def get_briefing(*, context: AgentToolContext) -> str:
 
     # 2. Pending todos
     try:
-        from koa.providers.todo.resolver import TodoAccountResolver
         from koa.providers.todo.factory import TodoProviderFactory
+        from koa.providers.todo.resolver import TodoAccountResolver
+
         todo_account = await TodoAccountResolver.resolve_account(tenant_id, "primary")
         if todo_account:
             todo = TodoProviderFactory.create_provider(todo_account)
@@ -206,6 +212,7 @@ async def get_briefing(*, context: AgentToolContext) -> str:
     if db:
         try:
             from ..digest.important_dates_repo import ImportantDatesRepository
+
             repo = ImportantDatesRepository(db)
             dates = await repo.get_important_dates(context.tenant_id, days_ahead=7)
             if dates:
@@ -229,8 +236,9 @@ async def get_briefing(*, context: AgentToolContext) -> str:
 
     # 4. Unread emails
     try:
-        from koa.providers.email.resolver import EmailAccountResolver
         from koa.providers.email.factory import EmailProviderFactory
+        from koa.providers.email.resolver import EmailAccountResolver
+
         email_account = await EmailAccountResolver.resolve_account(tenant_id, "primary")
         if email_account:
             email = EmailProviderFactory.create_provider(email_account)
@@ -239,7 +247,9 @@ async def get_briefing(*, context: AgentToolContext) -> str:
                 if emails.get("success") and emails.get("data"):
                     lines = ["## Unread Emails"]
                     for e in emails["data"]:
-                        lines.append(f"- {e.get('sender', 'Unknown')}: {e.get('subject', 'No subject')}")
+                        lines.append(
+                            f"- {e.get('sender', 'Unknown')}: {e.get('subject', 'No subject')}"
+                        )
                     sections.append("\n".join(lines))
     except Exception as exc:
         logger.debug("Briefing: email section failed: %s", exc)
@@ -262,11 +272,18 @@ async def get_briefing(*, context: AgentToolContext) -> str:
 # setup_daily_briefing
 # =============================================================================
 
+
 @tool
 async def setup_daily_briefing(
-    schedule_time: Annotated[str, "Time for the daily briefing in HH:MM 24-hour format (e.g. '08:00')."] = "08:00",
-    tz: Annotated[str, "IANA timezone for scheduling (e.g. 'America/New_York'). Leave empty for server default."] = "",
-    *, context: AgentToolContext,
+    schedule_time: Annotated[
+        str, "Time for the daily briefing in HH:MM 24-hour format (e.g. '08:00')."
+    ] = "08:00",
+    tz: Annotated[
+        str,
+        "IANA timezone for scheduling (e.g. 'America/New_York'). Leave empty for server default.",
+    ] = "",
+    *,
+    context: AgentToolContext,
 ) -> str:
     """Set up or update a recurring daily briefing delivered each morning at the specified time."""
     cron_service = _get_cron_service(context)
@@ -284,14 +301,14 @@ async def setup_daily_briefing(
         return f"Invalid time format: '{schedule_time}'. Please use HH:MM 24-hour format (e.g. '08:00')."
 
     from koa.triggers.cron.models import (
-        CronScheduleSpec,
-        SessionTarget,
-        WakeMode,
         AgentTurnPayload,
-        DeliveryConfig,
-        DeliveryMode,
         CronJobCreate,
         CronJobPatch,
+        CronScheduleSpec,
+        DeliveryConfig,
+        DeliveryMode,
+        SessionTarget,
+        WakeMode,
     )
 
     cron_expr = f"{minute} {hour} * * *"
@@ -353,10 +370,14 @@ async def setup_daily_briefing(
 # manage_briefing
 # =============================================================================
 
+
 @tool
 async def manage_briefing(
-    action: Annotated[str, "Action to perform on the daily briefing: 'status', 'disable', 'enable', or 'delete'."],
-    *, context: AgentToolContext,
+    action: Annotated[
+        str, "Action to perform on the daily briefing: 'status', 'disable', 'enable', or 'delete'."
+    ],
+    *,
+    context: AgentToolContext,
 ) -> str:
     """Manage the daily briefing cron job — check status, enable, disable, or delete it."""
     cron_service = _get_cron_service(context)
@@ -387,6 +408,7 @@ async def manage_briefing(
         if not job.enabled:
             return "Daily briefing is already disabled."
         from koa.triggers.cron.models import CronJobPatch
+
         try:
             await cron_service.update(job.id, CronJobPatch(enabled=False))
             return "Daily briefing has been disabled. Use action 'enable' to re-enable it."
@@ -397,6 +419,7 @@ async def manage_briefing(
         if job.enabled:
             return "Daily briefing is already enabled."
         from koa.triggers.cron.models import CronJobPatch
+
         try:
             updated = await cron_service.update(job.id, CronJobPatch(enabled=True))
             return (

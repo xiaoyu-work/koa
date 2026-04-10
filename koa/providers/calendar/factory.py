@@ -5,7 +5,7 @@ Registry pattern for managing multiple calendar providers (Google Calendar, Outl
 """
 
 import logging
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from .base import BaseCalendarProvider
 
@@ -56,7 +56,9 @@ class CalendarProviderFactory:
             return None
 
         provider_class = cls._providers[provider_name]
-        logger.info(f"Creating {provider_class.__name__} for account {credentials.get('account_name')}")
+        logger.info(
+            f"Creating {provider_class.__name__} for account {credentials.get('account_name')}"
+        )
         return provider_class(credentials, on_token_refreshed)
 
     @classmethod
@@ -68,6 +70,7 @@ class CalendarProviderFactory:
 def _register_providers():
     """Auto-register available calendar providers."""
     from .google import GoogleCalendarProvider
+
     CalendarProviderFactory.register_provider("google", GoogleCalendarProvider)
 
 

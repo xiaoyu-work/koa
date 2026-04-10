@@ -26,9 +26,7 @@ class ProfileRepository(Repository):
         val = row["profile"]
         return json.loads(val) if isinstance(val, str) else val
 
-    async def get_profile_section(
-        self, tenant_id: str, section: str
-    ) -> Optional[Any]:
+    async def get_profile_section(self, tenant_id: str, section: str) -> Optional[Any]:
         """Get a specific section (e.g. 'identity', 'work') of the profile."""
         val = await self.db.fetchval(
             "SELECT profile->$2 FROM tenant_profiles WHERE tenant_id = $1",
@@ -39,9 +37,7 @@ class ProfileRepository(Repository):
             return None
         return json.loads(val) if isinstance(val, str) else val
 
-    async def upsert_profile(
-        self, tenant_id: str, profile: Dict[str, Any]
-    ) -> None:
+    async def upsert_profile(self, tenant_id: str, profile: Dict[str, Any]) -> None:
         """Insert or update the merged profile for a tenant."""
         now = datetime.now(timezone.utc)
         await self.db.execute(
@@ -80,9 +76,7 @@ class ProfileRepository(Repository):
             json.dumps(raw_profile),
         )
 
-    async def get_extractions(
-        self, tenant_id: str
-    ) -> List[Dict[str, Any]]:
+    async def get_extractions(self, tenant_id: str) -> List[Dict[str, Any]]:
         """Get all raw extractions for a tenant, ordered by time."""
         rows = await self.db.fetch(
             """
@@ -96,9 +90,13 @@ class ProfileRepository(Repository):
         results = []
         for row in rows:
             val = row["raw_profile"]
-            results.append({
-                "email_account": row["email_account"],
-                "raw_profile": json.loads(val) if isinstance(val, str) else val,
-                "extracted_at": row["extracted_at"].isoformat() if row["extracted_at"] else None,
-            })
+            results.append(
+                {
+                    "email_account": row["email_account"],
+                    "raw_profile": json.loads(val) if isinstance(val, str) else val,
+                    "extracted_at": row["extracted_at"].isoformat()
+                    if row["extracted_at"]
+                    else None,
+                }
+            )
         return results

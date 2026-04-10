@@ -17,7 +17,6 @@ from .models import (
     MCPResource,
     MCPServerConfig,
     MCPTool,
-    MCPTransportType,
 )
 
 logger = logging.getLogger(__name__)
@@ -71,10 +70,8 @@ class MCPSDKClient(MCPClient):
         self._exit_stack = AsyncExitStack()
         await self._exit_stack.__aenter__()
 
-        read_stream, write_stream = await self._exit_stack.enter_async_context(
-            stdio_client(params)
-        )
-        self._session = await self._exit_stack.enter_async_context(
+        read_stream, write_stream = await self._exit_stack.enter_async_context(stdio_client(params))
+        self._session = await self._exit_stack.enter_async_context(  # type: ignore[func-returns-value]
             ClientSession(read_stream, write_stream)
         )
         await self._session.initialize()
@@ -94,7 +91,7 @@ class MCPSDKClient(MCPClient):
                 timeout=self.config.timeout,
             )
         )
-        self._session = await self._exit_stack.enter_async_context(
+        self._session = await self._exit_stack.enter_async_context(  # type: ignore[func-returns-value]
             ClientSession(read_stream, write_stream)
         )
         await self._session.initialize()
@@ -113,14 +110,14 @@ class MCPSDKClient(MCPClient):
         self._exit_stack = AsyncExitStack()
         await self._exit_stack.__aenter__()
 
-        read_stream, write_stream = await self._exit_stack.enter_async_context(
+        read_stream, write_stream = await self._exit_stack.enter_async_context(  # type: ignore[misc]
             streamablehttp_client(
                 url=self.config.url,
                 headers=self.config.headers or None,
                 timeout=self.config.timeout,
             )
         )
-        self._session = await self._exit_stack.enter_async_context(
+        self._session = await self._exit_stack.enter_async_context(  # type: ignore[func-returns-value]
             ClientSession(read_stream, write_stream)
         )
         await self._session.initialize()
@@ -168,7 +165,11 @@ class MCPSDKClient(MCPClient):
                 name=p.name,
                 description=getattr(p, "description", None),
                 arguments=[
-                    {"name": a.name, "description": getattr(a, "description", None), "required": getattr(a, "required", False)}
+                    {
+                        "name": a.name,
+                        "description": getattr(a, "description", None),
+                        "required": getattr(a, "required", False),
+                    }
                     for a in (p.arguments or [])
                 ],
                 server_name=self.config.name,
@@ -202,6 +203,7 @@ class MCPSDKClient(MCPClient):
         if not self._connected:
             raise ConnectionError("Not connected to MCP server")
         from pydantic import AnyUrl
+
         result = await self._session.read_resource(AnyUrl(uri))
         parts = []
         for block in result.contents:

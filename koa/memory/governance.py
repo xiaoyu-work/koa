@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import re
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
-
 
 _TRANSIENT_RE = re.compile(
     r"^(hi|hello|hey|thanks|thank you|ok|okay|cool|great|sure|yes|no|bye)[!. ]*$",
@@ -173,7 +172,10 @@ class MemoryGovernance:
             return MemoryWriteDecision(False, "missing user or assistant text", ["empty"])
         if len(user_text) <= 48 and _TRANSIENT_RE.match(user_text):
             return MemoryWriteDecision(False, "transient conversational turn", ["transient"])
-        if assistant_text.lower().startswith("error:") or "something went wrong" in assistant_text.lower():
+        if (
+            assistant_text.lower().startswith("error:")
+            or "something went wrong" in assistant_text.lower()
+        ):
             return MemoryWriteDecision(False, "assistant error response", ["error"])
 
         lowered = user_text.lower()

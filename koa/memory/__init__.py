@@ -47,21 +47,19 @@ Example YAML:
         port: 6333
 """
 
+from .governance import MemoryGovernance, MemoryWriteDecision
+from .manager import (
+    MemoryManager,
+    MemoryMixin,
+    configure_memory,
+    get_memory_manager,
+)
 from .models import (
     MemoryConfig,
     RecallResult,
     StoreResult,
 )
-
-from .manager import (
-    MemoryManager,
-    MemoryMixin,
-    get_memory_manager,
-    configure_memory,
-)
-
 from .momex import MomexMemory
-from .governance import MemoryGovernance, MemoryWriteDecision
 from .session_memory import SessionMemoryManager, SessionWorkingMemory
 from .true_memory import (
     extract_true_memory_proposals,

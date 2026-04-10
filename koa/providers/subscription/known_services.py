@@ -30,7 +30,6 @@ KNOWN_SERVICES: Dict[str, ServiceInfo] = {
     "youtube.com": {"name": "YouTube Premium", "category": "streaming"},
     "sling.com": {"name": "Sling TV", "category": "streaming"},
     "fubo.tv": {"name": "FuboTV", "category": "streaming"},
-
     # ── Cloud / Storage ──
     "apple.com": {"name": "Apple", "category": "cloud"},
     "icloud.com": {"name": "iCloud", "category": "cloud"},
@@ -39,7 +38,6 @@ KNOWN_SERVICES: Dict[str, ServiceInfo] = {
     "onedrive.com": {"name": "OneDrive", "category": "cloud"},
     "box.com": {"name": "Box", "category": "cloud"},
     "pcloud.com": {"name": "pCloud", "category": "cloud"},
-
     # ── Productivity / Office ──
     "microsoft.com": {"name": "Microsoft 365", "category": "productivity"},
     "office.com": {"name": "Microsoft 365", "category": "productivity"},
@@ -55,7 +53,6 @@ KNOWN_SERVICES: Dict[str, ServiceInfo] = {
     "slack.com": {"name": "Slack", "category": "productivity"},
     "zoom.us": {"name": "Zoom", "category": "productivity"},
     "zoom.com": {"name": "Zoom", "category": "productivity"},
-
     # ── SaaS / Tools ──
     "adobe.com": {"name": "Adobe Creative Cloud", "category": "saas"},
     "figma.com": {"name": "Figma", "category": "saas"},
@@ -67,7 +64,6 @@ KNOWN_SERVICES: Dict[str, ServiceInfo] = {
     "lastpass.com": {"name": "LastPass", "category": "saas"},
     "bitwarden.com": {"name": "Bitwarden", "category": "saas"},
     "dashlane.com": {"name": "Dashlane", "category": "saas"},
-
     # ── Developer Tools ──
     "github.com": {"name": "GitHub", "category": "developer"},
     "gitlab.com": {"name": "GitLab", "category": "developer"},
@@ -81,7 +77,6 @@ KNOWN_SERVICES: Dict[str, ServiceInfo] = {
     "railway.app": {"name": "Railway", "category": "developer"},
     "supabase.com": {"name": "Supabase", "category": "developer"},
     "mongodb.com": {"name": "MongoDB Atlas", "category": "developer"},
-
     # ── Telecom / Internet ──
     "t-mobile.com": {"name": "T-Mobile", "category": "telecom"},
     "verizon.com": {"name": "Verizon", "category": "telecom"},
@@ -98,7 +93,6 @@ KNOWN_SERVICES: Dict[str, ServiceInfo] = {
     "cox.com": {"name": "Cox", "category": "telecom"},
     "frontier.com": {"name": "Frontier", "category": "telecom"},
     "centurylink.com": {"name": "CenturyLink", "category": "telecom"},
-
     # ── VPN / Security ──
     "nordvpn.com": {"name": "NordVPN", "category": "vpn"},
     "expressvpn.com": {"name": "ExpressVPN", "category": "vpn"},
@@ -108,7 +102,6 @@ KNOWN_SERVICES: Dict[str, ServiceInfo] = {
     "tunnelbear.com": {"name": "TunnelBear", "category": "vpn"},
     "privateinternetaccess.com": {"name": "PIA", "category": "vpn"},
     "nordpass.com": {"name": "NordPass", "category": "vpn"},
-
     # ── Fitness / Health ──
     "onepeloton.com": {"name": "Peloton", "category": "fitness"},
     "strava.com": {"name": "Strava", "category": "fitness"},
@@ -118,7 +111,6 @@ KNOWN_SERVICES: Dict[str, ServiceInfo] = {
     "whoop.com": {"name": "WHOOP", "category": "fitness"},
     "noom.com": {"name": "Noom", "category": "fitness"},
     "fitbit.com": {"name": "Fitbit Premium", "category": "fitness"},
-
     # ── News / Media ──
     "nytimes.com": {"name": "New York Times", "category": "news"},
     "washingtonpost.com": {"name": "Washington Post", "category": "news"},
@@ -127,7 +119,6 @@ KNOWN_SERVICES: Dict[str, ServiceInfo] = {
     "substack.com": {"name": "Substack", "category": "news"},
     "economist.com": {"name": "The Economist", "category": "news"},
     "theathletic.com": {"name": "The Athletic", "category": "news"},
-
     # ── Gaming ──
     "playstation.com": {"name": "PlayStation Plus", "category": "gaming"},
     "xbox.com": {"name": "Xbox Game Pass", "category": "gaming"},
@@ -136,7 +127,6 @@ KNOWN_SERVICES: Dict[str, ServiceInfo] = {
     "ea.com": {"name": "EA Play", "category": "gaming"},
     "epicgames.com": {"name": "Epic Games", "category": "gaming"},
     "riotgames.com": {"name": "Riot Games", "category": "gaming"},
-
     # ── Education ──
     "coursera.org": {"name": "Coursera", "category": "education"},
     "udemy.com": {"name": "Udemy", "category": "education"},
@@ -145,19 +135,16 @@ KNOWN_SERVICES: Dict[str, ServiceInfo] = {
     "brilliant.org": {"name": "Brilliant", "category": "education"},
     "duolingo.com": {"name": "Duolingo Plus", "category": "education"},
     "linkedin.com": {"name": "LinkedIn Premium", "category": "education"},
-
     # ── Finance / Investing ──
     "robinhood.com": {"name": "Robinhood Gold", "category": "finance"},
     "coinbase.com": {"name": "Coinbase One", "category": "finance"},
     "tradingview.com": {"name": "TradingView", "category": "finance"},
-
     # ── Home / Smart Home ──
     "ring.com": {"name": "Ring", "category": "home"},
     "nest.com": {"name": "Nest Aware", "category": "home"},
     "simplisafe.com": {"name": "SimpliSafe", "category": "home"},
     "adt.com": {"name": "ADT", "category": "home"},
     "vivint.com": {"name": "Vivint", "category": "home"},
-
     # ── Shopping / Memberships ──
     "amazon.com": {"name": "Amazon Prime", "category": "shopping"},
     "costco.com": {"name": "Costco", "category": "shopping"},
@@ -171,11 +158,33 @@ KNOWN_SERVICES: Dict[str, ServiceInfo] = {
 # Keywords that suggest an email is subscription-related (case-insensitive).
 # Used when sender domain is NOT in KNOWN_SERVICES.
 SUBSCRIPTION_KEYWORDS = [
-    "receipt", "invoice", "subscription", "renewal", "billing",
-    "payment", "charged", "recurring", "monthly plan", "annual plan",
-    "your plan", "membership", "trial ending", "trial expires",
-    "auto-renew", "cancellation confirmed", "cancelled", "bill",
-    "statement", "autopay", "plan summary", "account charge",
-    "monthly charge", "service fee", "your payment", "payment received",
-    "billing summary", "plan renewed", "upcoming charge",
+    "receipt",
+    "invoice",
+    "subscription",
+    "renewal",
+    "billing",
+    "payment",
+    "charged",
+    "recurring",
+    "monthly plan",
+    "annual plan",
+    "your plan",
+    "membership",
+    "trial ending",
+    "trial expires",
+    "auto-renew",
+    "cancellation confirmed",
+    "cancelled",
+    "bill",
+    "statement",
+    "autopay",
+    "plan summary",
+    "account charge",
+    "monthly charge",
+    "service fee",
+    "your payment",
+    "payment received",
+    "billing summary",
+    "plan renewed",
+    "upcoming charge",
 ]

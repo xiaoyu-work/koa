@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import time
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING, Callable, Optional, Tuple
 
 from .delivery import CronDeliveryHandler, DeliveryResult
 from .models import (
@@ -15,14 +15,13 @@ from .models import (
     DeliveryMode,
     SessionTarget,
     SystemEventPayload,
-    WakeMode,
 )
 from .run_log import CronRunLog
-from .schedule import compute_job_next_run_at_ms, MIN_REFIRE_GAP_MS
+from .schedule import MIN_REFIRE_GAP_MS, compute_job_next_run_at_ms
 
 if TYPE_CHECKING:
-    from .store import CronJobStore
     from ...orchestrator.orchestrator import Orchestrator
+    from .store import CronJobStore
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +56,7 @@ class CronExecutor:
         store: "CronJobStore",
         run_log: CronRunLog,
         delivery: CronDeliveryHandler,
-        on_event: Optional[callable] = None,
+        on_event: Optional[Callable] = None,
     ):
         self._orchestrator = orchestrator
         self._store = store
@@ -73,7 +72,10 @@ class CronExecutor:
         if job.state.running_at_ms is not None:
             logger.warning(f"Job {job.id} already running, skipping")
             return CronRunEntry(
-                ts=now, job_id=job.id, action="finished", status="skipped",
+                ts=now,
+                job_id=job.id,
+                action="finished",
+                status="skipped",
                 summary="Already running",
             )
 
@@ -121,14 +123,21 @@ class CronExecutor:
         if status == "ok" and summary:
             try:
                 run_entry_for_delivery = CronRunEntry(
-                    ts=end_ms, job_id=job.id, status=status, summary=summary,
+                    ts=end_ms,
+                    job_id=job.id,
+                    status=status,
+                    summary=summary,
                 )
                 delivery_result = await self._delivery.deliver(
-                    job, summary, run_entry_for_delivery,
+                    job,
+                    summary,
+                    run_entry_for_delivery,
                 )
             except Exception as e:
                 delivery_result = DeliveryResult(
-                    delivered=False, status="not-delivered", error=str(e),
+                    delivered=False,
+                    status="not-delivered",
+                    error=str(e),
                 )
                 logger.warning(f"Delivery failed for job {job.id}: {e}")
 
@@ -139,11 +148,7 @@ class CronExecutor:
 
         # Handle auto-deletion for one-shot jobs
         deleted = False
-        if (
-            status == "ok"
-            and job.delete_after_run
-            and isinstance(job.schedule, AtSchedule)
-        ):
+        if status == "ok" and job.delete_after_run and isinstance(job.schedule, AtSchedule):
             self._store.remove(job.id)
             deleted = True
             logger.info(f"Auto-deleted one-shot job {job.id}")
@@ -179,14 +184,19 @@ class CronExecutor:
         await self._run_log.append(run_entry)
 
         # Emit finished event
-        self._emit(CronEvent(
-            job_id=job.id, action="finished",
-            status=status, error=error_msg, summary=summary,
-            duration_ms=duration_ms,
-            delivered=delivery_result.delivered,
-            delivery_status=delivery_result.status,
-            next_run_at_ms=run_entry.next_run_at_ms,
-        ))
+        self._emit(
+            CronEvent(
+                job_id=job.id,
+                action="finished",
+                status=status,
+                error=error_msg,
+                summary=summary,
+                duration_ms=duration_ms,
+                delivered=delivery_result.delivered,
+                delivery_status=delivery_result.status,
+                next_run_at_ms=run_entry.next_run_at_ms,
+            )
+        )
 
         return run_entry
 
@@ -216,6 +226,7 @@ class CronExecutor:
             db = self._orchestrator.database
             if db:
                 from koa.services.profile_repo import ProfileRepository
+
                 repo = ProfileRepository(db)
                 profile = await repo.get_profile(job.user_id)
                 if profile:
@@ -238,10 +249,12 @@ class CronExecutor:
         # Simple reminders (SystemEventPayload with announce delivery) don't need
         # AI processing — the payload text IS the reminder. Passing it through the
         # orchestrator causes the AI to re-interpret it as a new user instruction.
-        if (isinstance(job.payload, SystemEventPayload)
-                and job.delivery
-                and job.delivery.mode == DeliveryMode.ANNOUNCE
-                and not job.delivery.conditional):
+        if (
+            isinstance(job.payload, SystemEventPayload)
+            and job.delivery
+            and job.delivery.mode == DeliveryMode.ANNOUNCE
+            and not job.delivery.conditional
+        ):
             return text, None
 
         message = text
@@ -339,7 +352,7 @@ class CronExecutor:
         """Emit a cron event if handler is registered."""
         if self._on_event:
             try:
-                self._on_event(event)
+                self._on_event(event)  # type: ignore[misc]
             except Exception as e:
                 logger.debug(f"Event handler error: {e}")
 

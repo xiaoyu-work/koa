@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Event:
     """An event published to the EventBus."""
+
     source: str  # e.g. "email", "calendar"
     event_type: str  # e.g. "new_email", "event_created"
     data: Dict[str, Any] = field(default_factory=dict)
@@ -35,7 +36,9 @@ class EventBus:
         await bus.publish(Event(source="email", event_type="new_email", data={...}))
     """
 
-    def __init__(self, redis_url: str = "redis://localhost:6379", stream_prefix: str = "koa:events:"):
+    def __init__(
+        self, redis_url: str = "redis://localhost:6379", stream_prefix: str = "koa:events:"
+    ):
         self._redis_url = redis_url
         self._stream_prefix = stream_prefix
         self._redis = None  # lazy-initialized redis client
@@ -50,7 +53,9 @@ class EventBus:
         try:
             import redis.asyncio as aioredis
         except ImportError:
-            raise ImportError("redis package required for EventBus. Install with: pip install redis")
+            raise ImportError(
+                "redis package required for EventBus. Install with: pip install redis"
+            )
         self._redis = aioredis.from_url(self._redis_url, decode_responses=True)
 
     async def close(self) -> None:

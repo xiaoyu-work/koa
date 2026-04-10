@@ -5,12 +5,12 @@ from typing import Optional
 
 from fastapi import APIRouter, Request
 
-from ...errors import KoaError, E
-from ..app import require_app, verify_service_key
+from ...errors import E, KoaError
+from ...providers.email.factory import EmailProviderFactory
+from ...providers.email.resolver import AccountResolver
 from ...services.profile_extraction import ProfileExtractionService
 from ...services.profile_repo import ProfileRepository
-from ...providers.email.resolver import AccountResolver
-from ...providers.email.factory import EmailProviderFactory
+from ..app import require_app, verify_service_key
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -52,8 +52,11 @@ async def start_profile_extraction(
         raise KoaError(E.INTERNAL_ERROR, f"Failed to resolve email accounts: {e}")
 
     if not accounts:
-        raise KoaError(E.NOT_FOUND, "No email accounts found for this tenant",
-                            details={"resource": "email_account"})
+        raise KoaError(
+            E.NOT_FOUND,
+            "No email accounts found for this tenant",
+            details={"resource": "email_account"},
+        )
 
     # Create email providers
     providers = []
@@ -83,9 +86,11 @@ async def start_profile_extraction(
         database=app._database,
     )
 
-    logger.info(f"Profile extraction started: job={job_id}, tenant={tenant_id}, "
-                f"email_account={email_account}, providers={len(providers)}, "
-                f"callback={'yes' if callback_url else 'no'}")
+    logger.info(
+        f"Profile extraction started: job={job_id}, tenant={tenant_id}, "
+        f"email_account={email_account}, providers={len(providers)}, "
+        f"callback={'yes' if callback_url else 'no'}"
+    )
     return {"job_id": job_id, "status": "started"}
 
 
@@ -101,8 +106,9 @@ async def get_extraction_status(request: Request, job_id: str):
 
     job = _service.get_job_status(job_id)
     if not job:
-        raise KoaError(E.NOT_FOUND, "Extraction job not found",
-                            details={"resource": "extraction_job"})
+        raise KoaError(
+            E.NOT_FOUND, "Extraction job not found", details={"resource": "extraction_job"}
+        )
 
     result = {
         "job_id": job["job_id"],
@@ -129,6 +135,7 @@ async def get_tenant_profile(request: Request, tenant_id: str):
     repo = ProfileRepository(app._database)
     profile = await repo.get_profile(tenant_id)
     if profile is None:
-        raise KoaError(E.NOT_FOUND, "No profile found for this tenant",
-                            details={"resource": "profile"})
+        raise KoaError(
+            E.NOT_FOUND, "No profile found for this tenant", details={"resource": "profile"}
+        )
     return {"tenant_id": tenant_id, "profile": profile}

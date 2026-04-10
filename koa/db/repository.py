@@ -18,8 +18,13 @@ Usage:
             return [dict(r) for r in rows]
 """
 
+from __future__ import annotations
+
 import logging
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+if TYPE_CHECKING:
+    from .database import Database
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +55,7 @@ class Repository:
     ) -> Optional[Dict[str, Any]]:
         """Insert a row and return it."""
         columns = list(data.keys())
-        placeholders = [f"${i+1}" for i in range(len(columns))]
+        placeholders = [f"${i + 1}" for i in range(len(columns))]
         values = list(data.values())
 
         query = (

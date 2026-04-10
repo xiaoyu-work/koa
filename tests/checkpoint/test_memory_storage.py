@@ -8,10 +8,11 @@ Tests cover all CheckpointStorage interface methods:
 - Max checkpoints per agent enforcement
 """
 
-import pytest
-from datetime import datetime, timedelta
+from datetime import datetime
 
-from koa.checkpoint.models import Checkpoint, CheckpointTree
+import pytest
+
+from koa.checkpoint.models import Checkpoint
 from koa.checkpoint.storage import MemoryStorage
 
 
@@ -102,10 +103,12 @@ class TestMemoryStorageListByAgent:
 
     async def test_list_pagination(self, storage):
         for i in range(5):
-            await storage.save(_make_checkpoint(
-                id=f"c{i}",
-                timestamp=datetime(2025, 1, i + 1),
-            ))
+            await storage.save(
+                _make_checkpoint(
+                    id=f"c{i}",
+                    timestamp=datetime(2025, 1, i + 1),
+                )
+            )
         result = await storage.list_by_agent("agent_1", limit=2, offset=1)
         assert len(result) == 2
         assert result[0].id == "c3"
@@ -141,9 +144,13 @@ class TestMemoryStorageTree:
 
     async def test_get_tree_builds_structure(self, storage):
         await storage.save(_make_checkpoint(id="c1", timestamp=datetime(2025, 1, 1)))
-        await storage.save(_make_checkpoint(
-            id="c2", parent_checkpoint_id="c1", timestamp=datetime(2025, 1, 2),
-        ))
+        await storage.save(
+            _make_checkpoint(
+                id="c2",
+                parent_checkpoint_id="c1",
+                timestamp=datetime(2025, 1, 2),
+            )
+        )
         tree = await storage.get_tree("agent_1")
         assert tree is not None
         assert tree.root_id == "c1"
@@ -190,10 +197,12 @@ class TestMemoryStorageMaxCheckpoints:
     async def test_evicts_oldest_when_max_exceeded(self):
         storage = MemoryStorage(max_checkpoints_per_agent=3)
         for i in range(5):
-            await storage.save(_make_checkpoint(
-                id=f"c{i}",
-                timestamp=datetime(2025, 1, i + 1),
-            ))
+            await storage.save(
+                _make_checkpoint(
+                    id=f"c{i}",
+                    timestamp=datetime(2025, 1, i + 1),
+                )
+            )
         # c0 and c1 should have been evicted
         assert await storage.get("c0") is None
         assert await storage.get("c1") is None

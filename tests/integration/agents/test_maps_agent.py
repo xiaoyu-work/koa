@@ -44,6 +44,7 @@ async def test_tool_selection(conversation, user_input, expected_tools):
 # Argument extraction
 # ---------------------------------------------------------------------------
 
+
 async def test_extracts_search_query_and_location(conversation):
     """search_places should receive the query and location from the user message."""
     conv = await conversation()
@@ -96,14 +97,13 @@ async def test_extracts_directions_travel_mode(conversation):
 
     args = conv.get_tool_args("get_directions")[0]
     mode = args.get("mode", "").lower()
-    assert "walk" in mode, (
-        f"Expected mode containing 'walk', got '{mode}'"
-    )
+    assert "walk" in mode, f"Expected mode containing 'walk', got '{mode}'"
 
 
 # ---------------------------------------------------------------------------
 # Response quality
 # ---------------------------------------------------------------------------
+
 
 async def test_response_quality_search_places(conversation, llm_judge):
     """Searching for places should return a readable listing with details."""

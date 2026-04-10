@@ -5,10 +5,10 @@ Uses Dropbox HTTP API v2 (POST-based) for file operations.
 Docs: https://www.dropbox.com/developers/documentation/http/documentation
 """
 
-import os
 import logging
-from typing import Any, Callable, Dict, Optional
+import os
 from datetime import datetime, timedelta, timezone
+from typing import Any, Callable, Dict, Optional
 
 import httpx
 
@@ -134,9 +134,7 @@ class DropboxProvider(BaseCloudStorageProvider):
                     "options": {"max_results": max_results},
                 }
 
-                response = await self._post_with_retry(
-                    client, "/files/search_v2", body
-                )
+                response = await self._post_with_retry(client, "/files/search_v2", body)
 
                 if response.status_code != 200:
                     return {
@@ -154,9 +152,7 @@ class DropboxProvider(BaseCloudStorageProvider):
                     if tag == "file":
                         files.append(_normalize_file(metadata))
 
-                logger.info(
-                    f"Dropbox search found {len(files)} files for query '{query}'"
-                )
+                logger.info(f"Dropbox search found {len(files)} files for query '{query}'")
                 return {"success": True, "data": files}
 
         except Exception as e:
@@ -179,9 +175,7 @@ class DropboxProvider(BaseCloudStorageProvider):
                     "limit": min(max_results * 3, 2000),
                 }
 
-                response = await self._post_with_retry(
-                    client, "/files/list_folder", body
-                )
+                response = await self._post_with_retry(client, "/files/list_folder", body)
 
                 if response.status_code != 200:
                     return {
@@ -194,9 +188,7 @@ class DropboxProvider(BaseCloudStorageProvider):
 
                 # Filter to files only and sort by server_modified descending
                 files = [e for e in entries if e.get(".tag") == "file"]
-                files.sort(
-                    key=lambda f: f.get("server_modified", ""), reverse=True
-                )
+                files.sort(key=lambda f: f.get("server_modified", ""), reverse=True)
                 files = files[:max_results]
 
                 result = [_normalize_file(f) for f in files]
@@ -227,8 +219,7 @@ class DropboxProvider(BaseCloudStorageProvider):
                 metadata = response.json()
                 file_data = _normalize_file(metadata)
                 file_data["shared"] = bool(
-                    metadata.get("sharing_info")
-                    or metadata.get("has_explicit_shared_members")
+                    metadata.get("sharing_info") or metadata.get("has_explicit_shared_members")
                 )
 
                 logger.info(f"Dropbox get_file_info: {file_id}")
@@ -257,9 +248,7 @@ class DropboxProvider(BaseCloudStorageProvider):
 
                 data = response.json()
                 link = data.get("link", "")
-                expires = (
-                    datetime.now(timezone.utc) + timedelta(hours=4)
-                ).isoformat()
+                expires = (datetime.now(timezone.utc) + timedelta(hours=4)).isoformat()
 
                 logger.info(f"Dropbox get_download_link: {file_id}")
                 return {
@@ -285,9 +274,7 @@ class DropboxProvider(BaseCloudStorageProvider):
             async with httpx.AsyncClient() as client:
                 if email:
                     # Share with a specific user by email
-                    access_level = (
-                        "editor" if link_type == "edit" else "viewer"
-                    )
+                    access_level = "editor" if link_type == "edit" else "viewer"
                     body = {
                         "file": file_id,
                         "members": [
@@ -298,9 +285,7 @@ class DropboxProvider(BaseCloudStorageProvider):
                         ],
                         "access_level": {".tag": access_level},
                     }
-                    response = await self._post_with_retry(
-                        client, "/sharing/add_file_member", body
-                    )
+                    response = await self._post_with_retry(client, "/sharing/add_file_member", body)
 
                     if response.status_code != 200:
                         return {
@@ -308,9 +293,7 @@ class DropboxProvider(BaseCloudStorageProvider):
                             "error": f"Dropbox API error: {response.status_code} - {response.text}",
                         }
 
-                    logger.info(
-                        f"Dropbox shared {file_id} with {email} ({access_level})"
-                    )
+                    logger.info(f"Dropbox shared {file_id} with {email} ({access_level})")
                     return {
                         "success": True,
                         "data": {
@@ -343,9 +326,7 @@ class DropboxProvider(BaseCloudStorageProvider):
                             links = list_response.json().get("links", [])
                             if links:
                                 url = links[0].get("url", "")
-                                logger.info(
-                                    f"Dropbox retrieved existing shared link for {file_id}"
-                                )
+                                logger.info(f"Dropbox retrieved existing shared link for {file_id}")
                                 return {
                                     "success": True,
                                     "data": {"url": url, "type": "link"},
@@ -480,9 +461,7 @@ class DropboxProvider(BaseCloudStorageProvider):
                 token_data = response.json()
                 access_token = token_data["access_token"]
                 expires_in = token_data.get("expires_in", 14400)
-                token_expiry = datetime.now(timezone.utc) + timedelta(
-                    seconds=expires_in
-                )
+                token_expiry = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
 
                 logger.info("Dropbox access token refreshed successfully")
                 return {

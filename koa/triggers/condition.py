@@ -1,7 +1,7 @@
 """Condition trigger — periodic polling + condition expression evaluation."""
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, Callable, Coroutine, Dict, Optional
 
 logger = logging.getLogger(__name__)

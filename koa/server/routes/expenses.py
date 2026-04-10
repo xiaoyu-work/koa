@@ -10,10 +10,11 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request
 
-from ..app import require_app, verify_service_key
-from koa.builtin_agents.expense.repository import ExpenseRepository
 from koa.builtin_agents.expense.budget_repository import BudgetRepository
 from koa.builtin_agents.expense.receipt_repository import ReceiptRepository
+from koa.builtin_agents.expense.repository import ExpenseRepository
+
+from ..app import require_app, verify_service_key
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -158,11 +159,13 @@ async def internal_expense_summary(
     grand_total = 0.0
     for row in rows:
         cat_total = float(row.get("total_amount", 0))
-        categories.append({
-            "category": row["category"],
-            "total": round(cat_total, 2),
-            "count": row["count"],
-        })
+        categories.append(
+            {
+                "category": row["category"],
+                "total": round(cat_total, 2),
+                "count": row["count"],
+            }
+        )
         grand_total += cat_total
 
     return {
@@ -193,12 +196,14 @@ async def internal_list_budgets(
             month=today.month,
             category=category if category != "_total" else None,
         )
-        result.append({
-            "category": category,
-            "monthly_limit": float(b["monthly_limit"]),
-            "spent": round(spent, 2),
-            "currency": b.get("currency", "USD"),
-        })
+        result.append(
+            {
+                "category": category,
+                "monthly_limit": float(b["monthly_limit"]),
+                "spent": round(spent, 2),
+                "currency": b.get("currency", "USD"),
+            }
+        )
 
     return {"budgets": result}
 
@@ -238,6 +243,7 @@ async def internal_create_expense(
     expense_date = None
     if body.get("date"):
         from datetime import datetime as dt
+
         try:
             expense_date = dt.strptime(body["date"], "%Y-%m-%d").date()
         except (ValueError, TypeError):
@@ -277,6 +283,7 @@ async def internal_update_expense(
                 updates[key] = float(body[key])
             elif key == "date":
                 from datetime import datetime as dt
+
                 try:
                     updates[key] = dt.strptime(body[key], "%Y-%m-%d").date()
                 except (ValueError, TypeError):

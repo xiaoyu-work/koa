@@ -16,9 +16,7 @@ logger = logging.getLogger(__name__)
 class ImportantDatesRepository(Repository):
     TABLE_NAME = "important_dates"
 
-    async def get_today_important_dates(
-        self, tenant_id: str
-    ) -> List[Dict[str, Any]]:
+    async def get_today_important_dates(self, tenant_id: str) -> List[Dict[str, Any]]:
         """Get dates that need reminding today.
 
         For recurring dates, calculates the next occurrence this year
@@ -128,9 +126,7 @@ class ImportantDatesRepository(Repository):
         if "remind_days_before" in insert_data and isinstance(
             insert_data["remind_days_before"], list
         ):
-            insert_data["remind_days_before"] = json.dumps(
-                insert_data["remind_days_before"]
-            )
+            insert_data["remind_days_before"] = json.dumps(insert_data["remind_days_before"])
         return await self._insert(insert_data)
 
     async def update_important_date(
@@ -145,17 +141,11 @@ class ImportantDatesRepository(Repository):
         )
         if not row:
             return None
-        if "remind_days_before" in updates and isinstance(
-            updates["remind_days_before"], list
-        ):
-            updates["remind_days_before"] = json.dumps(
-                updates["remind_days_before"]
-            )
+        if "remind_days_before" in updates and isinstance(updates["remind_days_before"], list):
+            updates["remind_days_before"] = json.dumps(updates["remind_days_before"])
         return await self._update("id", date_id, updates)
 
-    async def delete_important_date(
-        self, tenant_id: str, date_id: str
-    ) -> bool:
+    async def delete_important_date(self, tenant_id: str, date_id: str) -> bool:
         """Delete an important date. Returns True if deleted."""
         result = await self.db.execute(
             "DELETE FROM important_dates WHERE id = $1 AND tenant_id = $2",

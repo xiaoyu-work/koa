@@ -125,7 +125,12 @@ class EmailEventHandler:
 
         # Handle subscription if detected
         sub_data = evaluation.get("subscription")
-        if sub_data and isinstance(sub_data, dict) and sub_data.get("service_name") and self._database:
+        if (
+            sub_data
+            and isinstance(sub_data, dict)
+            and sub_data.get("service_name")
+            and self._database
+        ):
             try:
                 await self._upsert_subscription(tenant_id, sub_data, sender)
             except Exception as e:
@@ -154,7 +159,9 @@ class EmailEventHandler:
                 pass
 
         if not is_important:
-            logger.debug(f"Email not important: {subject} (reason: {evaluation.get('reason', 'N/A')})")
+            logger.debug(
+                f"Email not important: {subject} (reason: {evaluation.get('reason', 'N/A')})"
+            )
             return
 
         logger.info(f"Important email detected: {subject} — {evaluation.get('reason', '')}")
@@ -170,6 +177,7 @@ class EmailEventHandler:
     async def _upsert_subscription(self, tenant_id: str, sub: Dict[str, Any], sender: str) -> None:
         """Upsert detected subscription to database."""
         from datetime import datetime, timezone
+
         now = datetime.now(timezone.utc)
 
         # Validate billing_cycle
@@ -192,7 +200,8 @@ class EmailEventHandler:
             except (ValueError, AttributeError):
                 amount = None
 
-        await self._database.execute("""
+        await self._database.execute(
+            """
             INSERT INTO subscriptions (
                 tenant_id, service_name, category, amount, currency,
                 billing_cycle, status, detected_from, source_email, updated_at
@@ -229,19 +238,19 @@ class EmailEventHandler:
         if not section or not field or not value:
             return
 
-        from .cron.models import CronScheduleSpec, AgentTurnPayload, DeliveryConfig, DeliveryMode
-
         # For insurance/registration renewals, also create a reminder
         if "renewal" in field or "expir" in field:
             try:
                 from datetime import datetime as _dt
+
                 renewal_date = _dt.strptime(value, "%Y-%m-%d")
                 # Create reminder 30 days before
                 remind_date = renewal_date.replace(day=max(1, renewal_date.day))
-                month = remind_date.month - 1 if remind_date.day > 1 else remind_date.month
-                day = remind_date.day
+                remind_date.month - 1 if remind_date.day > 1 else remind_date.month
                 # Simple: just log it for now, cron creation needs CronService
-                logger.info(f"Profile update: {detail} — renewal {value} for tenant {tenant_id[:8]}")
+                logger.info(
+                    f"Profile update: {detail} — renewal {value} for tenant {tenant_id[:8]}"
+                )
             except (ValueError, TypeError):
                 pass
 
@@ -258,9 +267,13 @@ class EmailEventHandler:
             updated_at = NOW()
             WHERE tenant_id = $1
             """,
-            tenant_id, [section, field], value,
+            tenant_id,
+            [section, field],
+            value,
         )
-        logger.info(f"Profile updated from email: {section}.{field} = {value} for tenant {tenant_id[:8]}")
+        logger.info(
+            f"Profile updated from email: {section}.{field} = {value} for tenant {tenant_id[:8]}"
+        )
 
     async def _is_learned_ignore_sender(self, tenant_id: str, sender: str) -> bool:
         """Check if this sender is in the user's learned ignore list."""
@@ -268,7 +281,8 @@ class EmailEventHandler:
             """SELECT COUNT(*) as cnt FROM notification_interactions
                WHERE user_id = $1 AND sender = $2 AND action = 'dismissed'
                  AND created_at > NOW() - INTERVAL '30 days'""",
-            tenant_id, sender,
+            tenant_id,
+            sender,
         )
         dismissed = row["cnt"] if row else 0
         if dismissed < 3:
@@ -278,7 +292,8 @@ class EmailEventHandler:
             """SELECT COUNT(*) as cnt FROM notification_interactions
                WHERE user_id = $1 AND sender = $2 AND action = 'tapped'
                  AND created_at > NOW() - INTERVAL '30 days'""",
-            tenant_id, sender,
+            tenant_id,
+            sender,
         )
         tapped = row2["cnt"] if row2 else 0
         return tapped == 0
@@ -289,7 +304,8 @@ class EmailEventHandler:
             """SELECT COUNT(*) as cnt FROM notification_interactions
                WHERE user_id = $1 AND sender = $2 AND action = 'tapped'
                  AND created_at > NOW() - INTERVAL '30 days'""",
-            tenant_id, sender,
+            tenant_id,
+            sender,
         )
         tapped = row["cnt"] if row else 0
         if tapped < 3:
@@ -298,7 +314,8 @@ class EmailEventHandler:
             """SELECT COUNT(*) as cnt FROM notification_interactions
                WHERE user_id = $1 AND sender = $2 AND action = 'dismissed'
                  AND created_at > NOW() - INTERVAL '30 days'""",
-            tenant_id, sender,
+            tenant_id,
+            sender,
         )
         dismissed = row2["cnt"] if row2 else 0
         return dismissed == 0
@@ -312,11 +329,7 @@ class EmailEventHandler:
             Dict with keys: important (bool), reason (str), summary (str), subscription (dict|null)
             None if the LLM call fails.
         """
-        user_message = (
-            f"Sender: {sender}\n"
-            f"Subject: {subject}\n"
-            f"Preview: {snippet}"
-        )
+        user_message = f"Sender: {sender}\nSubject: {subject}\nPreview: {snippet}"
 
         try:
             response = await self._llm_client.chat_completion(

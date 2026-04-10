@@ -4,26 +4,26 @@ Tests _check_api_key, input validation, action constant wiring, and
 success/failure formatting for every tool without making real API calls.
 """
 
-import pytest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from koa.builtin_agents.composio.discord_agent import (
     DiscordComposioAgent,
     _check_api_key,
-    send_message,
-    list_channels,
-    list_servers,
-    get_my_profile,
-    list_connections,
     get_guild_member,
-    connect_discord,
+    get_my_profile,
+    list_channels,
+    list_connections,
+    list_servers,
+    send_message,
 )
-
 
 # =========================================================================
 # Helpers
 # =========================================================================
+
 
 def _make_context(tenant_id: str = "test-tenant") -> SimpleNamespace:
     """Create a minimal AgentToolContext-like object for tool tests."""
@@ -42,8 +42,8 @@ def _failure_response(error: str = "Something went wrong") -> dict:
 # _check_api_key
 # =========================================================================
 
-class TestCheckApiKey:
 
+class TestCheckApiKey:
     def test_returns_none_when_set(self, monkeypatch):
         monkeypatch.setenv("COMPOSIO_API_KEY", "key-123")
         assert _check_api_key() is None
@@ -59,8 +59,8 @@ class TestCheckApiKey:
 # Agent class wiring
 # =========================================================================
 
-class TestAgentWiring:
 
+class TestAgentWiring:
     def test_all_tools_registered(self):
         tool_names = {t.__name__ for t in DiscordComposioAgent.tools}
         expected = {
@@ -95,7 +95,6 @@ _MODULE = "koa.builtin_agents.composio.discord_agent"
 
 
 class TestSendMessage:
-
     @pytest.mark.asyncio
     async def test_empty_channel_id(self, monkeypatch):
         monkeypatch.setenv("COMPOSIO_API_KEY", "key")
@@ -131,9 +130,7 @@ class TestSendMessage:
     async def test_failure(self, monkeypatch):
         monkeypatch.setenv("COMPOSIO_API_KEY", "key")
         with patch(f"{_MODULE}.ComposioClient") as MockClient:
-            MockClient.return_value.execute_action = AsyncMock(
-                return_value=_failure_response()
-            )
+            MockClient.return_value.execute_action = AsyncMock(return_value=_failure_response())
             MockClient.format_action_result = lambda d: "Error: fail"
             result = await send_message("ch123", "hello", context=_make_context())
         assert "Failed" in result
@@ -142,16 +139,13 @@ class TestSendMessage:
     async def test_exception(self, monkeypatch):
         monkeypatch.setenv("COMPOSIO_API_KEY", "key")
         with patch(f"{_MODULE}.ComposioClient") as MockClient:
-            MockClient.return_value.execute_action = AsyncMock(
-                side_effect=RuntimeError("timeout")
-            )
+            MockClient.return_value.execute_action = AsyncMock(side_effect=RuntimeError("timeout"))
             result = await send_message("ch123", "hello", context=_make_context())
         assert "Error" in result
         assert "timeout" in result
 
 
 class TestListChannels:
-
     @pytest.mark.asyncio
     async def test_empty_guild_id(self, monkeypatch):
         monkeypatch.setenv("COMPOSIO_API_KEY", "key")
@@ -171,7 +165,6 @@ class TestListChannels:
 
 
 class TestListServers:
-
     @pytest.mark.asyncio
     async def test_success(self, monkeypatch):
         monkeypatch.setenv("COMPOSIO_API_KEY", "key")
@@ -185,7 +178,6 @@ class TestListServers:
 
 
 class TestGetMyProfile:
-
     @pytest.mark.asyncio
     async def test_missing_api_key(self, monkeypatch):
         monkeypatch.delenv("COMPOSIO_API_KEY", raising=False)
@@ -207,9 +199,7 @@ class TestGetMyProfile:
     async def test_failure(self, monkeypatch):
         monkeypatch.setenv("COMPOSIO_API_KEY", "key")
         with patch(f"{_MODULE}.ComposioClient") as MockClient:
-            MockClient.return_value.execute_action = AsyncMock(
-                return_value=_failure_response()
-            )
+            MockClient.return_value.execute_action = AsyncMock(return_value=_failure_response())
             MockClient.format_action_result = lambda d: "Error: fail"
             result = await get_my_profile(context=_make_context())
         assert "Failed" in result
@@ -218,16 +208,13 @@ class TestGetMyProfile:
     async def test_exception(self, monkeypatch):
         monkeypatch.setenv("COMPOSIO_API_KEY", "key")
         with patch(f"{_MODULE}.ComposioClient") as MockClient:
-            MockClient.return_value.execute_action = AsyncMock(
-                side_effect=RuntimeError("timeout")
-            )
+            MockClient.return_value.execute_action = AsyncMock(side_effect=RuntimeError("timeout"))
             result = await get_my_profile(context=_make_context())
         assert "Error" in result
         assert "timeout" in result
 
 
 class TestListConnections:
-
     @pytest.mark.asyncio
     async def test_missing_api_key(self, monkeypatch):
         monkeypatch.delenv("COMPOSIO_API_KEY", raising=False)
@@ -249,9 +236,7 @@ class TestListConnections:
     async def test_failure(self, monkeypatch):
         monkeypatch.setenv("COMPOSIO_API_KEY", "key")
         with patch(f"{_MODULE}.ComposioClient") as MockClient:
-            MockClient.return_value.execute_action = AsyncMock(
-                return_value=_failure_response()
-            )
+            MockClient.return_value.execute_action = AsyncMock(return_value=_failure_response())
             MockClient.format_action_result = lambda d: "Error: fail"
             result = await list_connections(context=_make_context())
         assert "Failed" in result
@@ -260,16 +245,13 @@ class TestListConnections:
     async def test_exception(self, monkeypatch):
         monkeypatch.setenv("COMPOSIO_API_KEY", "key")
         with patch(f"{_MODULE}.ComposioClient") as MockClient:
-            MockClient.return_value.execute_action = AsyncMock(
-                side_effect=RuntimeError("timeout")
-            )
+            MockClient.return_value.execute_action = AsyncMock(side_effect=RuntimeError("timeout"))
             result = await list_connections(context=_make_context())
         assert "Error" in result
         assert "timeout" in result
 
 
 class TestGetGuildMember:
-
     @pytest.mark.asyncio
     async def test_empty_guild_id(self, monkeypatch):
         monkeypatch.setenv("COMPOSIO_API_KEY", "key")
@@ -298,9 +280,7 @@ class TestGetGuildMember:
     async def test_failure(self, monkeypatch):
         monkeypatch.setenv("COMPOSIO_API_KEY", "key")
         with patch(f"{_MODULE}.ComposioClient") as MockClient:
-            MockClient.return_value.execute_action = AsyncMock(
-                return_value=_failure_response()
-            )
+            MockClient.return_value.execute_action = AsyncMock(return_value=_failure_response())
             MockClient.format_action_result = lambda d: "Error: fail"
             result = await get_guild_member("guild-1", context=_make_context())
         assert "Failed" in result
@@ -309,9 +289,7 @@ class TestGetGuildMember:
     async def test_exception(self, monkeypatch):
         monkeypatch.setenv("COMPOSIO_API_KEY", "key")
         with patch(f"{_MODULE}.ComposioClient") as MockClient:
-            MockClient.return_value.execute_action = AsyncMock(
-                side_effect=RuntimeError("timeout")
-            )
+            MockClient.return_value.execute_action = AsyncMock(side_effect=RuntimeError("timeout"))
             result = await get_guild_member("guild-1", context=_make_context())
         assert "Error" in result
         assert "timeout" in result

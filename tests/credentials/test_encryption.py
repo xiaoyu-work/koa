@@ -1,6 +1,7 @@
 """Tests for credential encryption."""
 
 import pytest
+
 from koa.credentials.encryption import CredentialEncryptor
 
 

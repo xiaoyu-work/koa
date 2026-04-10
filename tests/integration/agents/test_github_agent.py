@@ -21,7 +21,10 @@ pytestmark = [pytest.mark.integration, pytest.mark.productivity]
 TOOL_SELECTION_CASES = [
     ("Create an issue in org/repo titled 'Login bug' about the auth failure", ["create_issue"]),
     ("Show me the open issues in facebook/react", ["list_issues"]),
-    ("Create a PR in org/repo to merge feature-branch into main titled 'Fix login'", ["create_pull_request"]),
+    (
+        "Create a PR in org/repo to merge feature-branch into main titled 'Fix login'",
+        ["create_pull_request"],
+    ),
     ("List open pull requests in vercel/next.js", ["list_pull_requests"]),
     ("Search GitHub for machine learning Python repos", ["search_repositories"]),
     ("Connect my GitHub account", ["connect_github"]),
@@ -46,6 +49,7 @@ async def test_tool_selection(orchestrator_factory, user_input, expected_tools):
 # Argument extraction
 # ---------------------------------------------------------------------------
 
+
 async def test_extracts_issue_fields(orchestrator_factory):
     """create_issue should receive owner, repo, and title from the user message."""
     orch, recorder = await orchestrator_factory()
@@ -61,15 +65,14 @@ async def test_extracts_issue_fields(orchestrator_factory):
     assert args.get("owner", "").lower() == "facebook", (
         f"Expected owner='facebook', got {args.get('owner')}"
     )
-    assert args.get("repo", "").lower() == "react", (
-        f"Expected repo='react', got {args.get('repo')}"
-    )
+    assert args.get("repo", "").lower() == "react", f"Expected repo='react', got {args.get('repo')}"
     assert args.get("title"), "title should not be empty"
 
 
 # ---------------------------------------------------------------------------
 # Response quality
 # ---------------------------------------------------------------------------
+
 
 async def test_response_quality_list_issues(orchestrator_factory, llm_judge):
     """Listing issues should produce a readable summary of the issues."""

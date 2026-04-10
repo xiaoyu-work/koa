@@ -14,21 +14,19 @@ spending_summary, set_budget, budget_status, upload_receipt, search_receipts)
 based on the user's request.
 """
 
-from datetime import datetime
-
 from koa import valet
 from koa.standard_agent import StandardAgent
 
 from .tools import (
+    budget_status,
+    delete_expense,
     log_expense,
     query_expenses,
-    delete_expense,
-    update_expense,
-    spending_summary,
-    set_budget,
-    budget_status,
-    upload_receipt,
     search_receipts,
+    set_budget,
+    spending_summary,
+    update_expense,
+    upload_receipt,
 )
 
 
@@ -89,8 +87,8 @@ ask for clarification in your text response WITHOUT calling any tools.
     def get_system_prompt(self) -> str:
         now, _ = self._user_now()
         prompt = self._SYSTEM_PROMPT_TEMPLATE.format(
-            today=now.strftime('%Y-%m-%d'),
-            weekday=now.strftime('%A'),
+            today=now.strftime("%Y-%m-%d"),
+            weekday=now.strftime("%A"),
         )
         # Tell the agent LLM that receipt images are available in context
         if self.context_hints and self.context_hints.get("user_images"):

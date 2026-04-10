@@ -14,13 +14,15 @@ def default_cm():
 @pytest.fixture
 def small_cm():
     """Context manager with a tiny context window for easy threshold testing."""
-    return ContextManager(ReactLoopConfig(
-        context_token_limit=100,      # 100 tokens = ~400 chars
-        context_trim_threshold=0.5,   # trim at 50 tokens = ~200 chars
-        max_history_messages=3,
-        max_tool_result_share=0.3,
-        max_tool_result_chars=200,
-    ))
+    return ContextManager(
+        ReactLoopConfig(
+            context_token_limit=100,  # 100 tokens = ~400 chars
+            context_trim_threshold=0.5,  # trim at 50 tokens = ~200 chars
+            max_history_messages=3,
+            max_tool_result_share=0.3,
+            max_tool_result_chars=200,
+        )
+    )
 
 
 # =========================================================================
@@ -29,7 +31,6 @@ def small_cm():
 
 
 class TestEstimateTokens:
-
     def test_string_content(self, default_cm):
         msgs = [{"role": "user", "content": "a" * 400}]
         assert default_cm.estimate_tokens(msgs) == 100
@@ -42,10 +43,15 @@ class TestEstimateTokens:
         assert default_cm.estimate_tokens([]) == 0
 
     def test_list_content_with_text_parts(self, default_cm):
-        msgs = [{"role": "tool", "content": [
-            {"text": "a" * 80},
-            {"text": "b" * 120},
-        ]}]
+        msgs = [
+            {
+                "role": "tool",
+                "content": [
+                    {"text": "a" * 80},
+                    {"text": "b" * 120},
+                ],
+            }
+        ]
         assert default_cm.estimate_tokens(msgs) == 50  # 200 / 4
 
     def test_list_content_with_string_parts(self, default_cm):
@@ -67,9 +73,14 @@ class TestEstimateTokens:
         assert default_cm.estimate_tokens(msgs) == 100  # 400 / 4
 
     def test_image_url_parts_ignored(self, default_cm):
-        msgs = [{"role": "tool", "content": [
-            {"type": "image_url", "image_url": {"url": "https://example.com/img.jpg"}},
-        ]}]
+        msgs = [
+            {
+                "role": "tool",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": "https://example.com/img.jpg"}},
+                ],
+            }
+        ]
         assert default_cm.estimate_tokens(msgs) == 0
 
 
@@ -79,7 +90,6 @@ class TestEstimateTokens:
 
 
 class TestTruncateToolResult:
-
     def test_under_limit_unchanged(self, small_cm):
         result = "short text"
         assert small_cm.truncate_tool_result(result) == result
@@ -93,9 +103,9 @@ class TestTruncateToolResult:
 
     def test_prefers_newline_boundary(self, small_cm):
         # max_chars = 120
-        line1 = "a" * 80 + "\n"   # 81 chars
-        line2 = "b" * 100          # 100 chars
-        result = line1 + line2     # 181 chars, over 120 limit
+        line1 = "a" * 80 + "\n"  # 81 chars
+        line2 = "b" * 100  # 100 chars
+        result = line1 + line2  # 181 chars, over 120 limit
         truncated = small_cm.truncate_tool_result(result)
         # Should cut at the newline (pos 80), not at char 120
         assert truncated == line1 + "\n[...truncated]"
@@ -128,7 +138,6 @@ class TestTruncateToolResult:
 
 
 class TestTrimIfNeeded:
-
     def test_under_threshold_returns_original(self, small_cm):
         msgs = [{"role": "user", "content": "hi"}]
         result = small_cm.trim_if_needed(msgs)
@@ -152,7 +161,6 @@ class TestTrimIfNeeded:
 
 
 class TestTruncateAllToolResults:
-
     def test_truncates_string_tool_content(self, small_cm):
         msgs = [
             {"role": "user", "content": "hi"},
@@ -164,10 +172,14 @@ class TestTruncateAllToolResults:
 
     def test_truncates_list_content_text_parts(self, small_cm):
         msgs = [
-            {"role": "tool", "tool_call_id": "1", "content": [
-                {"text": "y" * 200},
-                {"type": "image_url"},  # non-text part untouched
-            ]},
+            {
+                "role": "tool",
+                "tool_call_id": "1",
+                "content": [
+                    {"text": "y" * 200},
+                    {"type": "image_url"},  # non-text part untouched
+                ],
+            },
         ]
         result = small_cm.truncate_all_tool_results(msgs)
         parts = result[0]["content"]
@@ -177,7 +189,7 @@ class TestTruncateAllToolResults:
     def test_does_not_mutate_original(self, small_cm):
         original = {"role": "tool", "tool_call_id": "1", "content": "x" * 200}
         msgs = [original]
-        result = small_cm.truncate_all_tool_results(msgs)
+        small_cm.truncate_all_tool_results(msgs)
         assert original["content"] == "x" * 200  # original unchanged
 
 
@@ -187,7 +199,6 @@ class TestTruncateAllToolResults:
 
 
 class TestForceTrim:
-
     def test_keeps_system_plus_last_5(self, default_cm):
         msgs = [
             {"role": "system", "content": "sys"},
@@ -222,7 +233,6 @@ class TestForceTrim:
 
 
 class TestSplitForSummarization:
-
     def test_under_threshold_returns_none(self, small_cm):
         msgs = [{"role": "user", "content": "hi"}]
         assert small_cm.split_for_summarization(msgs) is None
@@ -250,7 +260,7 @@ class TestSplitForSummarization:
         assert len(system) == 1
         assert system[0]["content"] == "sys"
         assert len(recent) == 3  # max_history_messages
-        assert len(old) == 7    # 10 - 3
+        assert len(old) == 7  # 10 - 3
 
     def test_no_system_message(self, small_cm):
         msgs = [{"role": "user", "content": "x" * 50} for _ in range(10)]
@@ -268,7 +278,6 @@ class TestSplitForSummarization:
 
 
 class TestBuildSummarizedMessages:
-
     def test_basic_reconstruction(self):
         system = [{"role": "system", "content": "sys"}]
         recent = [{"role": "user", "content": "recent"}]
@@ -280,7 +289,9 @@ class TestBuildSummarizedMessages:
         assert result[2] == recent[0]
 
     def test_empty_system(self):
-        result = ContextManager.build_summarized_messages([], "summary", [{"role": "user", "content": "x"}])
+        result = ContextManager.build_summarized_messages(
+            [], "summary", [{"role": "user", "content": "x"}]
+        )
         assert len(result) == 2
         assert result[0]["role"] == "user"  # summary
         assert result[1]["content"] == "x"
@@ -292,7 +303,6 @@ class TestBuildSummarizedMessages:
 
 
 class TestKeepRecent:
-
     def test_with_system_prompt(self):
         msgs = [
             {"role": "system", "content": "sys"},

@@ -6,10 +6,10 @@ shared token refresh logic (same pattern as BaseTodoProvider).
 Each subclass defines its own device-specific methods.
 """
 
-from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, Optional
-from datetime import datetime, timedelta, timezone
 import logging
+from abc import ABC
+from datetime import datetime, timedelta, timezone
+from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +61,7 @@ class BaseSmartHomeProvider(ABC):
 
         if isinstance(self.token_expiry, str):
             from dateutil import parser
+
             self.token_expiry = parser.parse(self.token_expiry)
 
         now = datetime.now(timezone.utc)

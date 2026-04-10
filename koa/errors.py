@@ -26,10 +26,10 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-
 # ---------------------------------------------------------------------------
 # Error codes
 # ---------------------------------------------------------------------------
+
 
 class E:
     """Error code constants."""
@@ -84,6 +84,7 @@ _DEFAULT_STATUS: Dict[str, int] = {
 # Exception class
 # ---------------------------------------------------------------------------
 
+
 class KoaError(Exception):
     """Structured error raised anywhere in Koa."""
 
@@ -112,6 +113,7 @@ class KoaError(Exception):
 # ---------------------------------------------------------------------------
 # FastAPI integration (lazy import to avoid hard dependency at module level)
 # ---------------------------------------------------------------------------
+
 
 def install_error_handler(app) -> None:
     """Register the global exception handler on a FastAPI app."""

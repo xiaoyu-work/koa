@@ -5,7 +5,6 @@ Uses asyncpg via the shared Database pool for production-grade
 checkpoint persistence with JSONB storage and indexed queries.
 """
 
-import json
 import logging
 from typing import List, Optional
 
@@ -130,10 +129,7 @@ class PostgreSQLStorage(CheckpointStorage):
             limit,
             offset,
         )
-        return [
-            CheckpointMetadata.from_checkpoint(self._parse_checkpoint(r["data"]))
-            for r in rows
-        ]
+        return [CheckpointMetadata.from_checkpoint(self._parse_checkpoint(r["data"])) for r in rows]
 
     async def list_by_user(
         self,
@@ -153,10 +149,7 @@ class PostgreSQLStorage(CheckpointStorage):
             limit,
             offset,
         )
-        return [
-            CheckpointMetadata.from_checkpoint(self._parse_checkpoint(r["data"]))
-            for r in rows
-        ]
+        return [CheckpointMetadata.from_checkpoint(self._parse_checkpoint(r["data"])) for r in rows]
 
     async def get_tree(self, agent_id: str) -> Optional[CheckpointTree]:
         self._ensure_initialized()

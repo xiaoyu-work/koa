@@ -25,8 +25,7 @@ import json
 import logging
 import os
 import secrets
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from ..db import Database, Repository
 from .encryption import CredentialEncryptor
@@ -96,7 +95,10 @@ class CredentialStore(Repository):
             ON CONFLICT (tenant_id, service, account_name)
             DO UPDATE SET credentials_json = $4, updated_at = NOW()
             """,
-            tenant_id, service, account_name, credentials,
+            tenant_id,
+            service,
+            account_name,
+            credentials,
         )
 
     async def get(
@@ -111,7 +113,9 @@ class CredentialStore(Repository):
             SELECT credentials_json FROM credentials
             WHERE tenant_id = $1 AND service = $2 AND account_name = $3
             """,
-            tenant_id, service, account_name,
+            tenant_id,
+            service,
+            account_name,
         )
         if row:
             val = row["credentials_json"]
@@ -132,7 +136,8 @@ class CredentialStore(Repository):
                 FROM credentials WHERE tenant_id = $1 AND service = $2
                 ORDER BY service, account_name
                 """,
-                tenant_id, service,
+                tenant_id,
+                service,
             )
         else:
             rows = await self.db.fetch(
@@ -148,13 +153,15 @@ class CredentialStore(Repository):
             val = row["credentials_json"]
             creds = json.loads(val) if isinstance(val, str) else val
             creds = self._encryptor.decrypt(creds)
-            results.append({
-                "service": row["service"],
-                "account_name": row["account_name"],
-                "credentials": creds,
-                "created_at": row["created_at"].isoformat() if row["created_at"] else None,
-                "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
-            })
+            results.append(
+                {
+                    "service": row["service"],
+                    "account_name": row["account_name"],
+                    "credentials": creds,
+                    "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+                    "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
+                }
+            )
         return results
 
     async def delete(
@@ -169,7 +176,9 @@ class CredentialStore(Repository):
             DELETE FROM credentials
             WHERE tenant_id = $1 AND service = $2 AND account_name = $3
             """,
-            tenant_id, service, account_name,
+            tenant_id,
+            service,
+            account_name,
         )
         return result == "DELETE 1"
 
@@ -188,12 +197,14 @@ class CredentialStore(Repository):
             val = row["credentials_json"]
             creds = json.loads(val) if isinstance(val, str) else val
             creds = self._encryptor.decrypt(creds)
-            results.append({
-                "tenant_id": row["tenant_id"],
-                "service": row["service"],
-                "account_name": row["account_name"],
-                "credentials": creds,
-            })
+            results.append(
+                {
+                    "tenant_id": row["tenant_id"],
+                    "service": row["service"],
+                    "account_name": row["account_name"],
+                    "credentials": creds,
+                }
+            )
         return results
 
     async def find_by_email(
@@ -264,13 +275,15 @@ class CredentialStore(Repository):
             INSERT INTO oauth_states (state, tenant_id, service, redirect_after, account_name, extra_data)
             VALUES ($1, $2, $3, $4, $5, $6::jsonb)
             """,
-            state, tenant_id, service, redirect_after, account_name,
+            state,
+            tenant_id,
+            service,
+            redirect_after,
+            account_name,
             json.dumps(extra_data) if extra_data else None,
         )
         # Garbage-collect expired states
-        await self.db.execute(
-            "DELETE FROM oauth_states WHERE expires_at < NOW()"
-        )
+        await self.db.execute("DELETE FROM oauth_states WHERE expires_at < NOW()")
         return state
 
     async def consume_oauth_state(self, state: str) -> Optional[dict]:

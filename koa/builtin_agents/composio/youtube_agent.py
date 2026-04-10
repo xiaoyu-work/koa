@@ -6,8 +6,8 @@ subscriptions, browse channels, and retrieve captions using the
 Composio OAuth proxy platform.
 """
 
-import os
 import logging
+import os
 from typing import Annotated, Optional
 
 from koa import valet
@@ -44,6 +44,7 @@ def _check_api_key() -> Optional[str]:
 # =============================================================================
 # Tool executors
 # =============================================================================
+
 
 @tool
 async def search_videos(
@@ -412,6 +413,7 @@ async def connect_youtube(
 # =============================================================================
 # Agent
 # =============================================================================
+
 
 @valet(domain="lifestyle")
 class YouTubeComposioAgent(StandardAgent):

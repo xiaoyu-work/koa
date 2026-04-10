@@ -1,7 +1,7 @@
 """Simple in-memory rate limiter for API endpoints."""
 
-import time
 import logging
+import time
 from collections import defaultdict
 from typing import Dict, List, Tuple
 
@@ -36,9 +36,7 @@ class RateLimiter:
         self._minute_windows[client_id] = [
             t for t in self._minute_windows[client_id] if t > minute_ago
         ]
-        self._hour_windows[client_id] = [
-            t for t in self._hour_windows[client_id] if t > hour_ago
-        ]
+        self._hour_windows[client_id] = [t for t in self._hour_windows[client_id] if t > hour_ago]
 
         minute_count = len(self._minute_windows[client_id])
         hour_count = len(self._hour_windows[client_id])

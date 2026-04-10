@@ -42,6 +42,7 @@ async def test_tool_selection(orchestrator_factory, user_input, expected_tools):
 # Argument extraction
 # ---------------------------------------------------------------------------
 
+
 async def test_extracts_search_query(orchestrator_factory):
     """search_videos should receive the correct query from the user message."""
     orch, recorder = await orchestrator_factory()
@@ -64,12 +65,11 @@ async def test_extracts_search_query(orchestrator_factory):
 # Response quality
 # ---------------------------------------------------------------------------
 
+
 async def test_response_quality_search(orchestrator_factory, llm_judge):
     """Searching videos should produce a readable list of results."""
     orch, recorder = await orchestrator_factory()
-    result = await orch.handle_message(
-        "test_user", "Search YouTube for sunset timelapse videos"
-    )
+    result = await orch.handle_message("test_user", "Search YouTube for sunset timelapse videos")
 
     passed = await llm_judge(
         "Search YouTube for sunset timelapse videos",

@@ -10,16 +10,16 @@ This module provides:
 """
 
 import warnings
+
 warnings.warn(
-    "koa.memory.manager.MemoryManager is deprecated. "
-    "Use koa.memory.momex.MomexMemory instead.",
+    "koa.memory.manager.MemoryManager is deprecated. Use koa.memory.momex.MomexMemory instead.",
     DeprecationWarning,
     stacklevel=2,
 )
 
-from typing import Dict, Any, List, Optional, Protocol
+from typing import Any, Dict, List, Optional  # noqa: E402
 
-from .models import MemoryConfig, RecallResult, StoreResult
+from .models import MemoryConfig, RecallResult, StoreResult  # noqa: E402
 
 
 class MemoryManager:
@@ -67,10 +67,12 @@ class MemoryManager:
         if self.config.use_platform:
             # Platform version
             from mem0 import MemoryClient
+
             self._client = MemoryClient(api_key=self.config.api_key)
         else:
             # Self-hosted version
             from mem0 import Memory
+
             mem0_config = self.config.to_mem0_config()
             self._memory = Memory.from_config(mem0_config)
 
@@ -79,7 +81,7 @@ class MemoryManager:
         messages: List[Dict[str, str]],
         user_id: str,
         agent_type: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> StoreResult:
         """
         Add memories from conversation messages.
@@ -131,7 +133,7 @@ class MemoryManager:
         text: str,
         user_id: str,
         agent_type: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> StoreResult:
         """
         Add a single text memory.
@@ -171,11 +173,7 @@ class MemoryManager:
         return result
 
     def search(
-        self,
-        query: str,
-        user_id: str,
-        agent_type: Optional[str] = None,
-        limit: int = 10
+        self, query: str, user_id: str, agent_type: Optional[str] = None, limit: int = 10
     ) -> RecallResult:
         """
         Search memories.
@@ -210,16 +208,12 @@ class MemoryManager:
             elif isinstance(response, list):
                 result.memories = response
 
-        except Exception as e:
+        except Exception:
             pass  # Return empty result on error
 
         return result
 
-    def get_all(
-        self,
-        user_id: str,
-        agent_type: Optional[str] = None
-    ) -> RecallResult:
+    def get_all(self, user_id: str, agent_type: Optional[str] = None) -> RecallResult:
         """
         Get all memories for a user.
 
@@ -251,13 +245,12 @@ class MemoryManager:
             # Filter by agent_type if specified
             if agent_type:
                 memories = [
-                    m for m in memories
-                    if m.get("metadata", {}).get("agent_type") == agent_type
+                    m for m in memories if m.get("metadata", {}).get("agent_type") == agent_type
                 ]
 
             result.memories = memories
 
-        except Exception as e:
+        except Exception:
             pass
 
         return result
@@ -307,10 +300,7 @@ class MemoryManager:
             return False
 
     def auto_recall(
-        self,
-        user_id: str,
-        field_names: List[str],
-        agent_type: Optional[str] = None
+        self, user_id: str, field_names: List[str], agent_type: Optional[str] = None
     ) -> RecallResult:
         """
         Auto-recall fields by searching for each field name.
@@ -329,10 +319,7 @@ class MemoryManager:
         result = RecallResult()
 
         # Build search query from field names
-        fields_to_search = [
-            f for f in field_names
-            if self.config.should_remember(f)
-        ]
+        fields_to_search = [f for f in field_names if self.config.should_remember(f)]
 
         if not fields_to_search:
             return result
@@ -355,12 +342,7 @@ class MemoryManager:
 
         return result
 
-    def auto_store(
-        self,
-        user_id: str,
-        agent_type: str,
-        fields: Dict[str, Any]
-    ) -> StoreResult:
+    def auto_store(self, user_id: str, agent_type: str, fields: Dict[str, Any]) -> StoreResult:
         """
         Auto-store collected fields as memories.
 
@@ -379,8 +361,7 @@ class MemoryManager:
 
         # Filter fields
         fields_to_store = {
-            k: v for k, v in fields.items()
-            if v is not None and self.config.should_remember(k)
+            k: v for k, v in fields.items() if v is not None and self.config.should_remember(k)
         }
 
         if not fields_to_store:
@@ -398,7 +379,7 @@ class MemoryManager:
             text=memory_text,
             user_id=user_id,
             agent_type=agent_type,
-            metadata={"fields": list(fields_to_store.keys())}
+            metadata={"fields": list(fields_to_store.keys())},
         )
 
         return store_result
@@ -429,10 +410,7 @@ class MemoryMixin:
         """Set the memory manager"""
         self._memory_manager = manager
 
-    def _auto_recall_fields(
-        self,
-        field_names: Optional[List[str]] = None
-    ) -> RecallResult:
+    def _auto_recall_fields(self, field_names: Optional[List[str]] = None) -> RecallResult:
         """
         Auto-recall fields from memory.
 
@@ -445,26 +423,21 @@ class MemoryMixin:
         if not self._memory_manager:
             return RecallResult()
 
-        user_id = getattr(self, 'user_id', None)
+        user_id = getattr(self, "user_id", None)
         if not user_id:
             return RecallResult()
 
         if field_names is None:
-            required_fields = getattr(self, 'required_fields', [])
-            field_names = [
-                f.name if hasattr(f, 'name') else str(f)
-                for f in required_fields
-            ]
+            required_fields = getattr(self, "required_fields", [])
+            field_names = [f.name if hasattr(f, "name") else str(f) for f in required_fields]
 
         if not field_names:
             return RecallResult()
 
-        agent_type = getattr(self, 'agent_type', None)
+        agent_type = getattr(self, "agent_type", None)
 
         return self._memory_manager.auto_recall(
-            user_id=user_id,
-            field_names=field_names,
-            agent_type=agent_type
+            user_id=user_id, field_names=field_names, agent_type=agent_type
         )
 
     def _auto_store_fields(self) -> StoreResult:
@@ -477,17 +450,15 @@ class MemoryMixin:
         if not self._memory_manager:
             return StoreResult()
 
-        user_id = getattr(self, 'user_id', None)
+        user_id = getattr(self, "user_id", None)
         if not user_id:
             return StoreResult()
 
-        agent_type = getattr(self, 'agent_type', type(self).__name__)
-        collected_fields = getattr(self, 'collected_fields', {})
+        agent_type = getattr(self, "agent_type", type(self).__name__)
+        collected_fields = getattr(self, "collected_fields", {})
 
         return self._memory_manager.auto_store(
-            user_id=user_id,
-            agent_type=agent_type,
-            fields=collected_fields
+            user_id=user_id, agent_type=agent_type, fields=collected_fields
         )
 
 

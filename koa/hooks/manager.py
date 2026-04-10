@@ -6,29 +6,29 @@ This module provides:
 - Decorator for automatic hook execution
 """
 
-import asyncio
 from datetime import datetime
 from functools import wraps
-from typing import Dict, Any, List, Optional, Callable, Awaitable, TypeVar, Union
-from .models import (
-    HookType,
-    HookPhase,
-    HookConfig,
-    HookContext,
-    HookResult,
-)
+from typing import Any, Awaitable, Callable, Dict, List, Optional, TypeVar, Union
+
 from .handlers import (
     HookHandler,
     LoggingHook,
     MetricsHook,
-    TracingHook,
     RateLimitingHook,
-    CustomHook,
+    TracingHook,
+)
+from .models import (
+    HookConfig,
+    HookContext,
+    HookPhase,
+    HookResult,
+    HookType,
 )
 
 
 class HookExecutionError(Exception):
     """Raised when hook execution fails and should_proceed is False"""
+
     def __init__(self, message: str, retry_after: Optional[float] = None):
         super().__init__(message)
         self.retry_after = retry_after
@@ -55,10 +55,10 @@ class HookManager:
         self._hooks: Dict[HookType, HookHandler] = {}
         self._hook_order: List[HookType] = [
             HookType.RATE_LIMITING,  # Check rate limits first
-            HookType.TRACING,        # Start tracing
-            HookType.LOGGING,        # Log start
-            HookType.METRICS,        # Record metrics
-            HookType.CUSTOM,         # Custom hooks last
+            HookType.TRACING,  # Start tracing
+            HookType.LOGGING,  # Log start
+            HookType.METRICS,  # Record metrics
+            HookType.CUSTOM,  # Custom hooks last
         ]
 
     def register(self, hook: HookHandler) -> None:
@@ -93,17 +93,12 @@ class HookManager:
                     # Check if we should proceed
                     if not result.should_proceed:
                         raise HookExecutionError(
-                            result.error or "Hook blocked execution",
-                            retry_after=result.retry_after
+                            result.error or "Hook blocked execution", retry_after=result.retry_after
                         )
                 except HookExecutionError:
                     raise
                 except Exception as e:
-                    results.append(HookResult(
-                        hook_type=hook_type,
-                        success=False,
-                        error=str(e)
-                    ))
+                    results.append(HookResult(hook_type=hook_type, success=False, error=str(e)))
 
         return results
 
@@ -120,11 +115,7 @@ class HookManager:
                     result = await hook.on_post_execute(context)
                     results.append(result)
                 except Exception as e:
-                    results.append(HookResult(
-                        hook_type=hook_type,
-                        success=False,
-                        error=str(e)
-                    ))
+                    results.append(HookResult(hook_type=hook_type, success=False, error=str(e)))
 
         return results
 
@@ -140,11 +131,7 @@ class HookManager:
                     result = await hook.on_error(context)
                     results.append(result)
                 except Exception as e:
-                    results.append(HookResult(
-                        hook_type=hook_type,
-                        success=False,
-                        error=str(e)
-                    ))
+                    results.append(HookResult(hook_type=hook_type, success=False, error=str(e)))
 
         return results
 
@@ -181,7 +168,8 @@ class HookManager:
     def load_from_yaml(self, yaml_path: str) -> None:
         """Load hooks configuration from YAML file"""
         import yaml
-        with open(yaml_path, 'r') as f:
+
+        with open(yaml_path, "r") as f:
             config = yaml.safe_load(f)
 
         if "hooks" in config:
@@ -210,7 +198,7 @@ class HookManager:
 
 
 # Type variable for decorator
-F = TypeVar('F', bound=Callable[..., Awaitable[Any]])
+F = TypeVar("F", bound=Callable[..., Awaitable[Any]])
 
 
 def with_hooks(
@@ -230,12 +218,14 @@ def with_hooks(
             # Agent execution logic
             return result
     """
+
     def decorator(func: F) -> F:
         @wraps(func)
         async def wrapper(*args, **kwargs) -> Any:
             # Extract context from arguments
             # Try to get from kwargs first, then positional args
             import inspect
+
             sig = inspect.signature(func)
             params = list(sig.parameters.keys())
 
@@ -332,16 +322,16 @@ class HookableAgent:
         func: Callable[..., Awaitable[Any]],
         *args,
         method_name: Optional[str] = None,
-        **kwargs
+        **kwargs,
     ) -> Any:
         """Execute a function with hooks"""
         if not self._hook_manager:
             return await func(*args, **kwargs)
 
         # Get agent info
-        agent_id = getattr(self, 'agent_id', 'unknown')
-        agent_type = getattr(self, 'agent_type', type(self).__name__)
-        user_id = getattr(self, 'user_id', 'unknown')
+        agent_id = getattr(self, "agent_id", "unknown")
+        agent_type = getattr(self, "agent_type", type(self).__name__)
+        user_id = getattr(self, "user_id", "unknown")
 
         # Create context
         context = HookContext(
@@ -351,8 +341,8 @@ class HookableAgent:
             phase=HookPhase.PRE_EXECUTE,
             method_name=method_name or func.__name__,
             started_at=datetime.now(),
-            collected_fields=getattr(self, 'collected_fields', {}),
-            execution_state=getattr(self, 'execution_state', {}),
+            collected_fields=getattr(self, "collected_fields", {}),
+            execution_state=getattr(self, "execution_state", {}),
         )
 
         if args:

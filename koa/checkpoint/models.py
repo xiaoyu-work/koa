@@ -7,11 +7,11 @@ This module defines:
 - CheckpointTree: Tree structure for branching conversations
 """
 
+import json
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Any, List, Optional
-import uuid
-import json
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
@@ -25,6 +25,7 @@ class Checkpoint:
     - Result from the state handler
     - Link to parent checkpoint (for branching)
     """
+
     # Identity
     id: str
     agent_id: str
@@ -117,6 +118,7 @@ class CheckpointMetadata:
 
     Used for displaying checkpoint lists without loading full state.
     """
+
     id: str
     agent_id: str
     agent_type: str
@@ -176,6 +178,7 @@ class CheckpointTree:
     Represents the full tree of checkpoints for an agent,
     useful for visualizing conversation branches.
     """
+
     root_id: str
     nodes: Dict[str, CheckpointMetadata] = field(default_factory=dict)
     children: Dict[str, List[str]] = field(default_factory=dict)  # parent_id -> child_ids
@@ -235,6 +238,7 @@ class CheckpointDiff:
 
     Useful for understanding what changed between states.
     """
+
     from_checkpoint_id: str
     to_checkpoint_id: str
 
@@ -252,11 +256,7 @@ class CheckpointDiff:
     execution_state_changed: bool = False
 
     @classmethod
-    def compute(
-        cls,
-        from_checkpoint: Checkpoint,
-        to_checkpoint: Checkpoint
-    ) -> "CheckpointDiff":
+    def compute(cls, from_checkpoint: Checkpoint, to_checkpoint: Checkpoint) -> "CheckpointDiff":
         """Compute diff between two checkpoints"""
         diff = cls(
             from_checkpoint_id=from_checkpoint.id,
@@ -297,9 +297,9 @@ class CheckpointDiff:
     def has_changes(self) -> bool:
         """Check if there are any changes"""
         return (
-            self.status_changed or
-            bool(self.fields_added) or
-            bool(self.fields_removed) or
-            bool(self.fields_modified) or
-            self.execution_state_changed
+            self.status_changed
+            or bool(self.fields_added)
+            or bool(self.fields_removed)
+            or bool(self.fields_modified)
+            or self.execution_state_changed
         )

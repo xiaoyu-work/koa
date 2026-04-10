@@ -19,11 +19,20 @@ pytestmark = [pytest.mark.integration, pytest.mark.travel]
 # ---------------------------------------------------------------------------
 
 TOOL_SELECTION_CASES = [
-    ("Plan a 3-day trip to Tokyo", ["search_places", "check_weather", "search_hotels", "get_weather"]),
-    ("I'm planning a trip to Paris, what's the weather like there?", ["check_weather", "get_weather"]),
+    (
+        "Plan a 3-day trip to Tokyo",
+        ["search_places", "check_weather", "search_hotels", "get_weather"],
+    ),
+    (
+        "I'm planning a trip to Paris, what's the weather like there?",
+        ["check_weather", "get_weather"],
+    ),
     ("Find hotels in Barcelona for next week", ["search_hotels"]),
     ("Search for restaurants near the Eiffel Tower", ["search_places"]),
-    ("Plan a trip to London from New York", ["search_flights", "search_places", "check_weather", "get_weather"]),
+    (
+        "Plan a trip to London from New York",
+        ["search_flights", "search_places", "check_weather", "get_weather"],
+    ),
     ("How do I get from Shibuya to Asakusa?", ["get_directions"]),
     ("Find flights from SF to Tokyo", ["search_flights"]),
 ]
@@ -47,6 +56,7 @@ async def test_tool_selection(orchestrator_factory, user_input, expected_tools):
 # Argument extraction
 # ---------------------------------------------------------------------------
 
+
 async def test_weather_extracts_location(orchestrator_factory):
     """check_weather or get_weather should receive the destination city."""
     orch, recorder = await orchestrator_factory()
@@ -57,9 +67,7 @@ async def test_weather_extracts_location(orchestrator_factory):
 
     args = calls[0]["arguments"]
     location = args.get("location", "") or args.get("city", "") or args.get("query", "")
-    assert "tokyo" in location.lower(), (
-        f"Expected location containing 'Tokyo', got {args}"
-    )
+    assert "tokyo" in location.lower(), f"Expected location containing 'Tokyo', got {args}"
 
 
 async def test_search_places_extracts_destination(orchestrator_factory):
@@ -72,9 +80,7 @@ async def test_search_places_extracts_destination(orchestrator_factory):
 
     args = calls[0]["arguments"]
     query = args.get("query", "") or args.get("location", "")
-    assert "tokyo" in query.lower() or args, (
-        f"Expected query related to Tokyo, got {args}"
-    )
+    assert "tokyo" in query.lower() or args, f"Expected query related to Tokyo, got {args}"
 
 
 async def test_hotels_extracts_destination(orchestrator_factory):
@@ -134,6 +140,7 @@ async def test_directions_extracts_endpoints(orchestrator_factory):
 # Multi-tool parallel calls
 # ---------------------------------------------------------------------------
 
+
 async def test_trip_plan_triggers_multiple_tools(orchestrator_factory):
     """A full trip planning request should trigger weather + places + hotels."""
     orch, recorder = await orchestrator_factory()
@@ -152,9 +159,7 @@ async def test_trip_plan_triggers_multiple_tools(orchestrator_factory):
 async def test_trip_with_origin_triggers_flights(orchestrator_factory):
     """When origin is provided, search_flights should also be called."""
     orch, recorder = await orchestrator_factory()
-    await orch.handle_message(
-        "test_user", "Plan a trip to London from New York next week"
-    )
+    await orch.handle_message("test_user", "Plan a trip to London from New York next week")
 
     tools_called = set(c["tool_name"] for c in recorder.tool_calls)
     assert "search_flights" in tools_called, (
@@ -165,6 +170,7 @@ async def test_trip_with_origin_triggers_flights(orchestrator_factory):
 # ---------------------------------------------------------------------------
 # Response quality
 # ---------------------------------------------------------------------------
+
 
 async def test_response_quality_trip_plan(orchestrator_factory, llm_judge):
     """A trip plan should include weather, places, and accommodation info."""
@@ -187,9 +193,7 @@ async def test_response_quality_trip_plan(orchestrator_factory, llm_judge):
 async def test_response_quality_hotel_search(orchestrator_factory, llm_judge):
     """Hotel search should present options with prices."""
     orch, recorder = await orchestrator_factory()
-    result = await orch.handle_message(
-        "test_user", "Find hotels in Barcelona for next week"
-    )
+    result = await orch.handle_message("test_user", "Find hotels in Barcelona for next week")
     response = result.raw_message if hasattr(result, "raw_message") else str(result)
 
     passed = await llm_judge(
@@ -207,9 +211,7 @@ async def test_response_quality_hotel_search(orchestrator_factory, llm_judge):
 async def test_response_quality_directions(orchestrator_factory, llm_judge):
     """Directions response should include distance and steps."""
     orch, recorder = await orchestrator_factory()
-    result = await orch.handle_message(
-        "test_user", "How do I get from Shibuya to Asakusa?"
-    )
+    result = await orch.handle_message("test_user", "How do I get from Shibuya to Asakusa?")
     response = result.raw_message if hasattr(result, "raw_message") else str(result)
 
     passed = await llm_judge(

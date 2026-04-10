@@ -14,13 +14,13 @@ Agents:
 - DiscordComposioAgent: Send messages, list channels, list servers.
 """
 
-from .slack_agent import SlackComposioAgent
-from .github_agent import GitHubComposioAgent
-from .twitter_agent import TwitterComposioAgent
-from .spotify_agent import SpotifyComposioAgent
-from .youtube_agent import YouTubeComposioAgent
-from .linkedin_agent import LinkedInComposioAgent
 from .discord_agent import DiscordComposioAgent
+from .github_agent import GitHubComposioAgent
+from .linkedin_agent import LinkedInComposioAgent
+from .slack_agent import SlackComposioAgent
+from .spotify_agent import SpotifyComposioAgent
+from .twitter_agent import TwitterComposioAgent
+from .youtube_agent import YouTubeComposioAgent
 
 __all__ = [
     "SlackComposioAgent",

@@ -9,14 +9,13 @@ Tests cover:
 
 import pytest
 
-from koa.orchestrator.intent_analyzer import SubTask
 from koa.orchestrator.dag_executor import (
-    topological_sort,
     SubTaskResult,
-    get_runnable_tasks,
     aggregate_token_usage,
+    get_runnable_tasks,
+    topological_sort,
 )
-
+from koa.orchestrator.intent_analyzer import SubTask
 
 # ── Tests: topological_sort ──
 

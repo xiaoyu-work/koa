@@ -5,10 +5,10 @@ Each email provider (Gmail, Outlook, etc.) must implement this interface.
 Providers receive a credentials dict directly - they do not query any database.
 """
 
-from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, List, Optional
-from datetime import datetime, timedelta, timezone
 import logging
+from abc import ABC, abstractmethod
+from datetime import datetime, timedelta, timezone
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +115,7 @@ class BaseEmailProvider(ABC):
         # Parse token_expiry if it's a string
         if isinstance(self.token_expiry, str):
             from dateutil import parser
+
             self.token_expiry = parser.parse(self.token_expiry)
 
         now = datetime.now(timezone.utc)

@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 # Shared Helpers
 # =============================================================================
 
+
 def _get_repos(context: AgentToolContext):
     """Get expense, budget, and receipt repositories from context hints.
 
@@ -31,9 +32,10 @@ def _get_repos(context: AgentToolContext):
     db = context.context_hints.get("db") if context.context_hints else None
     if not db:
         return None, None, None
-    from .repository import ExpenseRepository
     from .budget_repository import BudgetRepository
     from .receipt_repository import ReceiptRepository
+    from .repository import ExpenseRepository
+
     return ExpenseRepository(db), BudgetRepository(db), ReceiptRepository(db)
 
 
@@ -56,6 +58,7 @@ def _parse_date(date_str: str) -> date:
         # Try dateutil as fallback for more flexible parsing
         try:
             from dateutil import parser as date_parser
+
             return date_parser.parse(date_str.strip()).date()
         except Exception:
             return date.today()
@@ -123,8 +126,13 @@ def _parse_period(period: str) -> tuple[date, date]:
 def _format_amount(amount: float, currency: str = "USD") -> str:
     """Format an amount with currency symbol."""
     symbols = {
-        "USD": "$", "EUR": "\u20ac", "GBP": "\u00a3", "JPY": "\u00a5",
-        "CAD": "CA$", "AUD": "A$", "CHF": "CHF ",
+        "USD": "$",
+        "EUR": "\u20ac",
+        "GBP": "\u00a3",
+        "JPY": "\u00a5",
+        "CAD": "CA$",
+        "AUD": "A$",
+        "CHF": "CHF ",
     }
     symbol = symbols.get(currency.upper(), f"{currency.upper()} ")
     if currency.upper() == "JPY":
@@ -154,8 +162,9 @@ def _format_expense_table(expenses: list, currency: str = "USD") -> str:
     return "\n".join(lines)
 
 
-async def _budget_warning(budget_repo, expense_repo, tenant_id: str,
-                          category: str, currency: str) -> str:
+async def _budget_warning(
+    budget_repo, expense_repo, tenant_id: str, category: str, currency: str
+) -> str:
     """Check if spending exceeds or approaches budget limits.
 
     Returns a warning string or empty string.
@@ -166,7 +175,9 @@ async def _budget_warning(budget_repo, expense_repo, tenant_id: str,
     # Check category-specific budget
     cat_budget = await budget_repo.get_budget(tenant_id, category)
     if cat_budget:
-        cat_total = await expense_repo.monthly_total(tenant_id, today.year, today.month, category=category)
+        cat_total = await expense_repo.monthly_total(
+            tenant_id, today.year, today.month, category=category
+        )
         limit = cat_budget.get("monthly_limit", 0)
         if limit > 0:
             pct = (cat_total / limit) * 100
@@ -208,13 +219,19 @@ async def _budget_warning(budget_repo, expense_repo, tenant_id: str,
 # log_expense
 # =============================================================================
 
+
 @tool
 async def log_expense(
     amount: Annotated[float, "Amount spent (e.g. 15.50)."],
-    category: Annotated[str, "Expense category: food, transport, shopping, entertainment, housing, health, education, or other."],
+    category: Annotated[
+        str,
+        "Expense category: food, transport, shopping, entertainment, housing, health, education, or other.",
+    ],
     description: Annotated[str, "Brief description of the expense (e.g. 'lunch at cafe')."] = "",
     merchant: Annotated[str, "Merchant or vendor name (e.g. 'Starbucks')."] = "",
-    expense_date: Annotated[str, "Date of expense: 'today', 'yesterday', or YYYY-MM-DD. Defaults to today."] = "today",
+    expense_date: Annotated[
+        str, "Date of expense: 'today', 'yesterday', or YYYY-MM-DD. Defaults to today."
+    ] = "today",
     currency: Annotated[str, "Currency code (e.g. USD, EUR). Defaults to USD."] = "USD",
     *,
     context: AgentToolContext,
@@ -248,7 +265,9 @@ async def log_expense(
     # Get monthly total
     today = _parse_date("today")
     cat_total = await expense_repo.monthly_total(
-        context.tenant_id, today.year, today.month,
+        context.tenant_id,
+        today.year,
+        today.month,
     )
 
     desc_part = f" ({description})" if description else ""
@@ -260,7 +279,11 @@ async def log_expense(
     # Check budget warnings
     if budget_repo:
         warning = await _budget_warning(
-            budget_repo, expense_repo, context.tenant_id, category_lower, currency,
+            budget_repo,
+            expense_repo,
+            context.tenant_id,
+            category_lower,
+            currency,
         )
         if warning:
             result += f" {warning}"
@@ -274,12 +297,14 @@ async def log_expense(
         "date": parsed_date.isoformat(),
         "currency": currency.upper(),
     }
-    media = [{
-        "type": "inline_cards",
-        "data": json.dumps([card]),
-        "media_type": "application/json",
-        "metadata": {"for_storage": False},
-    }]
+    media = [
+        {
+            "type": "inline_cards",
+            "data": json.dumps([card]),
+            "media_type": "application/json",
+            "metadata": {"for_storage": False},
+        }
+    ]
 
     return ToolOutput(text=result, media=media)
 
@@ -288,10 +313,15 @@ async def log_expense(
 # query_expenses
 # =============================================================================
 
+
 @tool
 async def query_expenses(
-    period: Annotated[str, "Time period: 'today', 'this_week', 'this_month', 'last_month', or 'YYYY-MM'."] = "this_month",
-    category: Annotated[str, "Filter by category (e.g. 'food'). Leave empty for all categories."] = "",
+    period: Annotated[
+        str, "Time period: 'today', 'this_week', 'this_month', 'last_month', or 'YYYY-MM'."
+    ] = "this_month",
+    category: Annotated[
+        str, "Filter by category (e.g. 'food'). Leave empty for all categories."
+    ] = "",
     merchant: Annotated[str, "Filter by merchant name. Leave empty for all merchants."] = "",
     limit: Annotated[int, "Maximum number of results to return."] = 20,
     *,
@@ -357,12 +387,14 @@ async def query_expenses(
 
     media = []
     if expense_cards:
-        media.append({
-            "type": "inline_cards",
-            "data": json.dumps(expense_cards),
-            "media_type": "application/json",
-            "metadata": {"for_storage": False},
-        })
+        media.append(
+            {
+                "type": "inline_cards",
+                "data": json.dumps(expense_cards),
+                "media_type": "application/json",
+                "metadata": {"for_storage": False},
+            }
+        )
 
     return ToolOutput(text=text_result, media=media)
 
@@ -371,14 +403,17 @@ async def query_expenses(
 # delete_expense
 # =============================================================================
 
+
 async def _preview_delete_expense(args: dict, context) -> str:
     hint = args.get("hint", "")
-    return f"Search for and delete expense matching: \"{hint}\"?"
+    return f'Search for and delete expense matching: "{hint}"?'
 
 
 @tool(needs_approval=True, get_preview=_preview_delete_expense)
 async def delete_expense(
-    hint: Annotated[str, "Keywords to find the expense to delete (e.g. 'Starbucks yesterday', '$15 lunch')."],
+    hint: Annotated[
+        str, "Keywords to find the expense to delete (e.g. 'Starbucks yesterday', '$15 lunch')."
+    ],
     *,
     context: AgentToolContext,
 ) -> str:
@@ -397,7 +432,7 @@ async def delete_expense(
         return "Sorry, I couldn't search for that expense. Please try again."
 
     if not matches:
-        return f"No matching expense found for \"{hint}\"."
+        return f'No matching expense found for "{hint}".'
 
     if len(matches) == 1:
         exp = matches[0]
@@ -417,7 +452,7 @@ async def delete_expense(
             return "Sorry, I couldn't delete that expense. Please try again."
 
     # Multiple matches - ask user to be more specific
-    lines = [f"Found {len(matches)} expenses matching \"{hint}\":\n"]
+    lines = [f'Found {len(matches)} expenses matching "{hint}":\n']
     for i, exp in enumerate(matches[:10], 1):
         d = exp.get("date", "")
         if isinstance(d, date):
@@ -448,13 +483,24 @@ async def _preview_update_expense(args: dict, context) -> str:
 
 @tool(needs_approval=True, get_preview=_preview_update_expense)
 async def update_expense(
-    hint: Annotated[str, "Keywords to find the expense to update (e.g. 'Starbucks yesterday', '$15 lunch')."],
+    hint: Annotated[
+        str, "Keywords to find the expense to update (e.g. 'Starbucks yesterday', '$15 lunch')."
+    ],
     amount: Annotated[Optional[float], "New amount. Leave empty to keep current value."] = None,
     category: Annotated[Optional[str], "New category. Leave empty to keep current value."] = None,
-    description: Annotated[Optional[str], "New description. Leave empty to keep current value."] = None,
-    merchant: Annotated[Optional[str], "New merchant name. Leave empty to keep current value."] = None,
-    currency: Annotated[Optional[str], "New currency code (e.g. USD, EUR, CNY). Leave empty to keep current value."] = None,
-    expense_date: Annotated[Optional[str], "New date: 'today', 'yesterday', or YYYY-MM-DD. Leave empty to keep current value."] = None,
+    description: Annotated[
+        Optional[str], "New description. Leave empty to keep current value."
+    ] = None,
+    merchant: Annotated[
+        Optional[str], "New merchant name. Leave empty to keep current value."
+    ] = None,
+    currency: Annotated[
+        Optional[str], "New currency code (e.g. USD, EUR, CNY). Leave empty to keep current value."
+    ] = None,
+    expense_date: Annotated[
+        Optional[str],
+        "New date: 'today', 'yesterday', or YYYY-MM-DD. Leave empty to keep current value.",
+    ] = None,
     *,
     context: AgentToolContext,
 ) -> str:
@@ -537,9 +583,12 @@ async def update_expense(
 # spending_summary
 # =============================================================================
 
+
 @tool
 async def spending_summary(
-    period: Annotated[str, "Time period: 'today', 'this_week', 'this_month', 'last_month', or 'YYYY-MM'."] = "this_month",
+    period: Annotated[
+        str, "Time period: 'today', 'this_week', 'this_month', 'last_month', or 'YYYY-MM'."
+    ] = "this_month",
     *,
     context: AgentToolContext,
 ) -> str:
@@ -593,9 +642,7 @@ async def spending_summary(
                     if total > limit:
                         budget_str += " OVER"
 
-        lines.append(
-            f"{cat:<14} {_format_amount(total, currency):>10}  {count:>5}  {budget_str}"
-        )
+        lines.append(f"{cat:<14} {_format_amount(total, currency):>10}  {count:>5}  {budget_str}")
 
         cat_card = {
             "name": cat.strip(),
@@ -633,12 +680,14 @@ async def spending_summary(
         "total": round(grand_total, 2),
         "categories": category_cards,
     }
-    media = [{
-        "type": "inline_cards",
-        "data": json.dumps([card]),
-        "media_type": "application/json",
-        "metadata": {"for_storage": False},
-    }]
+    media = [
+        {
+            "type": "inline_cards",
+            "data": json.dumps([card]),
+            "media_type": "application/json",
+            "metadata": {"for_storage": False},
+        }
+    ]
 
     return ToolOutput(text=text_result, media=media)
 
@@ -647,9 +696,12 @@ async def spending_summary(
 # set_budget
 # =============================================================================
 
+
 @tool
 async def set_budget(
-    category: Annotated[str, "Category to set budget for (e.g. 'food'), or '_total' for overall monthly budget."] = "_total",
+    category: Annotated[
+        str, "Category to set budget for (e.g. 'food'), or '_total' for overall monthly budget."
+    ] = "_total",
     monthly_limit: Annotated[float, "Monthly spending limit amount."] = 0,
     currency: Annotated[str, "Currency code (e.g. USD, EUR). Defaults to USD."] = "USD",
     *,
@@ -685,6 +737,7 @@ async def set_budget(
 # budget_status
 # =============================================================================
 
+
 @tool
 async def budget_status(
     *,
@@ -707,15 +760,17 @@ async def budget_status(
         return "No budgets configured yet. Use set_budget to create one."
 
     today = date.today()
-    month_start = today.replace(day=1)
+    today.replace(day=1)
     if today.month == 12:
-        month_end = today.replace(year=today.year + 1, month=1, day=1) - timedelta(days=1)
+        today.replace(year=today.year + 1, month=1, day=1) - timedelta(days=1)
     else:
-        month_end = today.replace(month=today.month + 1, day=1) - timedelta(days=1)
+        today.replace(month=today.month + 1, day=1) - timedelta(days=1)
 
     lines = []
     lines.append(f"Budget status for {today.strftime('%B %Y')}:\n")
-    lines.append(f"{'Category':<14} {'Budget':>10}  {'Spent':>10}  {'Remaining':>10}  {'% Used':>7}")
+    lines.append(
+        f"{'Category':<14} {'Budget':>10}  {'Spent':>10}  {'Remaining':>10}  {'% Used':>7}"
+    )
     lines.append("-" * 62)
 
     budget_cards_categories = []
@@ -728,7 +783,10 @@ async def budget_status(
             spent = await expense_repo.monthly_total(context.tenant_id, today.year, today.month)
         else:
             spent = await expense_repo.monthly_total(
-                context.tenant_id, today.year, today.month, category=cat,
+                context.tenant_id,
+                today.year,
+                today.month,
+                category=cat,
             )
 
         remaining = limit - spent
@@ -750,13 +808,15 @@ async def budget_status(
             f"{pct:>5.0f}%{status_marker}"
         )
 
-        budget_cards_categories.append({
-            "name": display_cat.strip(),
-            "budget": round(limit, 2),
-            "spent": round(spent, 2),
-            "remaining": round(remaining, 2),
-            "percentUsed": round(pct, 1),
-        })
+        budget_cards_categories.append(
+            {
+                "name": display_cat.strip(),
+                "budget": round(limit, 2),
+                "spent": round(spent, 2),
+                "remaining": round(remaining, 2),
+                "percentUsed": round(pct, 1),
+            }
+        )
 
     text_result = "\n".join(lines)
 
@@ -766,12 +826,14 @@ async def budget_status(
         "month": today.strftime("%B %Y"),
         "categories": budget_cards_categories,
     }
-    media = [{
-        "type": "inline_cards",
-        "data": json.dumps([card]),
-        "media_type": "application/json",
-        "metadata": {"for_storage": False},
-    }]
+    media = [
+        {
+            "type": "inline_cards",
+            "data": json.dumps([card]),
+            "media_type": "application/json",
+            "metadata": {"for_storage": False},
+        }
+    ]
 
     return ToolOutput(text=text_result, media=media)
 
@@ -780,9 +842,12 @@ async def budget_status(
 # upload_receipt
 # =============================================================================
 
+
 @tool
 async def upload_receipt(
-    description: Annotated[str, "Description or notes about the receipt (e.g. 'dinner receipt from Friday')."] = "",
+    description: Annotated[
+        str, "Description or notes about the receipt (e.g. 'dinner receipt from Friday')."
+    ] = "",
     *,
     context: AgentToolContext,
 ) -> str:
@@ -838,7 +903,9 @@ async def upload_receipt(
     # Try to upload to cloud storage if available
     storage_url = ""
     storage_file_id = ""
-    storage_provider = context.context_hints.get("cloud_storage_provider") if context.context_hints else None
+    storage_provider = (
+        context.context_hints.get("cloud_storage_provider") if context.context_hints else None
+    )
     if storage_provider:
         try:
             folder_path = f"Koa/Receipts/{today.strftime('%Y-%m')}"
@@ -857,7 +924,7 @@ async def upload_receipt(
     # Store in receipt repository
     provider_name = getattr(storage_provider, "provider", "") if storage_provider else ""
     try:
-        record = await receipt_repo.add(
+        await receipt_repo.add(
             tenant_id=context.tenant_id,
             file_name=filename,
             storage_provider=provider_name,
@@ -876,10 +943,13 @@ async def upload_receipt(
 # search_receipts
 # =============================================================================
 
+
 @tool
 async def search_receipts(
     query: Annotated[str, "Search keywords to find receipts (e.g. 'restaurant', 'March', 'uber')."],
-    period: Annotated[str, "Optional time period filter: 'this_month', 'last_month', or 'YYYY-MM'."] = "",
+    period: Annotated[
+        str, "Optional time period filter: 'this_month', 'last_month', or 'YYYY-MM'."
+    ] = "",
     *,
     context: AgentToolContext,
 ) -> str:
@@ -915,15 +985,17 @@ async def search_receipts(
 
     if not receipts and not expense_matches:
         period_str = f" in {period}" if period else ""
-        return f"No receipts found matching \"{query}\"{period_str}."
+        return f'No receipts found matching "{query}"{period_str}.'
 
     lines = []
 
     # Get storage provider for generating fresh signed URLs
-    storage_provider = context.context_hints.get("cloud_storage_provider") if context.context_hints else None
+    storage_provider = (
+        context.context_hints.get("cloud_storage_provider") if context.context_hints else None
+    )
 
     if receipts:
-        lines.append(f"Found {len(receipts)} receipt(s) matching \"{query}\":\n")
+        lines.append(f'Found {len(receipts)} receipt(s) matching "{query}":\n')
         for i, receipt in enumerate(receipts, 1):
             d = receipt.get("created_at", "")
             if isinstance(d, (date, datetime)):

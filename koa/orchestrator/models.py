@@ -10,11 +10,11 @@ This module defines:
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Any, Optional, Callable
 from enum import Enum
+from typing import Any, Callable, Dict, Optional
 
 # Attribute name for marking callback handlers
-CALLBACK_HANDLER_ATTR = '_callback_handler_name'
+CALLBACK_HANDLER_ATTR = "_callback_handler_name"
 
 
 def callback_handler(name: str):
@@ -41,14 +41,17 @@ def callback_handler(name: str):
     Args:
         name: The callback name that agents will use to invoke this handler
     """
+
     def decorator(func: Callable) -> Callable:
         setattr(func, CALLBACK_HANDLER_ATTR, name)
         return func
+
     return decorator
 
 
 class RoutingReason(str, Enum):
     """Reason codes for routing decisions."""
+
     ACTIVE_AGENT_FOUND = "active_agent_found"
     LLM_ROUTING = "llm_routing"
     DEFAULT_FALLBACK = "default_fallback"
@@ -65,6 +68,7 @@ class RoutingAction(str, Enum):
     - ROUTE_TO_DEFAULT: Route to DefaultAgent (when no other agent matches)
     - DELEGATE: Delegate to another orchestrator
     """
+
     ROUTE_TO_EXISTING = "route_to_existing"
     CREATE_NEW = "create_new"
     EXECUTE_WORKFLOW = "execute_workflow"
@@ -87,6 +91,7 @@ class RoutingDecision:
         reason: Reason code for the decision (RoutingReason enum)
         delegate_to: Orchestrator to delegate to (for DELEGATE)
     """
+
     action: RoutingAction
     agent_id: Optional[str] = None
     agent_type: Optional[str] = None
@@ -139,6 +144,7 @@ class SessionConfig:
         lazy_restore: Whether to restore sessions on first request
         waiting_timeout_seconds: Timeout for WAITING agents before cleanup (default: 5 min)
     """
+
     enabled: bool = True
     session_ttl_seconds: int = 86400  # 24 hours
     auto_backup_interval_seconds: int = 60
@@ -173,6 +179,7 @@ class OrchestratorConfig:
         enable_streaming: Whether streaming is enabled
         default_agent_type: Agent type to use when no other agent matches
     """
+
     config_dir: str = ""
     session: SessionConfig = field(default_factory=SessionConfig)
     default_timeout_seconds: int = 300
@@ -216,6 +223,7 @@ class AgentPoolEntry:
         checkpoint_id: Last checkpoint ID (if checkpointing enabled)
         schema_version: Schema version derived from InputField definitions (default: 0)
     """
+
     agent_id: str
     agent_type: str
     tenant_id: str = ""
@@ -253,9 +261,11 @@ class AgentPoolEntry:
             tenant_id=data.get("tenant_id", ""),
             status=data.get("status", ""),
             created_at=datetime.fromisoformat(data["created_at"])
-                if isinstance(data.get("created_at"), str) else data.get("created_at", datetime.now()),
+            if isinstance(data.get("created_at"), str)
+            else data.get("created_at", datetime.now()),
             last_activity=datetime.fromisoformat(data["last_activity"])
-                if isinstance(data.get("last_activity"), str) else data.get("last_activity", datetime.now()),
+            if isinstance(data.get("last_activity"), str)
+            else data.get("last_activity", datetime.now()),
             collected_fields=data.get("collected_fields", {}),
             execution_state=data.get("execution_state", {}),
             context=data.get("context", {}),
@@ -293,6 +303,7 @@ class AgentCallback:
             data={"message": message, "phone": phone}
         )
     """
+
     event: str
     tenant_id: str
     data: Dict[str, Any] = field(default_factory=dict)

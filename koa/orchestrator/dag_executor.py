@@ -7,7 +7,7 @@ tracking execution results.
 import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Dict, List
 
 from .intent_analyzer import SubTask
 
@@ -41,8 +41,7 @@ def get_runnable_tasks(
     skipped: List[SubTask] = []
     for task in level:
         deps_ok = all(
-            prior_results.get(dep_id) is not None
-            and prior_results[dep_id].status == "completed"
+            prior_results.get(dep_id) is not None and prior_results[dep_id].status == "completed"
             for dep_id in task.depends_on
         )
         if deps_ok:
@@ -98,8 +97,7 @@ def topological_sort(sub_tasks: List[SubTask]) -> List[List[SubTask]]:
         ready_ids = [sid for sid in remaining if in_degree[sid] == 0]
         if not ready_ids:
             raise ValueError(
-                f"Cycle detected in sub-task dependencies. "
-                f"Remaining tasks: {remaining}"
+                f"Cycle detected in sub-task dependencies. Remaining tasks: {remaining}"
             )
 
         level = [id_to_task[sid] for sid in sorted(ready_ids)]

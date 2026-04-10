@@ -15,6 +15,7 @@ WEBHOOK_TIMEOUT_SECONDS = 10
 @dataclass
 class DeliveryResult:
     """Outcome of a delivery attempt."""
+
     delivered: bool = False
     status: str = "not-requested"  # "delivered" | "not-delivered" | "not-requested"
     error: Optional[str] = None

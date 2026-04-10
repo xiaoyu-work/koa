@@ -9,8 +9,7 @@ import httpx
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
-from ...errors import KoaError, E
-
+from ...errors import E, KoaError
 from ..app import (
     get_base_url,
     oauth_success_html,
@@ -51,8 +50,10 @@ async def google_oauth_authorize(
     app = require_app()
 
     state = await app.save_oauth_state(
-        tenant_id=tenant_id, service="google",
-        redirect_after=redirect_after, account_name=account_name,
+        tenant_id=tenant_id,
+        service="google",
+        redirect_after=redirect_after,
+        account_name=account_name,
     )
     base_url = get_base_url(request)
     redirect_uri = f"{base_url}/api/oauth/google/callback"
@@ -100,8 +101,10 @@ async def google_oauth_callback(request: Request, code: str, state: str):
 
         for svc in ("gmail", "google_calendar", "google_tasks", "google_drive"):
             await app.save_credential_raw(
-                tenant_id=tenant_id, service=svc,
-                credentials=credentials, account_name=account_name,
+                tenant_id=tenant_id,
+                service=svc,
+                credentials=credentials,
+                account_name=account_name,
             )
 
         if redirect_after:
@@ -109,7 +112,9 @@ async def google_oauth_callback(request: Request, code: str, state: str):
         return oauth_success_html("google", email, "Gmail, Google Calendar, Tasks, Drive")
     except Exception as e:
         logger.error(f"Google OAuth callback failed: {e}", exc_info=True)
-        return HTMLResponse("<h2>OAuth Error</h2><p>Something went wrong. Please try again.</p>", status_code=500)
+        return HTMLResponse(
+            "<h2>OAuth Error</h2><p>Something went wrong. Please try again.</p>", status_code=500
+        )
 
 
 # --- Microsoft OAuth ---
@@ -128,8 +133,10 @@ async def microsoft_oauth_authorize(
     app = require_app()
 
     state = await app.save_oauth_state(
-        tenant_id=tenant_id, service="microsoft",
-        redirect_after=redirect_after, account_name=account_name,
+        tenant_id=tenant_id,
+        service="microsoft",
+        redirect_after=redirect_after,
+        account_name=account_name,
     )
     base_url = get_base_url(request)
     redirect_uri = f"{base_url}/api/oauth/microsoft/callback"
@@ -177,8 +184,10 @@ async def microsoft_oauth_callback(request: Request, code: str, state: str):
 
         for svc in ("outlook", "outlook_calendar", "microsoft_todo", "onedrive"):
             await app.save_credential_raw(
-                tenant_id=tenant_id, service=svc,
-                credentials=credentials, account_name=account_name,
+                tenant_id=tenant_id,
+                service=svc,
+                credentials=credentials,
+                account_name=account_name,
             )
 
         if redirect_after:
@@ -186,7 +195,9 @@ async def microsoft_oauth_callback(request: Request, code: str, state: str):
         return oauth_success_html("microsoft", email, "Outlook, Calendar, To Do &amp; OneDrive")
     except Exception as e:
         logger.error(f"Microsoft OAuth callback failed: {e}", exc_info=True)
-        return HTMLResponse("<h2>OAuth Error</h2><p>Something went wrong. Please try again.</p>", status_code=500)
+        return HTMLResponse(
+            "<h2>OAuth Error</h2><p>Something went wrong. Please try again.</p>", status_code=500
+        )
 
 
 # --- Todoist OAuth ---
@@ -204,12 +215,17 @@ async def todoist_oauth_authorize(
 
     client_id = os.getenv("TODOIST_CLIENT_ID")
     if not client_id:
-        raise KoaError(E.OAUTH_NOT_CONFIGURED, "Todoist OAuth client_id not configured",
-                            details={"provider": "todoist"})
+        raise KoaError(
+            E.OAUTH_NOT_CONFIGURED,
+            "Todoist OAuth client_id not configured",
+            details={"provider": "todoist"},
+        )
 
     state = await app.save_oauth_state(
-        tenant_id=tenant_id, service="todoist",
-        redirect_after=redirect_after, account_name=account_name,
+        tenant_id=tenant_id,
+        service="todoist",
+        redirect_after=redirect_after,
+        account_name=account_name,
     )
     params = {
         "client_id": client_id,
@@ -239,7 +255,9 @@ async def todoist_oauth_callback(request: Request, code: str, state: str):
     client_id = os.getenv("TODOIST_CLIENT_ID")
     client_secret = os.getenv("TODOIST_CLIENT_SECRET")
     if not client_id or not client_secret:
-        return HTMLResponse("<h2>OAuth Error</h2><p>Todoist OAuth not configured.</p>", status_code=500)
+        return HTMLResponse(
+            "<h2>OAuth Error</h2><p>Todoist OAuth not configured.</p>", status_code=500
+        )
 
     try:
         async with httpx.AsyncClient() as client:
@@ -274,8 +292,10 @@ async def todoist_oauth_callback(request: Request, code: str, state: str):
         }
 
         await app.save_credential_raw(
-            tenant_id=tenant_id, service="todoist",
-            credentials=credentials, account_name=account_name,
+            tenant_id=tenant_id,
+            service="todoist",
+            credentials=credentials,
+            account_name=account_name,
         )
 
         if redirect_after:
@@ -283,7 +303,9 @@ async def todoist_oauth_callback(request: Request, code: str, state: str):
         return oauth_success_html("todoist", email, "Todoist")
     except Exception as e:
         logger.error(f"Todoist OAuth callback failed: {e}", exc_info=True)
-        return HTMLResponse("<h2>OAuth Error</h2><p>Something went wrong. Please try again.</p>", status_code=500)
+        return HTMLResponse(
+            "<h2>OAuth Error</h2><p>Something went wrong. Please try again.</p>", status_code=500
+        )
 
 
 # --- Hue OAuth ---
@@ -302,8 +324,10 @@ async def hue_oauth_authorize(
     app = require_app()
 
     state = await app.save_oauth_state(
-        tenant_id=tenant_id, service="hue",
-        redirect_after=redirect_after, account_name=account_name,
+        tenant_id=tenant_id,
+        service="hue",
+        redirect_after=redirect_after,
+        account_name=account_name,
     )
     base_url = get_base_url(request)
     redirect_uri = f"{base_url}/api/oauth/hue/callback"
@@ -347,8 +371,10 @@ async def hue_oauth_callback(request: Request, code: str, state: str):
         }
 
         await app.save_credential_raw(
-            tenant_id=tenant_id, service="philips_hue",
-            credentials=credentials, account_name=account_name,
+            tenant_id=tenant_id,
+            service="philips_hue",
+            credentials=credentials,
+            account_name=account_name,
         )
 
         if redirect_after:
@@ -356,7 +382,9 @@ async def hue_oauth_callback(request: Request, code: str, state: str):
         return oauth_success_html("hue", "", "Philips Hue")
     except Exception as e:
         logger.error(f"Hue OAuth callback failed: {e}", exc_info=True)
-        return HTMLResponse("<h2>OAuth Error</h2><p>Something went wrong. Please try again.</p>", status_code=500)
+        return HTMLResponse(
+            "<h2>OAuth Error</h2><p>Something went wrong. Please try again.</p>", status_code=500
+        )
 
 
 # --- Sonos OAuth ---
@@ -375,8 +403,10 @@ async def sonos_oauth_authorize(
     app = require_app()
 
     state = await app.save_oauth_state(
-        tenant_id=tenant_id, service="sonos",
-        redirect_after=redirect_after, account_name=account_name,
+        tenant_id=tenant_id,
+        service="sonos",
+        redirect_after=redirect_after,
+        account_name=account_name,
     )
     base_url = get_base_url(request)
     redirect_uri = f"{base_url}/api/oauth/sonos/callback"
@@ -420,8 +450,10 @@ async def sonos_oauth_callback(request: Request, code: str, state: str):
         }
 
         await app.save_credential_raw(
-            tenant_id=tenant_id, service="sonos",
-            credentials=credentials, account_name=account_name,
+            tenant_id=tenant_id,
+            service="sonos",
+            credentials=credentials,
+            account_name=account_name,
         )
 
         if redirect_after:
@@ -429,7 +461,9 @@ async def sonos_oauth_callback(request: Request, code: str, state: str):
         return oauth_success_html("sonos", "", "Sonos")
     except Exception as e:
         logger.error(f"Sonos OAuth callback failed: {e}", exc_info=True)
-        return HTMLResponse("<h2>OAuth Error</h2><p>Something went wrong. Please try again.</p>", status_code=500)
+        return HTMLResponse(
+            "<h2>OAuth Error</h2><p>Something went wrong. Please try again.</p>", status_code=500
+        )
 
 
 # --- Dropbox OAuth ---
@@ -448,8 +482,10 @@ async def dropbox_oauth_authorize(
     app = require_app()
 
     state = await app.save_oauth_state(
-        tenant_id=tenant_id, service="dropbox",
-        redirect_after=redirect_after, account_name=account_name,
+        tenant_id=tenant_id,
+        service="dropbox",
+        redirect_after=redirect_after,
+        account_name=account_name,
     )
     base_url = get_base_url(request)
     redirect_uri = f"{base_url}/api/oauth/dropbox/callback"
@@ -495,8 +531,10 @@ async def dropbox_oauth_callback(request: Request, code: str, state: str):
         }
 
         await app.save_credential_raw(
-            tenant_id=tenant_id, service="dropbox",
-            credentials=credentials, account_name=account_name,
+            tenant_id=tenant_id,
+            service="dropbox",
+            credentials=credentials,
+            account_name=account_name,
         )
 
         if redirect_after:
@@ -504,7 +542,9 @@ async def dropbox_oauth_callback(request: Request, code: str, state: str):
         return oauth_success_html("dropbox", email, "Dropbox")
     except Exception as e:
         logger.error(f"Dropbox OAuth callback failed: {e}", exc_info=True)
-        return HTMLResponse("<h2>OAuth Error</h2><p>Something went wrong. Please try again.</p>", status_code=500)
+        return HTMLResponse(
+            "<h2>OAuth Error</h2><p>Something went wrong. Please try again.</p>", status_code=500
+        )
 
 
 # --- Notion OAuth ---
@@ -523,8 +563,10 @@ async def notion_oauth_authorize(
     app = require_app()
 
     state = await app.save_oauth_state(
-        tenant_id=tenant_id, service="notion",
-        redirect_after=redirect_after, account_name=account_name,
+        tenant_id=tenant_id,
+        service="notion",
+        redirect_after=redirect_after,
+        account_name=account_name,
     )
     base_url = get_base_url(request)
     redirect_uri = f"{base_url}/api/oauth/notion/callback"
@@ -571,8 +613,10 @@ async def notion_oauth_callback(request: Request, code: str, state: str):
         }
 
         await app.save_credential_raw(
-            tenant_id=tenant_id, service="notion",
-            credentials=credentials, account_name=account_name,
+            tenant_id=tenant_id,
+            service="notion",
+            credentials=credentials,
+            account_name=account_name,
         )
 
         if redirect_after:
@@ -580,7 +624,9 @@ async def notion_oauth_callback(request: Request, code: str, state: str):
         return oauth_success_html("notion", workspace, "Notion")
     except Exception as e:
         logger.error(f"Notion OAuth callback failed: {e}", exc_info=True)
-        return HTMLResponse("<h2>OAuth Error</h2><p>Something went wrong. Please try again.</p>", status_code=500)
+        return HTMLResponse(
+            "<h2>OAuth Error</h2><p>Something went wrong. Please try again.</p>", status_code=500
+        )
 
 
 # --- Composio OAuth (generic for all Composio-powered apps) ---
@@ -596,16 +642,21 @@ async def composio_oauth_authorize(
 ):
     """Initiate Composio OAuth flow. Returns authorization URL."""
     if composio_app not in COMPOSIO_APPS:
-        raise KoaError(E.PROVIDER_NOT_SUPPORTED, f"Unknown OAuth provider: {composio_app}",
-                            details={"provider": composio_app})
+        raise KoaError(
+            E.PROVIDER_NOT_SUPPORTED,
+            f"Unknown OAuth provider: {composio_app}",
+            details={"provider": composio_app},
+        )
 
     from ...builtin_agents.composio.client import ComposioClient
 
     app = require_app()
 
     state = await app.save_oauth_state(
-        tenant_id=tenant_id, service=composio_app,
-        redirect_after=redirect_after, account_name=account_name,
+        tenant_id=tenant_id,
+        service=composio_app,
+        redirect_after=redirect_after,
+        account_name=account_name,
     )
     base_url = get_base_url(request)
     callback_url = f"{base_url}/api/oauth/{composio_app}/callback?koa_state={state}"
@@ -627,7 +678,8 @@ async def composio_oauth_authorize(
                 }
 
         data = await client.initiate_connection(
-            app_name=composio_app, entity_id=tenant_id,
+            app_name=composio_app,
+            entity_id=tenant_id,
             redirect_url=callback_url,
         )
         redirect = data.get("redirectUrl", data.get("redirect_url", ""))
@@ -638,8 +690,11 @@ async def composio_oauth_authorize(
         return {"authorize_url": redirect, "connected_account_id": connected_account_id}
     except Exception as e:
         logger.error(f"Composio authorize failed for {composio_app}: {e}", exc_info=True)
-        raise KoaError(E.OAUTH_FAILED, f"Failed to initiate {composio_app} connection",
-                            details={"provider": composio_app})
+        raise KoaError(
+            E.OAUTH_FAILED,
+            f"Failed to initiate {composio_app} connection",
+            details={"provider": composio_app},
+        )
 
 
 @router.get("/api/oauth/{composio_app}/callback")
@@ -682,8 +737,10 @@ async def composio_oauth_callback(
             "access_token": "__composio_managed__",
         }
         await app.save_credential_raw(
-            tenant_id=tenant_id, service=composio_app,
-            credentials=credentials, account_name=account_name,
+            tenant_id=tenant_id,
+            service=composio_app,
+            credentials=credentials,
+            account_name=account_name,
         )
 
         if redirect_after:
@@ -691,7 +748,9 @@ async def composio_oauth_callback(
         return oauth_success_html(composio_app, "", label)
     except Exception as e:
         logger.error(f"Composio callback failed for {composio_app}: {e}", exc_info=True)
-        return HTMLResponse("<h2>OAuth Error</h2><p>Something went wrong. Please try again.</p>", status_code=500)
+        return HTMLResponse(
+            "<h2>OAuth Error</h2><p>Something went wrong. Please try again.</p>", status_code=500
+        )
 
 
 @router.get("/api/oauth/{composio_app}/verify")
@@ -707,8 +766,11 @@ async def composio_oauth_verify(
     when Composio does not redirect back to our callback URL.
     """
     if composio_app not in COMPOSIO_APPS:
-        raise KoaError(E.PROVIDER_NOT_SUPPORTED, f"Unknown provider: {composio_app}",
-                            details={"provider": composio_app})
+        raise KoaError(
+            E.PROVIDER_NOT_SUPPORTED,
+            f"Unknown provider: {composio_app}",
+            details={"provider": composio_app},
+        )
 
     from ...builtin_agents.composio.client import ComposioClient
 
@@ -718,7 +780,9 @@ async def composio_oauth_verify(
         client = ComposioClient()
         data = await client.get_connection_status(connected_account_id)
         status = data.get("status", "UNKNOWN")
-        logger.info(f"Composio verify {composio_app}: account={connected_account_id}, status={status}")
+        logger.info(
+            f"Composio verify {composio_app}: account={connected_account_id}, status={status}"
+        )
 
         if status == "ACTIVE":
             credentials = {
@@ -729,13 +793,18 @@ async def composio_oauth_verify(
                 "access_token": "__composio_managed__",
             }
             await app.save_credential_raw(
-                tenant_id=tenant_id, service=composio_app,
-                credentials=credentials, account_name=account_name,
+                tenant_id=tenant_id,
+                service=composio_app,
+                credentials=credentials,
+                account_name=account_name,
             )
             return {"status": "connected", "provider": composio_app}
         else:
             return {"status": status.lower(), "provider": composio_app}
     except Exception as e:
         logger.error(f"Composio verify failed for {composio_app}: {e}", exc_info=True)
-        raise KoaError(E.OAUTH_FAILED, f"Failed to verify {composio_app} connection",
-                            details={"provider": composio_app})
+        raise KoaError(
+            E.OAUTH_FAILED,
+            f"Failed to verify {composio_app} connection",
+            details={"provider": composio_app},
+        )

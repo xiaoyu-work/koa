@@ -142,10 +142,12 @@ class IntentAnalyzer:
                 if lat is not None and lng is not None:
                     context_parts.append(f"User location: {lat}, {lng}")
             if context_parts:
-                messages.append({
-                    "role": "system",
-                    "content": "[Context]\n" + "\n".join(context_parts),
-                })
+                messages.append(
+                    {
+                        "role": "system",
+                        "content": "[Context]\n" + "\n".join(context_parts),
+                    }
+                )
 
         messages.append({"role": "user", "content": user_message})
         try:
@@ -186,12 +188,14 @@ class IntentAnalyzer:
                 domain = st.get("domain", "general")
                 if domain not in VALID_DOMAINS:
                     domain = "general"
-                sub_tasks.append(SubTask(
-                    id=st.get("id", 0),
-                    description=st.get("description", ""),
-                    domain=domain,
-                    depends_on=st.get("depends_on", []),
-                ))
+                sub_tasks.append(
+                    SubTask(
+                        id=st.get("id", 0),
+                        description=st.get("description", ""),
+                        domain=domain,
+                        depends_on=st.get("depends_on", []),
+                    )
+                )
             # Cap sub-tasks to MAX_SUB_TASKS
             if len(sub_tasks) > MAX_SUB_TASKS:
                 logger.warning(

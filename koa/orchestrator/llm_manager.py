@@ -9,8 +9,8 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from .error_classifier import LLMErrorKind, classify_llm_error
 from ..llm.circuit_breaker import CircuitBreaker, CircuitBreakerOpenError
+from .error_classifier import LLMErrorKind, classify_llm_error
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +30,8 @@ class LLMManagerMixin:
 
     def _get_circuit_breaker(self, client: Any) -> CircuitBreaker:
         """Get or create a circuit breaker for the given LLM client."""
-        provider = getattr(client, 'provider', '') or id(client)
-        model = getattr(getattr(client, 'config', None), 'model', '')
+        provider = getattr(client, "provider", "") or id(client)
+        model = getattr(getattr(client, "config", None), "model", "")
         key = f"{provider}:{model}"
         if key not in self._circuit_breakers:
             self._circuit_breakers[key] = CircuitBreaker(
@@ -69,7 +69,11 @@ class LLMManagerMixin:
         """
         client = llm_client_override or self.llm_client
         primary_error = await self._llm_call_single_client(
-            client, messages, tool_schemas, tool_choice, **extra_kwargs,
+            client,
+            messages,
+            tool_schemas,
+            tool_choice,
+            **extra_kwargs,
         )
         if not isinstance(primary_error, Exception):
             return primary_error  # success — it's an LLMResponse
@@ -90,7 +94,11 @@ class LLMManagerMixin:
                 logger.warning(f"[LLM] Primary failed, trying fallback provider: {provider_name}")
                 try:
                     result = await self._llm_call_single_client(
-                        fallback_client, messages, tool_schemas, tool_choice, **extra_kwargs,
+                        fallback_client,
+                        messages,
+                        tool_schemas,
+                        tool_choice,
+                        **extra_kwargs,
                     )
                 except Exception as fb_err:
                     # Auth errors raised from _llm_call_single_client — skip this fallback
@@ -131,15 +139,19 @@ class LLMManagerMixin:
                     kwargs["tools"] = tool_schemas
                     if tool_choice:
                         kwargs["tool_choice"] = tool_choice
-                    logger.info(f"[LLM] Sending {len(tool_schemas)} tools, tool_choice={tool_choice or 'auto'}, sample: {json.dumps(tool_schemas[0], ensure_ascii=False)[:200]}")
+                    logger.info(
+                        f"[LLM] Sending {len(tool_schemas)} tools, tool_choice={tool_choice or 'auto'}, sample: {json.dumps(tool_schemas[0], ensure_ascii=False)[:200]}"
+                    )
                 else:
                     logger.info("[LLM] Sending request with NO tools")
                 response = await client.chat_completion(**kwargs)
                 # Debug: log what came back
-                tc = getattr(response, 'tool_calls', None)
-                sr = getattr(response, 'stop_reason', None)
-                content_len = len(getattr(response, 'content', '') or '')
-                logger.info(f"[LLM] Response: stop_reason={sr}, tool_calls={len(tc) if tc else 0}, content_len={content_len}")
+                tc = getattr(response, "tool_calls", None)
+                sr = getattr(response, "stop_reason", None)
+                content_len = len(getattr(response, "content", "") or "")
+                logger.info(
+                    f"[LLM] Response: stop_reason={sr}, tool_calls={len(tc) if tc else 0}, content_len={content_len}"
+                )
                 cb.record_success()
                 return response
 
@@ -153,7 +165,7 @@ class LLMManagerMixin:
 
                 # Rate limit: exponential backoff
                 if error_kind == LLMErrorKind.RATE_LIMIT:
-                    delay = self._react_config.llm_retry_base_delay * (2 ** attempt)
+                    delay = self._react_config.llm_retry_base_delay * (2**attempt)
                     logger.warning(f"Rate limited, retrying in {delay}s (attempt {attempt + 1})")
                     await asyncio.sleep(delay)
                     continue
@@ -187,8 +199,10 @@ class LLMManagerMixin:
 
                 # Service unavailable / transient / unknown: retry with backoff
                 if attempt < self._react_config.llm_max_retries:
-                    delay = self._react_config.llm_retry_base_delay * (2 ** attempt)
-                    logger.warning(f"LLM call failed ({error_kind.value}: {e}), retrying in {delay}s")
+                    delay = self._react_config.llm_retry_base_delay * (2**attempt)
+                    logger.warning(
+                        f"LLM call failed ({error_kind.value}: {e}), retrying in {delay}s"
+                    )
                     await asyncio.sleep(delay)
                     continue
 
@@ -212,6 +226,7 @@ class LLMManagerMixin:
 
         try:
             from ..llm.registry import LLMRegistry
+
             return LLMRegistry.get_instance()
         except Exception:
             return None

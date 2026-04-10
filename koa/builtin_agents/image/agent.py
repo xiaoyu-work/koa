@@ -8,12 +8,22 @@ This agent handles both image generation and editing:
 Supports multiple providers (OpenAI, Azure, Gemini, Seedream) via the
 image provider layer. Requires user approval before generating (costs money).
 """
-import logging
-import json
-import base64
-from typing import Dict, Any
 
-from koa import valet, StandardAgent, InputField, AgentStatus, AgentResult, Message, ApprovalResult, ImageBlock
+import base64
+import json
+import logging
+from typing import Any, Dict
+
+from koa import (
+    AgentResult,
+    AgentStatus,
+    ApprovalResult,
+    ImageBlock,
+    InputField,
+    Message,
+    StandardAgent,
+    valet,
+)
 from koa.constants import IMAGE_SERVICES
 
 logger = logging.getLogger(__name__)
@@ -44,11 +54,7 @@ class ImageAgent(StandardAgent):
     )
 
     def __init__(self, tenant_id: str = "", llm_client=None, **kwargs):
-        super().__init__(
-            tenant_id=tenant_id,
-            llm_client=llm_client,
-            **kwargs
-        )
+        super().__init__(tenant_id=tenant_id, llm_client=llm_client, **kwargs)
         self._resolved_credentials = None
         self._edit_mode = False
         self._image_data = None
@@ -70,8 +76,7 @@ Return ONLY one word: APPROVED, REJECTED, or MODIFY"""
 
         try:
             result = await self.llm_client.chat_completion(
-                messages=[{"role": "user", "content": prompt}],
-                enable_thinking=False
+                messages=[{"role": "user", "content": prompt}], enable_thinking=False
             )
             response = result.content.strip().upper()
 
@@ -107,13 +112,12 @@ Return ONLY one word: APPROVED, REJECTED, or MODIFY"""
             return self.make_result(
                 status=AgentStatus.WAITING_FOR_INPUT,
                 raw_message=self._get_next_prompt(),
-                missing_fields=missing
+                missing_fields=missing,
             )
 
         # All fields collected - go to approval
         return self.make_result(
-            status=AgentStatus.WAITING_FOR_APPROVAL,
-            raw_message=self.get_approval_prompt()
+            status=AgentStatus.WAITING_FOR_APPROVAL, raw_message=self.get_approval_prompt()
         )
 
     async def on_waiting_for_input(self, msg: Message) -> AgentResult:
@@ -131,14 +135,13 @@ Return ONLY one word: APPROVED, REJECTED, or MODIFY"""
             return self.make_result(
                 status=AgentStatus.WAITING_FOR_INPUT,
                 raw_message=self._get_next_prompt(),
-                missing_fields=missing
+                missing_fields=missing,
             )
 
         # All fields collected - go to approval
         await self._resolve_provider()
         return self.make_result(
-            status=AgentStatus.WAITING_FOR_APPROVAL,
-            raw_message=self.get_approval_prompt()
+            status=AgentStatus.WAITING_FOR_APPROVAL, raw_message=self.get_approval_prompt()
         )
 
     async def on_waiting_for_approval(self, msg: Message) -> AgentResult:
@@ -151,10 +154,7 @@ Return ONLY one word: APPROVED, REJECTED, or MODIFY"""
             return await self.on_running(msg)
 
         elif approval == ApprovalResult.REJECTED:
-            return self.make_result(
-                status=AgentStatus.CANCELLED,
-                raw_message="OK, cancelled."
-            )
+            return self.make_result(status=AgentStatus.CANCELLED, raw_message="OK, cancelled.")
 
         else:  # MODIFY
             await self._extract_and_collect_fields(user_input)
@@ -167,12 +167,11 @@ Return ONLY one word: APPROVED, REJECTED, or MODIFY"""
                 return self.make_result(
                     status=AgentStatus.WAITING_FOR_INPUT,
                     raw_message=self._get_next_prompt(),
-                    missing_fields=missing
+                    missing_fields=missing,
                 )
 
             return self.make_result(
-                status=AgentStatus.WAITING_FOR_APPROVAL,
-                raw_message=self.get_approval_prompt()
+                status=AgentStatus.WAITING_FOR_APPROVAL, raw_message=self.get_approval_prompt()
             )
 
     async def on_running(self, msg: Message) -> AgentResult:
@@ -194,14 +193,14 @@ Return ONLY one word: APPROVED, REJECTED, or MODIFY"""
             if not self._resolved_credentials:
                 return self.make_result(
                     status=AgentStatus.COMPLETED,
-                    raw_message="No image providers configured. Please add one in settings."
+                    raw_message="No image providers configured. Please add one in settings.",
                 )
 
             provider = ImageProviderFactory.create_provider(self._resolved_credentials)
             if not provider:
                 return self.make_result(
                     status=AgentStatus.COMPLETED,
-                    raw_message="Sorry, I can't use that image provider yet."
+                    raw_message="Sorry, I can't use that image provider yet.",
                 )
 
             if self._edit_mode:
@@ -209,13 +208,13 @@ Return ONLY one word: APPROVED, REJECTED, or MODIFY"""
                     provider_name = provider.get_provider_display_name()
                     return self.make_result(
                         status=AgentStatus.COMPLETED,
-                        raw_message=f"{provider_name} doesn't support image editing. Try a different provider."
+                        raw_message=f"{provider_name} doesn't support image editing. Try a different provider.",
                     )
 
                 if not self._image_data:
                     return self.make_result(
                         status=AgentStatus.COMPLETED,
-                        raw_message="I couldn't read the attached image. Please try again."
+                        raw_message="I couldn't read the attached image. Please try again.",
                     )
 
                 result = await provider.edit_image(
@@ -235,7 +234,7 @@ Return ONLY one word: APPROVED, REJECTED, or MODIFY"""
                 if not images:
                     return self.make_result(
                         status=AgentStatus.COMPLETED,
-                        raw_message="The provider returned no images. Please try again."
+                        raw_message="The provider returned no images. Please try again.",
                     )
 
                 image_info = images[0]
@@ -296,14 +295,14 @@ Return ONLY one word: APPROVED, REJECTED, or MODIFY"""
                 logger.error(f"Image {mode_label} failed: {error_msg}")
                 return self.make_result(
                     status=AgentStatus.COMPLETED,
-                    raw_message=f"Image {mode_label} failed: {error_msg}"
+                    raw_message=f"Image {mode_label} failed: {error_msg}",
                 )
 
         except Exception as e:
             logger.error(f"Image {mode_label} failed: {e}", exc_info=True)
             return self.make_result(
                 status=AgentStatus.COMPLETED,
-                raw_message=f"Something went wrong during image {mode_label}. Want to try again?"
+                raw_message=f"Something went wrong during image {mode_label}. Want to try again?",
             )
 
     # ===== Helper Methods =====
@@ -391,11 +390,14 @@ Rules:
         try:
             result = await self.llm_client.chat_completion(
                 messages=[
-                    {"role": "system", "content": "Extract image parameters. Return valid JSON only."},
-                    {"role": "user", "content": extraction_prompt}
+                    {
+                        "role": "system",
+                        "content": "Extract image parameters. Return valid JSON only.",
+                    },
+                    {"role": "user", "content": extraction_prompt},
                 ],
                 response_format="json_object",
-                enable_thinking=False
+                enable_thinking=False,
             )
 
             response_text = result.content.strip()

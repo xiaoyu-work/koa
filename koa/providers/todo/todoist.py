@@ -5,8 +5,7 @@ Uses Todoist REST API for task operations.
 """
 
 import logging
-from typing import Any, Callable, Dict, List, Optional
-from datetime import datetime, timedelta, timezone
+from typing import Any, Callable, Dict, Optional
 
 import httpx
 
@@ -88,7 +87,9 @@ class TodoistProvider(BaseTodoProvider):
                 )
 
                 if response.status_code == 401:
-                    logger.warning(f"401 Unauthorized - attempting to refresh token for {self.account_name}")
+                    logger.warning(
+                        f"401 Unauthorized - attempting to refresh token for {self.account_name}"
+                    )
                     if await self.ensure_valid_token(force_refresh=True):
                         response = await client.get(
                             f"{self.api_base_url}/tasks",
@@ -138,7 +139,9 @@ class TodoistProvider(BaseTodoProvider):
                 )
 
                 if response.status_code == 401:
-                    logger.warning(f"401 Unauthorized - attempting to refresh token for {self.account_name}")
+                    logger.warning(
+                        f"401 Unauthorized - attempting to refresh token for {self.account_name}"
+                    )
                     if await self.ensure_valid_token(force_refresh=True):
                         response = await client.get(
                             f"{self.api_base_url}/tasks",
@@ -156,8 +159,10 @@ class TodoistProvider(BaseTodoProvider):
                 query_lower = query.lower()
                 matched = []
                 for task in tasks:
-                    if (query_lower in task.get("content", "").lower()
-                            or query_lower in task.get("description", "").lower()):
+                    if (
+                        query_lower in task.get("content", "").lower()
+                        or query_lower in task.get("description", "").lower()
+                    ):
                         project_name = project_map.get(task.get("project_id", ""), "")
                         matched.append(self._format_task(task, project_name))
 
@@ -206,7 +211,9 @@ class TodoistProvider(BaseTodoProvider):
                     logger.info(f"Todoist created task: {task['id']}")
                     return {"success": True, "data": self._format_task(task, project_name)}
                 else:
-                    logger.error(f"Todoist create task failed: {response.status_code} - {response.text}")
+                    logger.error(
+                        f"Todoist create task failed: {response.status_code} - {response.text}"
+                    )
                     return {"success": False, "error": f"Todoist API error: {response.status_code}"}
 
         except Exception as e:
@@ -234,7 +241,9 @@ class TodoistProvider(BaseTodoProvider):
                     logger.info(f"Todoist completed task: {task_id}")
                     return {"success": True}
                 else:
-                    logger.error(f"Todoist complete task failed: {response.status_code} - {response.text}")
+                    logger.error(
+                        f"Todoist complete task failed: {response.status_code} - {response.text}"
+                    )
                     return {"success": False, "error": f"Todoist API error: {response.status_code}"}
 
         except Exception as e:
@@ -269,7 +278,10 @@ class TodoistProvider(BaseTodoProvider):
                         timeout=30.0,
                     )
                     if response.status_code != 204:
-                        return {"success": False, "error": f"Todoist API error: {response.status_code}"}
+                        return {
+                            "success": False,
+                            "error": f"Todoist API error: {response.status_code}",
+                        }
 
             # Update other fields
             body: Dict[str, Any] = {}
@@ -298,8 +310,13 @@ class TodoistProvider(BaseTodoProvider):
                         logger.info(f"Todoist updated task: {task_id}")
                         return {"success": True, "data": self._format_task(task, project_name)}
                     else:
-                        logger.error(f"Todoist update task failed: {response.status_code} - {response.text}")
-                        return {"success": False, "error": f"Todoist API error: {response.status_code}"}
+                        logger.error(
+                            f"Todoist update task failed: {response.status_code} - {response.text}"
+                        )
+                        return {
+                            "success": False,
+                            "error": f"Todoist API error: {response.status_code}",
+                        }
 
             # If only completed was changed and succeeded, return success
             logger.info(f"Todoist updated task: {task_id}")
@@ -330,7 +347,9 @@ class TodoistProvider(BaseTodoProvider):
                     logger.info(f"Todoist deleted task: {task_id}")
                     return {"success": True}
                 else:
-                    logger.error(f"Todoist delete task failed: {response.status_code} - {response.text}")
+                    logger.error(
+                        f"Todoist delete task failed: {response.status_code} - {response.text}"
+                    )
                     return {"success": False, "error": f"Todoist API error: {response.status_code}"}
 
         except Exception as e:
@@ -351,7 +370,9 @@ class TodoistProvider(BaseTodoProvider):
                 )
 
                 if response.status_code == 401:
-                    logger.warning(f"401 Unauthorized - attempting to refresh token for {self.account_name}")
+                    logger.warning(
+                        f"401 Unauthorized - attempting to refresh token for {self.account_name}"
+                    )
                     if await self.ensure_valid_token(force_refresh=True):
                         response = await client.get(
                             f"{self.api_base_url}/projects",

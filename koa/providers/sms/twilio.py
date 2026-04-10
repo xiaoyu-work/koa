@@ -3,6 +3,7 @@ Twilio SMS Provider - Sends SMS via Twilio Messaging Service
 """
 
 import logging
+
 from twilio.rest import Client as TwilioClient
 
 from .base import BaseSMSProvider
@@ -23,7 +24,9 @@ class TwilioProvider(BaseSMSProvider):
     - from_number: Specify which number from the pool to use
     """
 
-    def __init__(self, account_sid: str, auth_token: str, messaging_service_sid: str, from_number: str = ""):
+    def __init__(
+        self, account_sid: str, auth_token: str, messaging_service_sid: str, from_number: str = ""
+    ):
         super().__init__()
         self.account_sid = account_sid
         self.auth_token = auth_token
@@ -32,9 +35,13 @@ class TwilioProvider(BaseSMSProvider):
 
         if self.is_enabled():
             if self.from_number:
-                logger.info(f"Twilio SMS Provider initialized (Messaging Service: {self.messaging_service_sid}, From: {self.from_number})")
+                logger.info(
+                    f"Twilio SMS Provider initialized (Messaging Service: {self.messaging_service_sid}, From: {self.from_number})"
+                )
             else:
-                logger.info(f"Twilio SMS Provider initialized (Messaging Service: {self.messaging_service_sid}, auto-select number)")
+                logger.info(
+                    f"Twilio SMS Provider initialized (Messaging Service: {self.messaging_service_sid}, auto-select number)"
+                )
         else:
             logger.warning("Twilio SMS Provider disabled - missing configuration")
 
@@ -62,7 +69,9 @@ class TwilioProvider(BaseSMSProvider):
 
             if self.from_number:
                 create_params["from_"] = self.from_number
-                logger.info(f"[Twilio] Using Messaging Service with specific number: {self.from_number}")
+                logger.info(
+                    f"[Twilio] Using Messaging Service with specific number: {self.from_number}"
+                )
             else:
                 logger.info("[Twilio] Using Messaging Service (auto-select from pool)")
 

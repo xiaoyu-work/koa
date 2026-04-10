@@ -24,26 +24,22 @@ class TripRepository(Repository):
             rows = await self.db.fetch(
                 "SELECT * FROM trips WHERE tenant_id = $1 AND status = $2 "
                 "ORDER BY departure_time ASC NULLS LAST",
-                tenant_id, status,
+                tenant_id,
+                status,
             )
         else:
             rows = await self.db.fetch(
-                "SELECT * FROM trips WHERE tenant_id = $1 "
-                "ORDER BY departure_time ASC NULLS LAST",
+                "SELECT * FROM trips WHERE tenant_id = $1 ORDER BY departure_time ASC NULLS LAST",
                 tenant_id,
             )
         return [self._row_to_dict(r) for r in rows]
 
-    async def upsert_trip(
-        self, tenant_id: str, data: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+    async def upsert_trip(self, tenant_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Insert a new trip. Returns the created row."""
         insert_data = {"tenant_id": tenant_id, **data}
         return await self._insert(insert_data)
 
-    async def update_trip(
-        self, trip_id: str, data: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+    async def update_trip(self, trip_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Update a trip by id. Returns the updated row."""
         return await self._update("id", trip_id, data)
 

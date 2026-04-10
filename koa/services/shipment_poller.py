@@ -17,8 +17,8 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 POLL_INTERVAL_S = 3600  # 1 hour
-WAKING_HOUR_START = 9   # 9 AM
-WAKING_HOUR_END = 22    # 10 PM
+WAKING_HOUR_START = 9  # 9 AM
+WAKING_HOUR_END = 22  # 10 PM
 
 # Human-readable status labels
 STATUS_LABELS = {
@@ -104,8 +104,7 @@ class ShipmentPoller:
         """Read timezone from tenant_profiles, default to UTC."""
         try:
             row = await self._db.fetchrow(
-                "SELECT profile->>'timezone' AS tz FROM tenant_profiles "
-                "WHERE tenant_id = $1",
+                "SELECT profile->>'timezone' AS tz FROM tenant_profiles WHERE tenant_id = $1",
                 tenant_id,
             )
             if row and row["tz"]:
@@ -120,9 +119,11 @@ class ShipmentPoller:
         try:
             try:
                 from zoneinfo import ZoneInfo
+
                 tz = ZoneInfo(tz_name)
             except ImportError:
                 import pytz
+
                 tz = pytz.timezone(tz_name)
             local_now = datetime.now(tz)
             return WAKING_HOUR_START <= local_now.hour < WAKING_HOUR_END
@@ -132,8 +133,8 @@ class ShipmentPoller:
 
     async def _poll_user(self, tenant_id: str) -> None:
         """Poll all active non-delivered shipments for one user."""
-        from koa.providers.shipment import TrackingProvider
         from koa.builtin_agents.shipment.shipment_repo import ShipmentRepository
+        from koa.providers.shipment import TrackingProvider
 
         provider = TrackingProvider()
         if not provider.api_key:
@@ -184,22 +185,22 @@ class ShipmentPoller:
 
             # Record change
             if new_status != old_status:
-                changes.append({
-                    "tracking_number": tn,
-                    "carrier": carrier,
-                    "description": shipment.get("description"),
-                    "old_status": old_status,
-                    "new_status": new_status,
-                    "last_update": result.get("last_update"),
-                    "estimated_delivery": result.get("estimated_delivery"),
-                })
+                changes.append(
+                    {
+                        "tracking_number": tn,
+                        "carrier": carrier,
+                        "description": shipment.get("description"),
+                        "old_status": old_status,
+                        "new_status": new_status,
+                        "last_update": result.get("last_update"),
+                        "estimated_delivery": result.get("estimated_delivery"),
+                    }
+                )
 
         if changes:
             await self._notify_changes(tenant_id, changes)
 
-    async def _notify_changes(
-        self, tenant_id: str, changes: List[Dict[str, Any]]
-    ) -> None:
+    async def _notify_changes(self, tenant_id: str, changes: List[Dict[str, Any]]) -> None:
         """Send a notification about shipment status changes."""
         if not self._notification:
             logger.info(
@@ -230,8 +231,6 @@ class ShipmentPoller:
                     "trigger_type": "shipment_poll",
                 },
             )
-            logger.info(
-                f"ShipmentPoller: notified {tenant_id} of {len(changes)} change(s)"
-            )
+            logger.info(f"ShipmentPoller: notified {tenant_id} of {len(changes)} change(s)")
         except Exception as e:
             logger.warning(f"ShipmentPoller: notification failed for {tenant_id}: {e}")

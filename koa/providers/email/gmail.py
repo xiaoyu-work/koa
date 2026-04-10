@@ -8,15 +8,13 @@ Requires OAuth scopes: gmail.send, gmail.modify, gmail.readonly
 import base64
 import logging
 import re
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from typing import Any, Callable, Dict, List, Optional
 from datetime import datetime, timedelta, timezone
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from typing import Any, Callable, Dict, List, Optional
 
-import httpx
-
-from .base import BaseEmailProvider
 from ..http_mixin import OAuthHTTPMixin
+from .base import BaseEmailProvider
 
 logger = logging.getLogger(__name__)
 
@@ -90,11 +88,17 @@ class GmailProvider(BaseEmailProvider, OAuthHTTPMixin):
             response = await self._oauth_request(
                 "GET",
                 f"{self.api_base_url}/users/me/messages/{original_message_id}",
-                params={"format": "metadata", "metadataHeaders": ["From", "To", "Cc", "Subject", "Message-ID"]},
+                params={
+                    "format": "metadata",
+                    "metadataHeaders": ["From", "To", "Cc", "Subject", "Message-ID"],
+                },
             )
 
             if response.status_code != 200:
-                return {"success": False, "error": f"Failed to get original message: {response.status_code}"}
+                return {
+                    "success": False,
+                    "error": f"Failed to get original message: {response.status_code}",
+                }
 
             msg_data = response.json()
             thread_id = msg_data.get("threadId")
@@ -107,7 +111,7 @@ class GmailProvider(BaseEmailProvider, OAuthHTTPMixin):
             original_message_id_header = hdrs.get("Message-ID", "")
 
             def extract_email(s):
-                match = re.search(r'<([^>]+)>', s)
+                match = re.search(r"<([^>]+)>", s)
                 return match.group(1) if match else s.strip()
 
             reply_to = extract_email(original_from)
@@ -182,7 +186,9 @@ class GmailProvider(BaseEmailProvider, OAuthHTTPMixin):
             if query:
                 query_parts.append(query)
             if days_back:
-                after_date = (datetime.now(timezone.utc) - timedelta(days=days_back)).strftime("%Y/%m/%d")
+                after_date = (datetime.now(timezone.utc) - timedelta(days=days_back)).strftime(
+                    "%Y/%m/%d"
+                )
                 query_parts.append(f"after:{after_date}")
             if include_categories:
                 for category in include_categories:
@@ -212,15 +218,20 @@ class GmailProvider(BaseEmailProvider, OAuthHTTPMixin):
                 )
                 if detail_response.status_code == 200:
                     msg_data = detail_response.json()
-                    hdrs = {h["name"]: h["value"] for h in msg_data.get("payload", {}).get("headers", [])}
-                    email_list.append({
-                        "message_id": msg_id,
-                        "sender": hdrs.get("From", "Unknown"),
-                        "subject": hdrs.get("Subject", "(No subject)"),
-                        "date": hdrs.get("Date", "Unknown"),
-                        "unread": "UNREAD" in msg_data.get("labelIds", []),
-                        "snippet": msg_data.get("snippet", ""),
-                    })
+                    hdrs = {
+                        h["name"]: h["value"]
+                        for h in msg_data.get("payload", {}).get("headers", [])
+                    }
+                    email_list.append(
+                        {
+                            "message_id": msg_id,
+                            "sender": hdrs.get("From", "Unknown"),
+                            "subject": hdrs.get("Subject", "(No subject)"),
+                            "date": hdrs.get("Date", "Unknown"),
+                            "unread": "UNREAD" in msg_data.get("labelIds", []),
+                            "snippet": msg_data.get("snippet", ""),
+                        }
+                    )
 
             logger.info(f"Gmail search found {len(email_list)} emails")
             return {"success": True, "data": email_list, "count": len(email_list)}
@@ -382,10 +393,12 @@ class GmailProvider(BaseEmailProvider, OAuthHTTPMixin):
                         for added in record["messagesAdded"]:
                             message = added.get("message", {})
                             if "INBOX" in message.get("labelIds", []):
-                                new_messages.append({
-                                    "message_id": message.get("id"),
-                                    "thread_id": message.get("threadId"),
-                                })
+                                new_messages.append(
+                                    {
+                                        "message_id": message.get("id"),
+                                        "thread_id": message.get("threadId"),
+                                    }
+                                )
 
                 logger.info(f"Gmail history: {len(new_messages)} new messages")
                 return {
@@ -418,7 +431,9 @@ class GmailProvider(BaseEmailProvider, OAuthHTTPMixin):
 
             if response.status_code == 200:
                 msg_data = response.json()
-                hdrs = {h["name"]: h["value"] for h in msg_data.get("payload", {}).get("headers", [])}
+                hdrs = {
+                    h["name"]: h["value"] for h in msg_data.get("payload", {}).get("headers", [])
+                }
                 return {
                     "success": True,
                     "data": {

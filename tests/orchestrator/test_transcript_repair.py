@@ -1,14 +1,11 @@
 """Tests for koa.orchestrator.transcript_repair"""
 
-import pytest
-
 from koa.orchestrator.transcript_repair import (
     SYNTHETIC_TOOL_RESULT,
     repair_tool_call_inputs,
     repair_tool_use_result_pairing,
     repair_transcript,
 )
-
 
 # ── helpers ──
 
@@ -41,7 +38,6 @@ def _system(text):
 
 
 class TestRepairToolCallInputs:
-
     def test_no_changes_returns_original_ref(self):
         msgs = [
             _user("hi"),
@@ -80,11 +76,13 @@ class TestRepairToolCallInputs:
 
     def test_mixed_valid_and_invalid(self):
         msgs = [
-            _assistant([
-                _tc("1", "good_tool", '{"a":1}'),
-                _tc("2", "bad_tool", None),
-                _tc("3", "another_good", '{"b":2}'),
-            ]),
+            _assistant(
+                [
+                    _tc("1", "good_tool", '{"a":1}'),
+                    _tc("2", "bad_tool", None),
+                    _tc("3", "another_good", '{"b":2}'),
+                ]
+            ),
         ]
         result, dropped_tc, dropped_asst = repair_tool_call_inputs(msgs)
         assert dropped_tc == 1
@@ -126,7 +124,6 @@ class TestRepairToolCallInputs:
 
 
 class TestRepairToolUseResultPairing:
-
     def test_no_changes_returns_original_ref(self):
         msgs = [
             _assistant([_tc("1", "weather", '{"c":"tokyo"}')]),
@@ -191,7 +188,7 @@ class TestRepairToolUseResultPairing:
 
     def test_displaced_result_moved(self):
         msgs = [
-            _assistant([_tc("1", "a", '{}'), _tc("2", "b", '{}')]),
+            _assistant([_tc("1", "a", "{}"), _tc("2", "b", "{}")]),
             _tool_result("2"),  # result for "2" before "1"
             _tool_result("1"),
         ]
@@ -205,10 +202,10 @@ class TestRepairToolUseResultPairing:
 
     def test_multiple_assistant_messages(self):
         msgs = [
-            _assistant([_tc("1", "a", '{}')]),
+            _assistant([_tc("1", "a", "{}")]),
             _tool_result("1"),
             _user("thanks"),
-            _assistant([_tc("2", "b", '{}')]),
+            _assistant([_tc("2", "b", "{}")]),
             # missing result for "2"
         ]
         result, synth, dup, orphan, moved = repair_tool_use_result_pairing(msgs)
@@ -228,7 +225,6 @@ class TestRepairToolUseResultPairing:
 
 
 class TestRepairTranscript:
-
     def test_clean_transcript_returns_original_ref(self):
         msgs = [
             _user("hi"),

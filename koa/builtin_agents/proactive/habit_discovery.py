@@ -13,10 +13,9 @@ automatically adapt to the user's patterns.
 
 import logging
 from datetime import datetime, timezone
-from typing import Annotated
 
-from koa.tool_decorator import tool
 from koa.models import AgentToolContext
+from koa.tool_decorator import tool
 
 logger = logging.getLogger(__name__)
 
@@ -106,22 +105,14 @@ async def analyze_user_habits(*, context: AgentToolContext) -> str:
             tenant_id,
         )
         if tool_usage:
-            top_agents = [
-                (row["agent"], row["cnt"]) for row in tool_usage if row["agent"]
-            ]
+            top_agents = [(row["agent"], row["cnt"]) for row in tool_usage if row["agent"]]
             if top_agents:
-                agent_summary = ", ".join(
-                    f"{a} ({c}x)" for a, c in top_agents[:3]
-                )
+                agent_summary = ", ".join(f"{a} ({c}x)" for a, c in top_agents[:3])
                 discoveries.append(
                     {
                         "namespace": "habit",
                         "fact_key": "most_used_features",
-                        "value": {
-                            "agents": [
-                                {"name": a, "count": c} for a, c in top_agents
-                            ]
-                        },
+                        "value": {"agents": [{"name": a, "count": c} for a, c in top_agents]},
                         "summary": f"User's most used features this week: {agent_summary}.",
                         "how_to_apply": "Prioritize proactive updates for these features.",
                     }
@@ -132,9 +123,7 @@ async def analyze_user_habits(*, context: AgentToolContext) -> str:
     # 3. Analyze calendar patterns (meeting density by day)
     try:
         cal_provider = (
-            context.context_hints.get("calendar_provider")
-            if context.context_hints
-            else None
+            context.context_hints.get("calendar_provider") if context.context_hints else None
         )
         if cal_provider:
             from datetime import timedelta
@@ -195,33 +184,44 @@ async def analyze_user_habits(*, context: AgentToolContext) -> str:
         )
         if interactions:
             from collections import defaultdict
+
             sender_stats: dict = defaultdict(lambda: {"tapped": 0, "dismissed": 0})
             for row in interactions:
                 sender_stats[row["sender"]][row["action"]] = row["cnt"]
 
             # Senders the user consistently ignores (dismissed >= 3, never tapped)
-            ignored = [s for s, stats in sender_stats.items()
-                       if stats["dismissed"] >= 3 and stats["tapped"] == 0]
+            ignored = [
+                s
+                for s, stats in sender_stats.items()
+                if stats["dismissed"] >= 3 and stats["tapped"] == 0
+            ]
             # Senders the user always taps (tapped >= 3, never dismissed)
-            priority = [s for s, stats in sender_stats.items()
-                        if stats["tapped"] >= 3 and stats["dismissed"] == 0]
+            priority = [
+                s
+                for s, stats in sender_stats.items()
+                if stats["tapped"] >= 3 and stats["dismissed"] == 0
+            ]
 
             if ignored:
-                discoveries.append({
-                    "namespace": "feedback",
-                    "fact_key": "email_ignore_senders",
-                    "value": {"senders": ignored},
-                    "summary": f"User consistently ignores email notifications from: {', '.join(ignored[:5])}",
-                    "how_to_apply": "Do NOT notify user about emails from these senders.",
-                })
+                discoveries.append(
+                    {
+                        "namespace": "feedback",
+                        "fact_key": "email_ignore_senders",
+                        "value": {"senders": ignored},
+                        "summary": f"User consistently ignores email notifications from: {', '.join(ignored[:5])}",
+                        "how_to_apply": "Do NOT notify user about emails from these senders.",
+                    }
+                )
             if priority:
-                discoveries.append({
-                    "namespace": "feedback",
-                    "fact_key": "email_priority_senders",
-                    "value": {"senders": priority},
-                    "summary": f"User always reads email notifications from: {', '.join(priority[:5])}",
-                    "how_to_apply": "ALWAYS notify user about emails from these senders, even if content seems routine.",
-                })
+                discoveries.append(
+                    {
+                        "namespace": "feedback",
+                        "fact_key": "email_priority_senders",
+                        "value": {"senders": priority},
+                        "summary": f"User always reads email notifications from: {', '.join(priority[:5])}",
+                        "how_to_apply": "ALWAYS notify user about emails from these senders, even if content seems routine.",
+                    }
+                )
     except Exception as e:
         logger.debug(f"Email interaction analysis failed: {e}")
 
@@ -233,17 +233,19 @@ async def analyze_user_habits(*, context: AgentToolContext) -> str:
     #    via the orchestrator's result.metadata["true_memory_proposals"] pipeline.
     proposals = []
     for d in discoveries:
-        proposals.append({
-            "operation": "upsert",
-            "namespace": d["namespace"],
-            "fact_key": d["fact_key"],
-            "value": d["value"],
-            "summary": d["summary"],
-            "confidence": 0.7,
-            "source_type": "system_inferred",
-            "how_to_apply": d.get("how_to_apply", ""),
-            "why": "Inferred from user behavior patterns over the past week.",
-        })
+        proposals.append(
+            {
+                "operation": "upsert",
+                "namespace": d["namespace"],
+                "fact_key": d["fact_key"],
+                "value": d["value"],
+                "summary": d["summary"],
+                "confidence": 0.7,
+                "source_type": "system_inferred",
+                "how_to_apply": d.get("how_to_apply", ""),
+                "why": "Inferred from user behavior patterns over the past week.",
+            }
+        )
 
     # Store proposals in context metadata so the orchestrator picks them up
     if context.metadata is None:
@@ -252,11 +254,7 @@ async def analyze_user_habits(*, context: AgentToolContext) -> str:
     context.metadata["true_memory_proposals"] = existing + proposals
 
     # 5. Adjust proactive job schedules based on discovered timing
-    cron_service = (
-        context.context_hints.get("cron_service")
-        if context.context_hints
-        else None
-    )
+    cron_service = context.context_hints.get("cron_service") if context.context_hints else None
     if cron_service:
         await _adjust_proactive_schedules(cron_service, tenant_id, discoveries)
 
@@ -267,9 +265,7 @@ async def analyze_user_habits(*, context: AgentToolContext) -> str:
     return "\n".join(summary_lines)
 
 
-async def _adjust_proactive_schedules(
-    cron_service, tenant_id: str, discoveries: list
-):
+async def _adjust_proactive_schedules(cron_service, tenant_id: str, discoveries: list):
     """Adjust proactive cron job schedules based on discovered habits."""
     from koa.triggers.cron.models import CronJobPatch, CronScheduleSpec
 
@@ -306,12 +302,8 @@ async def _adjust_proactive_schedules(
 
             if new_schedule:
                 try:
-                    await cron_service.update(
-                        job.id, CronJobPatch(schedule=new_schedule)
-                    )
-                    logger.info(
-                        f"Adjusted '{job.name}' schedule for tenant {tenant_id}"
-                    )
+                    await cron_service.update(job.id, CronJobPatch(schedule=new_schedule))
+                    logger.info(f"Adjusted '{job.name}' schedule for tenant {tenant_id}")
                 except Exception as e:
                     logger.warning(f"Failed to adjust '{job.name}': {e}")
     except Exception as e:

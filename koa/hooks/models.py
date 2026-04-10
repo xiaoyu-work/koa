@@ -10,12 +10,13 @@ This module defines:
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Any, List, Optional, Literal, Callable, Union
 from enum import Enum
+from typing import Any, Dict, List, Literal, Optional
 
 
 class HookType(str, Enum):
     """Types of built-in hooks"""
+
     LOGGING = "logging"
     METRICS = "metrics"
     TRACING = "tracing"
@@ -26,15 +27,17 @@ class HookType(str, Enum):
 
 class HookPhase(str, Enum):
     """When hooks are executed"""
-    PRE_EXECUTE = "pre_execute"      # Before agent execution
-    POST_EXECUTE = "post_execute"    # After agent execution
-    ON_ERROR = "on_error"            # On error
+
+    PRE_EXECUTE = "pre_execute"  # Before agent execution
+    POST_EXECUTE = "post_execute"  # After agent execution
+    ON_ERROR = "on_error"  # On error
     ON_STATE_CHANGE = "on_state_change"  # On status change
 
 
 @dataclass
 class HookConfig:
     """Configuration for a hook"""
+
     hook_type: HookType
     enabled: bool = True
 
@@ -71,6 +74,7 @@ class HookConfig:
 @dataclass
 class HookContext:
     """Context passed to hook handlers"""
+
     # Agent info
     agent_id: str
     agent_type: str
@@ -126,6 +130,7 @@ class HookContext:
 @dataclass
 class HookResult:
     """Result from hook execution"""
+
     hook_type: HookType
     success: bool = True
     error: Optional[str] = None
@@ -141,6 +146,7 @@ class HookResult:
 @dataclass
 class MetricsData:
     """Metrics data collected by metrics hook"""
+
     agent_type: str
     user_id: str
 
@@ -152,7 +158,7 @@ class MetricsData:
     # Timing
     total_duration_ms: float = 0
     avg_duration_ms: float = 0
-    min_duration_ms: float = float('inf')
+    min_duration_ms: float = float("inf")
     max_duration_ms: float = 0
 
     # Token usage (if available)
@@ -168,7 +174,7 @@ class MetricsData:
         duration_ms: float,
         success: bool,
         tokens: Optional[Dict[str, int]] = None,
-        cost: Optional[float] = None
+        cost: Optional[float] = None,
     ) -> None:
         """Record an invocation"""
         self.invocation_count += 1
@@ -195,6 +201,7 @@ class MetricsData:
 @dataclass
 class TracingSpan:
     """A tracing span for distributed tracing"""
+
     span_id: str
     trace_id: str
     parent_span_id: Optional[str] = None
@@ -222,13 +229,13 @@ class TracingSpan:
 
     def add_event(self, name: str, attributes: Optional[Dict[str, Any]] = None) -> None:
         """Add an event to the span"""
-        self.events.append({
-            "name": name,
-            "timestamp": datetime.now().isoformat(),
-            "attributes": attributes or {}
-        })
+        self.events.append(
+            {"name": name, "timestamp": datetime.now().isoformat(), "attributes": attributes or {}}
+        )
 
-    def end(self, status: Literal["ok", "error"] = "ok", error_message: Optional[str] = None) -> None:
+    def end(
+        self, status: Literal["ok", "error"] = "ok", error_message: Optional[str] = None
+    ) -> None:
         """End the span"""
         self.end_time = datetime.now()
         self.status = status
@@ -262,6 +269,7 @@ class TracingSpan:
 @dataclass
 class RateLimitConfig:
     """Rate limiting configuration"""
+
     # Per-user limits
     max_requests_per_minute: int = 60
     max_requests_per_hour: int = 1000
@@ -281,6 +289,7 @@ class RateLimitConfig:
 @dataclass
 class RateLimitState:
     """Current rate limit state for a user"""
+
     user_id: str
 
     # Request counts
@@ -298,9 +307,7 @@ class RateLimitState:
     day_window_start: datetime = field(default_factory=datetime.now)
 
     def check_and_update(
-        self,
-        config: RateLimitConfig,
-        tokens: int = 0
+        self, config: RateLimitConfig, tokens: int = 0
     ) -> tuple[bool, Optional[float]]:
         """
         Check if request is allowed and update counters.

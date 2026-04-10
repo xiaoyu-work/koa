@@ -8,12 +8,11 @@ Requires OAuth scope: https://www.googleapis.com/auth/drive
 
 import logging
 from typing import Any, Callable, Dict, Optional
-from datetime import datetime, timedelta, timezone
 
 import httpx
 
-from .base import BaseCloudStorageProvider
 from ..http_mixin import OAuthHTTPMixin
+from .base import BaseCloudStorageProvider
 
 logger = logging.getLogger(__name__)
 
@@ -128,8 +127,10 @@ class GoogleDriveProvider(BaseCloudStorageProvider, OAuthHTTPMixin):
             }
 
             response = await self._oauth_request(
-                "GET", f"{DRIVE_API}/files",
-                params=params, timeout=15.0,
+                "GET",
+                f"{DRIVE_API}/files",
+                params=params,
+                timeout=15.0,
             )
 
             if response.status_code != 200:
@@ -163,8 +164,10 @@ class GoogleDriveProvider(BaseCloudStorageProvider, OAuthHTTPMixin):
             }
 
             response = await self._oauth_request(
-                "GET", f"{DRIVE_API}/files",
-                params=params, timeout=15.0,
+                "GET",
+                f"{DRIVE_API}/files",
+                params=params,
+                timeout=15.0,
             )
 
             if response.status_code != 200:
@@ -190,8 +193,10 @@ class GoogleDriveProvider(BaseCloudStorageProvider, OAuthHTTPMixin):
             fields = f"{FILE_FIELDS},shared,owners,sharingUser,capabilities"
 
             response = await self._oauth_request(
-                "GET", f"{DRIVE_API}/files/{file_id}",
-                params={"fields": fields}, timeout=10.0,
+                "GET",
+                f"{DRIVE_API}/files/{file_id}",
+                params={"fields": fields},
+                timeout=10.0,
             )
 
             if response.status_code != 200:
@@ -220,13 +225,16 @@ class GoogleDriveProvider(BaseCloudStorageProvider, OAuthHTTPMixin):
                 return {"success": False, "error": "Failed to refresh access token"}
 
             response = await self._oauth_request(
-                "GET", f"{DRIVE_API}/files/{file_id}",
+                "GET",
+                f"{DRIVE_API}/files/{file_id}",
                 params={"fields": "webContentLink,webViewLink,mimeType"},
                 timeout=10.0,
             )
 
             if response.status_code != 200:
-                logger.error(f"Drive download link failed: {response.status_code} - {response.text}")
+                logger.error(
+                    f"Drive download link failed: {response.status_code} - {response.text}"
+                )
                 return {"success": False, "error": f"Drive API error: {response.status_code}"}
 
             data = response.json()
@@ -277,9 +285,11 @@ class GoogleDriveProvider(BaseCloudStorageProvider, OAuthHTTPMixin):
                 }
 
             response = await self._oauth_request(
-                "POST", f"{DRIVE_API}/files/{file_id}/permissions",
+                "POST",
+                f"{DRIVE_API}/files/{file_id}/permissions",
                 headers={"Content-Type": "application/json"},
-                json=permission, timeout=15.0,
+                json=permission,
+                timeout=15.0,
             )
 
             if response.status_code not in (200, 201):
@@ -288,8 +298,10 @@ class GoogleDriveProvider(BaseCloudStorageProvider, OAuthHTTPMixin):
 
             # Get the shareable link
             file_resp = await self._oauth_request(
-                "GET", f"{DRIVE_API}/files/{file_id}",
-                params={"fields": "webViewLink"}, timeout=10.0,
+                "GET",
+                f"{DRIVE_API}/files/{file_id}",
+                params={"fields": "webViewLink"},
+                timeout=10.0,
             )
 
             url = ""
@@ -308,7 +320,10 @@ class GoogleDriveProvider(BaseCloudStorageProvider, OAuthHTTPMixin):
             return {"success": False, "error": str(e)}
 
     async def _find_or_create_folder(
-        self, client: httpx.AsyncClient, folder_name: str, parent_id: str = "root",
+        self,
+        client: httpx.AsyncClient,
+        folder_name: str,
+        parent_id: str = "root",
     ) -> str:
         """Find a folder by name under a parent, or create it. Returns folder ID."""
         safe_name = folder_name.replace("'", "\\'")
@@ -320,7 +335,8 @@ class GoogleDriveProvider(BaseCloudStorageProvider, OAuthHTTPMixin):
 
         # Use _oauth_request for automatic 401 retry
         resp = await self._oauth_request(
-            "GET", f"{DRIVE_API}/files",
+            "GET",
+            f"{DRIVE_API}/files",
             params={"q": q, "fields": "files(id)", "pageSize": 1},
             timeout=10.0,
         )
@@ -338,15 +354,19 @@ class GoogleDriveProvider(BaseCloudStorageProvider, OAuthHTTPMixin):
             "parents": [parent_id],
         }
         resp = await self._oauth_request(
-            "POST", f"{DRIVE_API}/files",
+            "POST",
+            f"{DRIVE_API}/files",
             headers={"Content-Type": "application/json"},
-            json=metadata, timeout=15.0,
+            json=metadata,
+            timeout=15.0,
         )
         resp.raise_for_status()
         return resp.json()["id"]
 
     async def _ensure_folder_path(
-        self, client: httpx.AsyncClient, folder_path: str,
+        self,
+        client: httpx.AsyncClient,
+        folder_path: str,
     ) -> str:
         """Ensure a nested folder path exists (e.g. 'Koa/Receipts/2026-02').
         Returns the leaf folder ID."""
@@ -389,14 +409,10 @@ class GoogleDriveProvider(BaseCloudStorageProvider, OAuthHTTPMixin):
                 # Build multipart/related body manually
                 boundary = f"koa_upload_{_uuid.uuid4().hex}"
                 body = (
-                    f"--{boundary}\r\n"
-                    f"Content-Type: application/json; charset=UTF-8\r\n\r\n"
+                    f"--{boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n"
                 ).encode("utf-8")
                 body += metadata_bytes
-                body += (
-                    f"\r\n--{boundary}\r\n"
-                    f"Content-Type: {mime_type}\r\n\r\n"
-                ).encode("utf-8")
+                body += (f"\r\n--{boundary}\r\nContent-Type: {mime_type}\r\n\r\n").encode("utf-8")
                 body += file_data
                 body += f"\r\n--{boundary}--".encode("utf-8")
 
@@ -405,7 +421,8 @@ class GoogleDriveProvider(BaseCloudStorageProvider, OAuthHTTPMixin):
                     "https://www.googleapis.com/upload/drive/v3/files",
                     headers={"Content-Type": f"multipart/related; boundary={boundary}"},
                     params={"uploadType": "multipart", "fields": "id,name,webViewLink"},
-                    content=body, timeout=60.0,
+                    content=body,
+                    timeout=60.0,
                 )
 
                 if resp.status_code not in (200, 201):
@@ -434,12 +451,16 @@ class GoogleDriveProvider(BaseCloudStorageProvider, OAuthHTTPMixin):
                 return {"success": False, "error": "Failed to refresh access token"}
 
             response = await self._oauth_request(
-                "GET", f"{DRIVE_API}/about",
-                params={"fields": "storageQuota"}, timeout=10.0,
+                "GET",
+                f"{DRIVE_API}/about",
+                params={"fields": "storageQuota"},
+                timeout=10.0,
             )
 
             if response.status_code != 200:
-                logger.error(f"Drive storage usage failed: {response.status_code} - {response.text}")
+                logger.error(
+                    f"Drive storage usage failed: {response.status_code} - {response.text}"
+                )
                 return {"success": False, "error": f"Drive API error: {response.status_code}"}
 
             quota = response.json().get("storageQuota", {})
@@ -460,4 +481,3 @@ class GoogleDriveProvider(BaseCloudStorageProvider, OAuthHTTPMixin):
         except Exception as e:
             logger.error(f"Drive storage usage error: {e}", exc_info=True)
             return {"success": False, "error": str(e)}
-

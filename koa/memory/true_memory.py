@@ -316,47 +316,53 @@ def _fallback_extract(user_message: str) -> List[Dict[str, Any]]:
     if name_match:
         captured = name_match.group(1).strip()
         fact_key = "preferred_name" if "call me" in lowered else "full_name"
-        proposals.append({
-            "operation": "upsert",
-            "namespace": "identity",
-            "fact_key": fact_key,
-            "value": captured,
-            "summary": f"User's {'preferred name' if fact_key == 'preferred_name' else 'name'} is {captured}.",
-            "confidence": 0.88,
-            "source_type": "user_direct",
-            "reason": "Matched a direct self-identification pattern.",
-            "evidence": text,
-        })
+        proposals.append(
+            {
+                "operation": "upsert",
+                "namespace": "identity",
+                "fact_key": fact_key,
+                "value": captured,
+                "summary": f"User's {'preferred name' if fact_key == 'preferred_name' else 'name'} is {captured}.",
+                "confidence": 0.88,
+                "source_type": "user_direct",
+                "reason": "Matched a direct self-identification pattern.",
+                "evidence": text,
+            }
+        )
 
     seat_match = re.search(r"\b(?:prefer|like)\s+(aisle|window)\s+seats?\b", lowered)
     if seat_match:
         seat = seat_match.group(1)
-        proposals.append({
-            "operation": "upsert",
-            "namespace": "travel",
-            "fact_key": "flight_seat",
-            "value": {"seat": seat},
-            "summary": f"User prefers {seat} seats on flights.",
-            "confidence": 0.9,
-            "source_type": "user_direct",
-            "reason": "Matched an explicit travel seating preference.",
-            "evidence": text,
-        })
+        proposals.append(
+            {
+                "operation": "upsert",
+                "namespace": "travel",
+                "fact_key": "flight_seat",
+                "value": {"seat": seat},
+                "summary": f"User prefers {seat} seats on flights.",
+                "confidence": 0.9,
+                "source_type": "user_direct",
+                "reason": "Matched an explicit travel seating preference.",
+                "evidence": text,
+            }
+        )
 
     location_match = re.search(r"\bi live in\s+([^.!?]+)", text, re.IGNORECASE)
     if location_match:
         location = location_match.group(1).strip()
-        proposals.append({
-            "operation": "upsert",
-            "namespace": "identity",
-            "fact_key": "home_location",
-            "value": {"text": location},
-            "summary": f"User lives in {location}.",
-            "confidence": 0.84,
-            "source_type": "user_direct",
-            "reason": "Matched an explicit home location statement.",
-            "evidence": text,
-        })
+        proposals.append(
+            {
+                "operation": "upsert",
+                "namespace": "identity",
+                "fact_key": "home_location",
+                "value": {"text": location},
+                "summary": f"User lives in {location}.",
+                "confidence": 0.84,
+                "source_type": "user_direct",
+                "reason": "Matched an explicit home location statement.",
+                "evidence": text,
+            }
+        )
 
     # Feedback: user correcting AI behavior
     stop_match = re.search(
@@ -367,19 +373,21 @@ def _fallback_extract(user_message: str) -> List[Dict[str, Any]]:
         action = stop_match.group(1)
         detail = stop_match.group(2).rstrip(" .,!").strip()
         fact_key = _normalize_slug(f"stop_{action}_{detail[:30]}")
-        proposals.append({
-            "operation": "upsert",
-            "namespace": "feedback",
-            "fact_key": fact_key,
-            "value": {"correction": text},
-            "summary": f"User wants assistant to stop {action} {detail}.",
-            "confidence": 0.85,
-            "source_type": "user_correction",
-            "reason": "User explicitly corrected AI behavior.",
-            "why": f"User said to stop {action} {detail}.",
-            "how_to_apply": f"Avoid {action} {detail} in future interactions.",
-            "evidence": text,
-        })
+        proposals.append(
+            {
+                "operation": "upsert",
+                "namespace": "feedback",
+                "fact_key": fact_key,
+                "value": {"correction": text},
+                "summary": f"User wants assistant to stop {action} {detail}.",
+                "confidence": 0.85,
+                "source_type": "user_correction",
+                "reason": "User explicitly corrected AI behavior.",
+                "why": f"User said to stop {action} {detail}.",
+                "how_to_apply": f"Avoid {action} {detail} in future interactions.",
+                "evidence": text,
+            }
+        )
 
     # Feedback: user confirming AI behavior
     confirm_match = re.search(
@@ -388,18 +396,20 @@ def _fallback_extract(user_message: str) -> List[Dict[str, Any]]:
     )
     if confirm_match and not stop_match:
         fact_key = _normalize_slug(f"confirmed_{text[:30]}")
-        proposals.append({
-            "operation": "upsert",
-            "namespace": "feedback",
-            "fact_key": fact_key,
-            "value": {"confirmation": text},
-            "summary": f"User confirmed current approach is correct.",
-            "confidence": 0.75,
-            "source_type": "user_confirmation",
-            "reason": "User validated the assistant's approach.",
-            "why": "User expressed approval of the current interaction style.",
-            "how_to_apply": "Continue using this approach in similar situations.",
-            "evidence": text,
-        })
+        proposals.append(
+            {
+                "operation": "upsert",
+                "namespace": "feedback",
+                "fact_key": fact_key,
+                "value": {"confirmation": text},
+                "summary": "User confirmed current approach is correct.",
+                "confidence": 0.75,
+                "source_type": "user_confirmation",
+                "reason": "User validated the assistant's approach.",
+                "why": "User expressed approval of the current interaction style.",
+                "how_to_apply": "Continue using this approach in similar situations.",
+                "evidence": text,
+            }
+        )
 
     return _dedupe_proposals(proposals)

@@ -8,19 +8,24 @@ import asyncio
 import dataclasses
 import json
 import logging
+import random
 import time
 from collections import namedtuple
 from typing import Any, AsyncIterator, Dict, List, Optional
 
-from ..streaming.models import AgentEvent, EventType
+from ..constants import GENERATE_PLAN_SCHEMA
 from ..models import ToolOutput
+from ..streaming.models import AgentEvent, EventType
 from .agent_tool import AgentToolResult
 from .approval import collect_batch_approvals
+from .error_classifier import LLMErrorKind
 from .react_config import (
-    ToolCallRecord, TokenUsage,
-    COMPLETE_TASK_TOOL_NAME, COMPLETE_TASK_SCHEMA, CompleteTaskResult,
+    COMPLETE_TASK_SCHEMA,
+    COMPLETE_TASK_TOOL_NAME,
+    CompleteTaskResult,
+    TokenUsage,
+    ToolCallRecord,
 )
-from ..constants import GENERATE_PLAN_TOOL_NAME, GENERATE_PLAN_SCHEMA
 from .transcript_repair import repair_transcript
 
 logger = logging.getLogger(__name__)
@@ -35,18 +40,17 @@ class _ReactLoopLLMError(Exception):
     to attempt model-level fallback.
     """
 
-    def __init__(self, original: Exception, error_kind: "LLMErrorKind", turn: int):
+    def __init__(self, original: Exception, error_kind: "LLMErrorKind", turn: int):  # noqa: F821
         self.original = original
         self.error_kind = error_kind
         self.turn = turn
         super().__init__(str(original))
 
+
 # ── Tool acknowledgment messages ──────────────────────────────────
 # Shown to the user before tool execution so they know Koi is working.
 # Only emitted on turn 1 (first tool invocation); subsequent turns in
 # the same ReAct loop skip the acknowledgment to avoid clutter.
-
-import random
 
 _CASUAL_ACKS = [
     "On it!",
@@ -95,7 +99,9 @@ class ReactLoopMixin:
     """
 
     async def _yield_chunked_response(
-        self, text: str, turn: int,
+        self,
+        text: str,
+        turn: int,
     ) -> AsyncIterator[AgentEvent]:
         """Yield response text in paragraph-sized chunks for progressive rendering.
 
@@ -111,7 +117,8 @@ class ReactLoopMixin:
                 chunk += "\n\n"
             if chunk:
                 yield AgentEvent(
-                    type=EventType.MESSAGE_CHUNK, data={"chunk": chunk},
+                    type=EventType.MESSAGE_CHUNK,
+                    data={"chunk": chunk},
                 )
                 await asyncio.sleep(0)  # yield control so SSE can flush
         yield AgentEvent(type=EventType.MESSAGE_END, data={})
@@ -143,11 +150,13 @@ class ReactLoopMixin:
         # --- Change A: Context window pre-flight guard ---
         CONTEXT_HARD_MIN = 16_000
         CONTEXT_WARN_BELOW = 32_000
-        context_tokens = getattr(self.llm_client, 'context_window', 128_000)
+        context_tokens = getattr(self.llm_client, "context_window", 128_000)
         if context_tokens < CONTEXT_HARD_MIN:
             yield AgentEvent(
                 type=EventType.ERROR,
-                data={"message": f"Model context window too small: {context_tokens} tokens (minimum: {CONTEXT_HARD_MIN})"},
+                data={
+                    "message": f"Model context window too small: {context_tokens} tokens (minimum: {CONTEXT_HARD_MIN})"
+                },
             )
             return
         if context_tokens < CONTEXT_WARN_BELOW:
@@ -179,7 +188,6 @@ class ReactLoopMixin:
         routing_score = -1
         if routed_llm_client is None and self._model_router:
             try:
-                from ..llm.router import RoutingDecision
                 decision = await self._model_router.route(messages)
                 routing_score = decision.score
                 routed_llm_client = self._model_router.registry.get(decision.provider)
@@ -194,14 +202,16 @@ class ReactLoopMixin:
         # Enable reasoning for complex requests on the first turn
         enable_reasoning = routing_score >= self._react_config.reasoning_score_threshold
         if enable_reasoning:
-            logger.info(f"[ReAct] Reasoning enabled (score={routing_score}, effort={self._react_config.reasoning_effort})")
+            logger.info(
+                f"[ReAct] Reasoning enabled (score={routing_score}, effort={self._react_config.reasoning_effort})"
+            )
 
         # -- Planning phase --
         enable_planning = routing_score >= self._react_config.planning_score_threshold
 
         # Case 1: Pending plan from previous turn -- user is responding to it
         # Check both persistent store and in-memory fallback.
-        plan_store = getattr(self, '_plan_store', None)
+        plan_store = getattr(self, "_plan_store", None)
         pending_plan_data = None
         if plan_store is not None:
             pending_plan_data = await plan_store.pop(tenant_id)
@@ -213,7 +223,9 @@ class ReactLoopMixin:
 
             logger.info("[ReAct] Pending plan found, injecting into prompt for LLM to handle")
             messages = await self._build_llm_messages(
-                context, user_message, pending_plan=pending_plan_text,
+                context,
+                user_message,
+                pending_plan=pending_plan_text,
             )
             enable_planning = False  # don't re-plan
 
@@ -222,11 +234,15 @@ class ReactLoopMixin:
             logger.info(f"[ReAct] Planning phase triggered (score={routing_score})")
             try:
                 plan_messages = await self._build_llm_messages(
-                    context, user_message, include_planning=True,
+                    context,
+                    user_message,
+                    include_planning=True,
                 )
                 plan_schemas = [GENERATE_PLAN_SCHEMA, COMPLETE_TASK_SCHEMA]
                 plan_response = await self._llm_call_with_retry(
-                    plan_messages, plan_schemas, tool_choice="auto",
+                    plan_messages,
+                    plan_schemas,
+                    tool_choice="auto",
                     llm_client_override=routed_llm_client,
                 )
                 plan_data = self._extract_plan_from_response(plan_response)
@@ -239,7 +255,9 @@ class ReactLoopMixin:
                         await plan_store.save(tenant_id, plan_data)
                     else:
                         self._tenant_plans[tenant_id] = plan_data
-                    logger.info(f"[ReAct] Plan generated, awaiting approval: {plan_data.get('goal', '')}")
+                    logger.info(
+                        f"[ReAct] Plan generated, awaiting approval: {plan_data.get('goal', '')}"
+                    )
                     yield AgentEvent(
                         type=EventType.PLAN_GENERATED,
                         data={"plan": plan_data, "plan_text": plan_text},
@@ -269,7 +287,9 @@ class ReactLoopMixin:
                     )
                     logger.info(f"[ReAct] Plan auto-approved: {plan_data.get('goal', '')}")
                     messages = await self._build_llm_messages(
-                        context, user_message, approved_plan=plan_text,
+                        context,
+                        user_message,
+                        approved_plan=plan_text,
                     )
                 else:
                     logger.info("[ReAct] LLM did not generate a plan, proceeding directly")
@@ -279,7 +299,9 @@ class ReactLoopMixin:
         for turn in range(1, self._react_config.max_turns + 1):
             elapsed = time.monotonic() - start_time
             if elapsed > self._react_config.react_timeout:
-                logger.warning(f"[ReAct] Global timeout after {elapsed:.1f}s (limit={self._react_config.react_timeout}s)")
+                logger.warning(
+                    f"[ReAct] Global timeout after {elapsed:.1f}s (limit={self._react_config.react_timeout}s)"
+                )
                 yield AgentEvent(
                     type=EventType.ERROR,
                     data={"error": "Request timed out. Please try again with a simpler request."},
@@ -303,13 +325,16 @@ class ReactLoopMixin:
                 if media and turn == 1:
                     extra_kwargs["media"] = media
                 response = await self._llm_call_with_retry(
-                    messages, tool_schemas, tool_choice=tool_choice,
+                    messages,
+                    tool_schemas,
+                    tool_choice=tool_choice,
                     llm_client_override=routed_llm_client,
                     **extra_kwargs,
                 )
             except Exception as e:
                 # Classify the error to decide whether to retry at model level
-                from .error_classifier import classify_llm_error, LLMErrorKind
+                from .error_classifier import LLMErrorKind, classify_llm_error
+
                 error_kind = classify_llm_error(e)
 
                 if error_kind == LLMErrorKind.AUTH:
@@ -341,14 +366,18 @@ class ReactLoopMixin:
                 max_retries = self._react_config.max_complete_task_retries
                 for retry in range(1, max_retries + 1):
                     logger.warning(
-                        f"[ReAct] turn={turn} no tool calls, "
-                        f"grace retry {retry}/{max_retries}"
+                        f"[ReAct] turn={turn} no tool calls, grace retry {retry}/{max_retries}"
                     )
-                    nudge_msg = {"role": "user", "content": "Call `complete_task` now with your final answer."}
+                    nudge_msg = {
+                        "role": "user",
+                        "content": "Call `complete_task` now with your final answer.",
+                    }
                     messages.append(nudge_msg)
                     try:
                         response = await self._llm_call_with_retry(
-                            messages, tool_schemas, tool_choice="required",
+                            messages,
+                            tool_schemas,
+                            tool_choice="required",
                             llm_client_override=routed_llm_client,
                         )
                     except Exception as e:
@@ -377,17 +406,21 @@ class ReactLoopMixin:
                         f"grace retries, LLM still did not call complete_task"
                     )
                     messages.append(self._assistant_message_from_response(response))
-                    messages.append({
-                        "role": "user",
-                        "content": (
-                            "There was an internal issue processing your request. "
-                            "Generate a short, friendly apology to the user in "
-                            "their language, and suggest they try again later."
-                        ),
-                    })
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": (
+                                "There was an internal issue processing your request. "
+                                "Generate a short, friendly apology to the user in "
+                                "their language, and suggest they try again later."
+                            ),
+                        }
+                    )
                     try:
                         fallback_resp = await self._llm_call_with_retry(
-                            messages, tool_schemas=[], tool_choice=None,
+                            messages,
+                            tool_schemas=[],
+                            tool_choice=None,
                             llm_client_override=routed_llm_client,
                         )
                         final_response = (
@@ -398,7 +431,9 @@ class ReactLoopMixin:
                     except Exception:
                         final_response = "Sorry, something went wrong. Please try again later."
                     self._audit.log_react_turn(
-                        turn=turn, tool_calls=[], final_answer=True,
+                        turn=turn,
+                        tool_calls=[],
+                        final_answer=True,
                         tenant_id=tenant_id,
                     )
                     async for event in self._yield_chunked_response(final_response, turn):
@@ -418,39 +453,54 @@ class ReactLoopMixin:
                 for tc in tool_calls:
                     if tc.name == COMPLETE_TASK_TOOL_NAME:
                         try:
-                            _ct_args = tc.arguments if isinstance(tc.arguments, dict) else json.loads(tc.arguments)
+                            _ct_args = (
+                                tc.arguments
+                                if isinstance(tc.arguments, dict)
+                                else json.loads(tc.arguments)
+                            )
                         except (json.JSONDecodeError, TypeError):
                             _ct_args = {}
                         _ct_text = _ct_args.get("result", "")
                         if _ct_text:
                             complete_task_result = CompleteTaskResult(result=_ct_text)
                             _complete_task_tc_id = tc.id
-                            logger.info(f"[ReAct] turn={turn} complete_task called ({len(_ct_text)} chars)")
+                            logger.info(
+                                f"[ReAct] turn={turn} complete_task called ({len(_ct_text)} chars)"
+                            )
                         else:
                             # Missing result -- append error, let LLM retry
-                            messages.append(self._build_tool_result_message(
-                                tc.id,
-                                'Error: "result" argument is required for complete_task.',
-                                is_error=True,
-                            ))
+                            messages.append(
+                                self._build_tool_result_message(
+                                    tc.id,
+                                    'Error: "result" argument is required for complete_task.',
+                                    is_error=True,
+                                )
+                            )
                             remaining_tool_calls.append(tc)
                     else:
                         remaining_tool_calls.append(tc)
 
                 # Pure complete_task with no other tools -- break immediately
                 if complete_task_result and not remaining_tool_calls:
-                    messages.append(self._build_tool_result_message(_complete_task_tc_id, "Task completed."))
-                    all_tool_records.append(ToolCallRecord(
-                        name=COMPLETE_TASK_TOOL_NAME,
-                        args_summary={"result": complete_task_result.result[:100]},
-                        duration_ms=0, success=True,
-                        result_status="COMPLETED",
-                        result_chars=len(complete_task_result.result),
-                    ))
+                    messages.append(
+                        self._build_tool_result_message(_complete_task_tc_id, "Task completed.")
+                    )
+                    all_tool_records.append(
+                        ToolCallRecord(
+                            name=COMPLETE_TASK_TOOL_NAME,
+                            args_summary={"result": complete_task_result.result[:100]},
+                            duration_ms=0,
+                            success=True,
+                            result_status="COMPLETED",
+                            result_chars=len(complete_task_result.result),
+                        )
+                    )
                     final_response = complete_task_result.result
                     self._audit.log_react_turn(
-                        turn=turn, tool_calls=[COMPLETE_TASK_TOOL_NAME],
-                        final_answer=True, tenant_id=tenant_id,
+                        turn=turn,
+                        tool_calls=[COMPLETE_TASK_TOOL_NAME],
+                        final_answer=True,
+                        tenant_id=tenant_id,
                     )
                     async for event in self._yield_chunked_response(final_response, turn):
                         yield event
@@ -486,7 +536,11 @@ class ReactLoopMixin:
                     # Try to reuse a speculative result
                     if speculative and tc.name == "google_search":
                         try:
-                            args = tc.arguments if isinstance(tc.arguments, dict) else json.loads(tc.arguments)
+                            args = (
+                                tc.arguments
+                                if isinstance(tc.arguments, dict)
+                                else json.loads(tc.arguments)
+                            )
                         except (json.JSONDecodeError, TypeError):
                             args = {}
                         search_type = args.get("search_type", "web")
@@ -507,9 +561,17 @@ class ReactLoopMixin:
 
                     # Normal execution path
                     try:
-                        r = await self._execute_with_timeout(tc, tenant_id, metadata=metadata, request_tools=request_tools, request_context=context)
+                        r = await self._execute_with_timeout(
+                            tc,
+                            tenant_id,
+                            metadata=metadata,
+                            request_tools=request_tools,
+                            request_context=context,
+                        )
                     except BaseException as exc:
-                        return TimedResult(result=exc, duration_ms=int((time.monotonic() - t0) * 1000))
+                        return TimedResult(
+                            result=exc, duration_ms=int((time.monotonic() - t0) * 1000)
+                        )
                     return TimedResult(result=r, duration_ms=int((time.monotonic() - t0) * 1000))
 
                 # Execute tools eagerly: yield results as each completes
@@ -549,7 +611,11 @@ class ReactLoopMixin:
                         tc_duration = 0
 
                     try:
-                        args_summary = tc.arguments if isinstance(tc.arguments, dict) else json.loads(tc.arguments)
+                        args_summary = (
+                            tc.arguments
+                            if isinstance(tc.arguments, dict)
+                            else json.loads(tc.arguments)
+                        )
                     except (json.JSONDecodeError, TypeError):
                         args_summary = {}
                     args_summary = {k: str(v)[:100] for k, v in args_summary.items()}
@@ -557,25 +623,37 @@ class ReactLoopMixin:
                     if isinstance(result, BaseException):
                         logger.warning(f"[ReAct]   {kind}={tc_name} ERROR: {result}")
                         error_text = f"Error executing {tc_name}: {result}"
-                        messages.append(self._build_tool_result_message(tc.id, error_text, is_error=True))
-                        all_tool_records.append(ToolCallRecord(
-                            name=tc_name, args_summary=args_summary,
-                            duration_ms=tc_duration, success=False,
-                            result_chars=len(error_text), token_attribution=turn_tokens,
-                        ))
+                        messages.append(
+                            self._build_tool_result_message(tc.id, error_text, is_error=True)
+                        )
+                        all_tool_records.append(
+                            ToolCallRecord(
+                                name=tc_name,
+                                args_summary=args_summary,
+                                duration_ms=tc_duration,
+                                success=False,
+                                result_chars=len(error_text),
+                                token_attribution=turn_tokens,
+                            )
+                        )
                         yield AgentEvent(
                             type=EventType.TOOL_RESULT,
                             data={
-                                "tool_name": tc_name, "call_id": tc.id,
-                                "kind": kind, "success": False,
+                                "tool_name": tc_name,
+                                "call_id": tc.id,
+                                "kind": kind,
+                                "success": False,
                                 "error": str(result),
                                 "result_preview": error_text[:240],
                             },
                         )
                         self._audit.log_tool_execution(
-                            tool_name=tc_name, args_summary=args_summary,
-                            success=False, duration_ms=tc_duration,
-                            error=str(result), tenant_id=tenant_id,
+                            tool_name=tc_name,
+                            args_summary=args_summary,
+                            success=False,
+                            duration_ms=tc_duration,
+                            error=str(result),
+                            tenant_id=tenant_id,
                         )
 
                     elif isinstance(result, AgentToolResult) and not result.completed:
@@ -587,24 +665,33 @@ class ReactLoopMixin:
                         waiting_text = result.result_text or "Agent is waiting for input."
                         messages.append(self._build_tool_result_message(tc.id, waiting_text))
                         waiting_status = (
-                            "WAITING_FOR_APPROVAL" if result.approval_request
+                            "WAITING_FOR_APPROVAL"
+                            if result.approval_request
                             else "WAITING_FOR_INPUT"
                         )
-                        all_tool_records.append(ToolCallRecord(
-                            name=tc_name, args_summary=args_summary,
-                            duration_ms=tc_duration, success=True,
-                            result_status=waiting_status,
-                            result_chars=len(waiting_text), token_attribution=turn_tokens,
-                        ))
-                        tool_trace = []
+                        all_tool_records.append(
+                            ToolCallRecord(
+                                name=tc_name,
+                                args_summary=args_summary,
+                                duration_ms=tc_duration,
+                                success=True,
+                                result_status=waiting_status,
+                                result_chars=len(waiting_text),
+                                token_attribution=turn_tokens,
+                            )
+                        )
+                        tool_trace: List = []
                         if isinstance(result.metadata, dict):
                             tool_trace = result.metadata.get("tool_trace") or []
                         yield AgentEvent(
                             type=EventType.TOOL_RESULT,
                             data={
-                                "tool_name": tc_name, "call_id": tc.id,
-                                "kind": "agent", "success": True,
-                                "waiting": True, "status": waiting_status,
+                                "tool_name": tc_name,
+                                "call_id": tc.id,
+                                "kind": "agent",
+                                "success": True,
+                                "waiting": True,
+                                "status": waiting_status,
                                 "result_preview": waiting_text[:240],
                                 "tool_trace": tool_trace,
                             },
@@ -614,8 +701,10 @@ class ReactLoopMixin:
                             data={"agent_type": tc_name, "status": waiting_status},
                         )
                         self._audit.log_tool_execution(
-                            tool_name=tc_name, args_summary=args_summary,
-                            success=True, duration_ms=tc_duration,
+                            tool_name=tc_name,
+                            args_summary=args_summary,
+                            success=True,
+                            duration_ms=tc_duration,
                             tenant_id=tenant_id,
                         )
                         loop_broken = True
@@ -644,13 +733,24 @@ class ReactLoopMixin:
                         result_text = self._cap_tool_result(result_text)
                         result_text = self._context_manager.truncate_tool_result(result_text)
                         if is_agent and len(result_text) > 2000:
-                            result_text = result_text[:1500] + f"\n...[truncated from {original_len} to 1500 chars]"
+                            result_text = (
+                                result_text[:1500]
+                                + f"\n...[truncated from {original_len} to 1500 chars]"
+                            )
                         elif len(result_text) < original_len:
-                            result_text += f"\n...[truncated from {original_len} to {len(result_text)} chars]"
-                        logger.info(f"[ReAct]   {kind}={tc_name} OK ({len(result_text)} chars, media={len(result_media)})")
-                        messages.append(self._build_tool_result_message(
-                            tc.id, result_text, media=result_media,
-                        ))
+                            result_text += (
+                                f"\n...[truncated from {original_len} to {len(result_text)} chars]"
+                            )
+                        logger.info(
+                            f"[ReAct]   {kind}={tc_name} OK ({len(result_text)} chars, media={len(result_media)})"
+                        )
+                        messages.append(
+                            self._build_tool_result_message(
+                                tc.id,
+                                result_text,
+                                media=result_media,
+                            )
+                        )
 
                         # Collect media for the final response:
                         # - for_storage=True media (images) for client persistence
@@ -660,42 +760,60 @@ class ReactLoopMixin:
                             if meta.get("for_storage") or m.get("type") == "inline_cards":
                                 _response_media.append(m)
 
-                        all_tool_records.append(ToolCallRecord(
-                            name=tc_name, args_summary=args_summary,
-                            duration_ms=tc_duration, success=True,
-                            result_status="COMPLETED" if isinstance(result, AgentToolResult) else None,
-                            result_chars=result_chars_original, token_attribution=turn_tokens,
-                        ))
+                        all_tool_records.append(
+                            ToolCallRecord(
+                                name=tc_name,
+                                args_summary=args_summary,
+                                duration_ms=tc_duration,
+                                success=True,
+                                result_status="COMPLETED"
+                                if isinstance(result, AgentToolResult)
+                                else None,
+                                result_chars=result_chars_original,
+                                token_attribution=turn_tokens,
+                            )
+                        )
                         yield AgentEvent(
                             type=EventType.TOOL_RESULT,
                             data={
-                                "tool_name": tc_name, "call_id": tc.id,
-                                "kind": kind, "success": True,
+                                "tool_name": tc_name,
+                                "call_id": tc.id,
+                                "kind": kind,
+                                "success": True,
                                 "result_preview": result_text[:240],
                                 "tool_trace": tool_trace,
                             },
                         )
                         self._audit.log_tool_execution(
-                            tool_name=tc_name, args_summary=args_summary,
-                            success=True, duration_ms=tc_duration,
+                            tool_name=tc_name,
+                            args_summary=args_summary,
+                            success=True,
+                            duration_ms=tc_duration,
                             tenant_id=tenant_id,
                         )
 
                 # complete_task was called alongside other tools -- add its result
                 # AFTER all other tools' results have been appended to messages
                 if complete_task_result:
-                    messages.append(self._build_tool_result_message(_complete_task_tc_id, "Task completed."))
-                    all_tool_records.append(ToolCallRecord(
-                        name=COMPLETE_TASK_TOOL_NAME,
-                        args_summary={"result": complete_task_result.result[:100]},
-                        duration_ms=0, success=True,
-                        result_status="COMPLETED",
-                        result_chars=len(complete_task_result.result),
-                    ))
+                    messages.append(
+                        self._build_tool_result_message(_complete_task_tc_id, "Task completed.")
+                    )
+                    all_tool_records.append(
+                        ToolCallRecord(
+                            name=COMPLETE_TASK_TOOL_NAME,
+                            args_summary={"result": complete_task_result.result[:100]},
+                            duration_ms=0,
+                            success=True,
+                            result_status="COMPLETED",
+                            result_chars=len(complete_task_result.result),
+                        )
+                    )
                     final_response = complete_task_result.result
                     self._audit.log_react_turn(
-                        turn=turn, tool_calls=tool_names + [COMPLETE_TASK_TOOL_NAME],
-                        final_answer=True, tenant_id=tenant_id,
+                        turn=turn,
+                        tool_calls=tool_names + [COMPLETE_TASK_TOOL_NAME],
+                        final_answer=True,
+                        tenant_id=tenant_id,
                     )
                     async for event in self._yield_chunked_response(final_response, turn):
                         yield event
@@ -703,12 +821,15 @@ class ReactLoopMixin:
 
                 # Watchdog: detect loops (enhanced with args + result hashes)
                 import hashlib
+
                 for tc, timed in zip(tool_calls, timed_results):
                     _recent_tool_names.append(tc.name)
                     # Fingerprint: tool name + serialized args
                     try:
                         args_str = json.dumps(
-                            tc.arguments if isinstance(tc.arguments, dict) else json.loads(tc.arguments),
+                            tc.arguments
+                            if isinstance(tc.arguments, dict)
+                            else json.loads(tc.arguments),
                             sort_keys=True,
                         )
                     except (json.JSONDecodeError, TypeError):
@@ -743,7 +864,9 @@ class ReactLoopMixin:
 
                 if loop_broken:
                     final_response = loop_broken_text or ""
-                    result_status = "WAITING_FOR_APPROVAL" if pending_approvals else "WAITING_FOR_INPUT"
+                    result_status = (
+                        "WAITING_FOR_APPROVAL" if pending_approvals else "WAITING_FOR_INPUT"
+                    )
                     if pending_approvals:
                         pending_approvals = collect_batch_approvals(pending_approvals)
                     if loop_broken_text:
@@ -752,7 +875,11 @@ class ReactLoopMixin:
                     break
 
                 # Agent passthrough: single completed agent-tool skips LLM re-summary
-                _first_result = timed_results[0].result if isinstance(timed_results[0], TimedResult) else timed_results[0]
+                _first_result = (
+                    timed_results[0].result
+                    if isinstance(timed_results[0], TimedResult)
+                    else timed_results[0]
+                )
                 if (
                     len(tool_calls) == 1
                     and self._is_agent_tool(tool_calls[0].name)
@@ -771,16 +898,19 @@ class ReactLoopMixin:
 
         else:
             # max_turns reached: ask LLM for summary without tools
-            messages.append({
-                "role": "user",
-                "content": (
-                    "You have used all available turns. Please provide your best "
-                    "final answer based on the information gathered so far."
-                ),
-            })
+            messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        "You have used all available turns. Please provide your best "
+                        "final answer based on the information gathered so far."
+                    ),
+                }
+            )
             try:
                 response = await self._llm_call_with_retry(
-                    messages, tool_schemas=None,
+                    messages,
+                    tool_schemas=None,
                     llm_client_override=routed_llm_client,
                 )
                 final_text = response.content or ""
@@ -825,13 +955,16 @@ class ReactLoopMixin:
         )
 
     async def _save_tool_call_history(
-        self, tenant_id: str, tool_calls: list,
+        self,
+        tenant_id: str,
+        tool_calls: list,
     ) -> None:
         """Persist tool call records to the database (fire-and-forget)."""
         if not self.database or not tool_calls:
             return
         try:
             from ..builtin_agents.tools.action_history import save_tool_call_history
+
             await save_tool_call_history(self.database, tenant_id, tool_calls)
         except Exception as e:
             logger.warning(f"Failed to save tool call history: {e}")
@@ -904,7 +1037,9 @@ class ReactLoopMixin:
                     f"({len(old_text)} chars -> {len(summary)} chars)"
                 )
                 return self._context_manager.build_summarized_messages(
-                    system_msgs, summary, recent_msgs,
+                    system_msgs,
+                    summary,
+                    recent_msgs,
                 )
         except Exception as e:
             logger.warning(f"[Context] Summarization failed, falling back to trim: {e}")
@@ -939,10 +1074,12 @@ class ReactLoopMixin:
         for item in media:
             if item.get("type") == "image":
                 data = item.get("data", "")
-                parts.append({
-                    "type": "image_url",
-                    "image_url": {"url": data, "detail": "low"},
-                })
+                parts.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": data, "detail": "low"},
+                    }
+                )
         return {
             "role": "tool",
             "tool_call_id": tool_call_id,
@@ -964,7 +1101,9 @@ class ReactLoopMixin:
                     "type": "function",
                     "function": {
                         "name": tc.name,
-                        "arguments": json.dumps(tc.arguments) if isinstance(tc.arguments, dict) else tc.arguments,
+                        "arguments": json.dumps(tc.arguments)
+                        if isinstance(tc.arguments, dict)
+                        else tc.arguments,
                     },
                 }
                 for tc in tool_calls

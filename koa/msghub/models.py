@@ -10,12 +10,13 @@ This module defines:
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Any, List, Optional, Literal, Union
 from enum import Enum
+from typing import Any, Dict, List, Literal, Optional
 
 
 class MessageRole(str, Enum):
     """Role of message sender"""
+
     USER = "user"
     AGENT = "agent"
     SYSTEM = "system"
@@ -23,6 +24,7 @@ class MessageRole(str, Enum):
 
 class MessageType(str, Enum):
     """Type of message"""
+
     TEXT = "text"
     DATA = "data"
     ACTION = "action"
@@ -32,6 +34,7 @@ class MessageType(str, Enum):
 @dataclass
 class Message:
     """A message in the shared conversation"""
+
     id: str
     role: MessageRole
     content: str
@@ -79,7 +82,9 @@ class Message:
             sender_type=d.get("sender_type"),
             message_type=MessageType(d.get("message_type", "text")),
             data=d.get("data", {}),
-            timestamp=datetime.fromisoformat(d["timestamp"]) if isinstance(d.get("timestamp"), str) else d.get("timestamp", datetime.now()),
+            timestamp=datetime.fromisoformat(d["timestamp"])
+            if isinstance(d.get("timestamp"), str)
+            else d.get("timestamp", datetime.now()),
             metadata=d.get("metadata", {}),
             reply_to=d.get("reply_to"),
         )
@@ -88,6 +93,7 @@ class Message:
 @dataclass
 class ParticipantInfo:
     """Information about a participant agent"""
+
     agent_id: str
     agent_type: str
 
@@ -120,14 +126,16 @@ class ParticipantInfo:
 
 class VisibilityMode(str, Enum):
     """How messages are shared among participants"""
-    ALL = "all"          # All participants see all messages
+
+    ALL = "all"  # All participants see all messages
     SEQUENTIAL = "sequential"  # Each agent sees previous agents' messages
-    SELECTIVE = "selective"    # Custom visibility rules
+    SELECTIVE = "selective"  # Custom visibility rules
 
 
 @dataclass
 class MsgHubConfig:
     """Configuration for MsgHub"""
+
     hub_id: Optional[str] = None
 
     # Visibility settings
@@ -152,6 +160,7 @@ class MsgHubConfig:
 @dataclass
 class SharedContext:
     """Shared context data accessible by all participants"""
+
     data: Dict[str, Any] = field(default_factory=dict)
 
     # Track updates
@@ -186,6 +195,7 @@ class SharedContext:
 @dataclass
 class MsgHubState:
     """Current state of MsgHub"""
+
     hub_id: str
 
     # Messages
@@ -213,9 +223,7 @@ class MsgHubState:
         return sum(1 for p in self.participants.values() if p.is_active)
 
     def get_messages_for_participant(
-        self,
-        participant_id: str,
-        config: MsgHubConfig
+        self, participant_id: str, config: MsgHubConfig
     ) -> List[Message]:
         """Get messages visible to a participant"""
         participant = self.participants.get(participant_id)
@@ -227,13 +235,17 @@ class MsgHubState:
                 return list(self.messages)
             else:
                 # Only messages after join (use index, not timestamp)
-                return list(self.messages)[participant.joined_at_message_count:]
+                return list(self.messages)[participant.joined_at_message_count :]
 
         elif config.visibility_mode == VisibilityMode.SEQUENTIAL:
             # See all messages from agents who executed before
             visible = []
             participant_order = list(self.participants.keys())
-            my_index = participant_order.index(participant_id) if participant_id in participant_order else -1
+            my_index = (
+                participant_order.index(participant_id)
+                if participant_id in participant_order
+                else -1
+            )
 
             for msg in self.messages:
                 if msg.role == MessageRole.USER:
@@ -270,6 +282,7 @@ class MsgHubState:
 @dataclass
 class HubExecutionResult:
     """Result from executing agents in MsgHub"""
+
     hub_id: str
     status: Literal["completed", "partial", "failed"]
 

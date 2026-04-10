@@ -41,6 +41,7 @@ async def test_tool_selection(orchestrator_factory, user_input, expected_tools):
 # Argument extraction
 # ---------------------------------------------------------------------------
 
+
 async def test_extracts_post_text(orchestrator_factory):
     """create_post should receive the text content from the user message."""
     orch, recorder = await orchestrator_factory()
@@ -63,12 +64,11 @@ async def test_extracts_post_text(orchestrator_factory):
 # Response quality
 # ---------------------------------------------------------------------------
 
+
 async def test_response_quality_profile(orchestrator_factory, llm_judge):
     """Getting profile info should produce a readable summary."""
     orch, recorder = await orchestrator_factory()
-    result = await orch.handle_message(
-        "test_user", "Show me my LinkedIn profile information"
-    )
+    result = await orch.handle_message("test_user", "Show me my LinkedIn profile information")
 
     passed = await llm_judge(
         "Show me my LinkedIn profile information",

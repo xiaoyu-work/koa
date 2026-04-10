@@ -7,10 +7,11 @@ from typing import Optional
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
-from ...errors import KoaError, E
-from ..app import require_app, verify_service_key
 from koa.builtin_agents.shipment.shipment_repo import ShipmentRepository
 from koa.providers.shipment import TrackingProvider
+
+from ...errors import E, KoaError
+from ..app import require_app, verify_service_key
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -88,8 +89,7 @@ async def internal_get_shipment(
         *([carrier] if carrier else []),
     )
     if not rows:
-        raise KoaError(E.NOT_FOUND, "Shipment not found",
-                            details={"resource": "shipment"})
+        raise KoaError(E.NOT_FOUND, "Shipment not found", details={"resource": "shipment"})
     return dict(rows[0])
 
 
@@ -106,8 +106,7 @@ async def internal_get_shipment_by_tracking(
         tracking_number.upper(),
     )
     if not rows:
-        raise KoaError(E.NOT_FOUND, "Shipment not found",
-                            details={"resource": "shipment"})
+        raise KoaError(E.NOT_FOUND, "Shipment not found", details={"resource": "shipment"})
     return dict(rows[0])
 
 
@@ -121,8 +120,14 @@ async def internal_upsert_shipment(
     repo = await _get_repo()
     kwargs = {}
     for field in (
-        "tracking_url", "status", "description", "last_update",
-        "estimated_delivery", "tracking_history", "delivered_notified", "is_active",
+        "tracking_url",
+        "status",
+        "description",
+        "last_update",
+        "estimated_delivery",
+        "tracking_history",
+        "delivered_notified",
+        "is_active",
     ):
         val = getattr(body, field)
         if val is not None:
@@ -149,8 +154,7 @@ async def internal_archive_shipment(
     repo = await _get_repo()
     result = await repo.archive_shipment(shipment_id)
     if not result:
-        raise KoaError(E.NOT_FOUND, "Shipment not found",
-                            details={"resource": "shipment"})
+        raise KoaError(E.NOT_FOUND, "Shipment not found", details={"resource": "shipment"})
     return result
 
 
@@ -164,8 +168,7 @@ async def internal_archive_by_tracking(
     repo = await _get_repo()
     result = await repo.archive_shipment_by_tracking(body.tenant_id, body.tracking_number)
     if not result:
-        raise KoaError(E.NOT_FOUND, "Shipment not found",
-                            details={"resource": "shipment"})
+        raise KoaError(E.NOT_FOUND, "Shipment not found", details={"resource": "shipment"})
     return result
 
 
@@ -192,7 +195,8 @@ async def internal_refresh_shipments(
                 DO UPDATE SET profile = tenant_profiles.profile || jsonb_build_object('timezone', $2),
                               updated_at = NOW()
                 """,
-                tenant_id, timezone,
+                tenant_id,
+                timezone,
             )
         except Exception as e:
             logger.debug(f"Failed to persist timezone for {tenant_id}: {e}")

@@ -9,8 +9,6 @@ The internal LLM decides which tools to call (control_lights, control_speaker)
 based on the user's request.
 """
 
-from datetime import datetime
-
 from koa import valet
 from koa.constants import SMARTHOME_SERVICES
 from koa.standard_agent import StandardAgent
@@ -44,8 +42,8 @@ Instructions:
     def get_system_prompt(self) -> str:
         now, _ = self._user_now()
         return self._SYSTEM_PROMPT_TEMPLATE.format(
-            today=now.strftime('%Y-%m-%d'),
-            weekday=now.strftime('%A'),
+            today=now.strftime("%Y-%m-%d"),
+            weekday=now.strftime("%A"),
         )
 
     tools = (

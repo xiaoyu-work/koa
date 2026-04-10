@@ -4,11 +4,11 @@ EmailPreferenceAgent - Manage user's email importance rules and notification pre
 Allows users to set, update, view, and manage custom rules for email importance
 """
 
-import logging
 import json
-from typing import Dict, Any, List
+import logging
+from typing import Any, Dict
 
-from koa import valet, StandardAgent, InputField, AgentStatus, AgentResult, Message
+from koa import AgentResult, AgentStatus, InputField, Message, StandardAgent, valet
 
 logger = logging.getLogger(__name__)
 
@@ -79,11 +79,14 @@ Examples:
         try:
             result = await self.llm_client.chat_completion(
                 messages=[
-                    {"role": "system", "content": "Extract email preference actions. Return JSON only."},
-                    {"role": "user", "content": prompt}
+                    {
+                        "role": "system",
+                        "content": "Extract email preference actions. Return JSON only.",
+                    },
+                    {"role": "user", "content": prompt},
                 ],
                 response_format="json_object",
-                enable_thinking=False
+                enable_thinking=False,
             )
 
             parsed = json.loads(result.content.strip())
@@ -130,15 +133,13 @@ Examples:
                 result = {"success": False, "message": f"Unknown action: {action}"}
 
             return self.make_result(
-                status=AgentStatus.COMPLETED,
-                raw_message=result.get("message", "Done.")
+                status=AgentStatus.COMPLETED, raw_message=result.get("message", "Done.")
             )
 
         except Exception as e:
             logger.error(f"Email preference error: {e}", exc_info=True)
             return self.make_result(
-                status=AgentStatus.COMPLETED,
-                raw_message=f"Something went wrong: {str(e)}"
+                status=AgentStatus.COMPLETED, raw_message=f"Something went wrong: {str(e)}"
             )
 
     async def _get_current_rules(self, credential_store) -> str:
@@ -177,8 +178,7 @@ Examples:
 
         if credential_store:
             await credential_store.update_user_profile(
-                self.tenant_id,
-                {"email_importance_rules": new_rules}
+                self.tenant_id, {"email_importance_rules": new_rules}
             )
 
         logger.info(f"Email rules set for user {self.tenant_id}")
@@ -202,15 +202,13 @@ Keep it concise and clear. Use bullet points or commas to separate different rul
 """
 
         result = await self.llm_client.chat_completion(
-            messages=[{"role": "user", "content": prompt}],
-            enable_thinking=False
+            messages=[{"role": "user", "content": prompt}], enable_thinking=False
         )
         merged_rules = result.content.strip()
 
         if credential_store:
             await credential_store.update_user_profile(
-                self.tenant_id,
-                {"email_importance_rules": merged_rules}
+                self.tenant_id, {"email_importance_rules": merged_rules}
             )
 
         logger.info(f"Email rules updated for user {self.tenant_id}")
@@ -240,15 +238,13 @@ Keep the format consistent with the existing rules.
 """
 
         result = await self.llm_client.chat_completion(
-            messages=[{"role": "user", "content": prompt}],
-            enable_thinking=False
+            messages=[{"role": "user", "content": prompt}], enable_thinking=False
         )
         updated_rules = result.content.strip()
 
         if credential_store:
             await credential_store.update_user_profile(
-                self.tenant_id,
-                {"email_importance_rules": updated_rules if updated_rules else None}
+                self.tenant_id, {"email_importance_rules": updated_rules if updated_rules else None}
             )
 
         if updated_rules:
@@ -266,8 +262,7 @@ Keep the format consistent with the existing rules.
         """Completely replace existing rules"""
         if credential_store:
             await credential_store.update_user_profile(
-                self.tenant_id,
-                {"email_importance_rules": new_rules}
+                self.tenant_id, {"email_importance_rules": new_rules}
             )
 
         logger.info(f"Email rules replaced for user {self.tenant_id}")
@@ -280,8 +275,7 @@ Keep the format consistent with the existing rules.
         """Clear all custom rules"""
         if credential_store:
             await credential_store.update_user_profile(
-                self.tenant_id,
-                {"email_importance_rules": None}
+                self.tenant_id, {"email_importance_rules": None}
             )
 
         logger.info(f"Email rules cleared for user {self.tenant_id}")
@@ -294,16 +288,17 @@ Keep the format consistent with the existing rules.
         """Enable or disable email notifications"""
         if credential_store:
             await credential_store.update_notification_preferences(
-                self.tenant_id,
-                {"email_hook_enabled": enabled}
+                self.tenant_id, {"email_hook_enabled": enabled}
             )
 
         action = "on" if enabled else "off"
-        msg = (
-            f"Email notifications turned {action}. "
-            + ("I'll text you when important emails arrive." if enabled
-               else "I won't text you about emails anymore.")
+        msg = f"Email notifications turned {action}. " + (
+            "I'll text you when important emails arrive."
+            if enabled
+            else "I won't text you about emails anymore."
         )
 
-        logger.info(f"Email notifications {'enabled' if enabled else 'disabled'} for user {self.tenant_id}")
+        logger.info(
+            f"Email notifications {'enabled' if enabled else 'disabled'} for user {self.tenant_id}"
+        )
         return {"success": True, "message": msg}

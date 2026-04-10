@@ -21,7 +21,9 @@ class CallbackNotification:
         self._callback_url = callback_url
         self._timeout = timeout
 
-    async def send(self, tenant_id: str, message: str, metadata: Optional[Dict[str, Any]] = None) -> bool:
+    async def send(
+        self, tenant_id: str, message: str, metadata: Optional[Dict[str, Any]] = None
+    ) -> bool:
         """POST notification to callback URL.
 
         Returns True on success, False on failure.
@@ -39,7 +41,6 @@ class CallbackNotification:
             },
         }
 
-        last_error: Optional[Exception] = None
         for attempt in range(2):  # 1 initial + 1 retry
             try:
                 async with httpx.AsyncClient(timeout=self._timeout) as client:
@@ -48,7 +49,6 @@ class CallbackNotification:
                 logger.info(f"Callback notification sent for tenant {tenant_id}")
                 return True
             except httpx.ConnectError as e:
-                last_error = e
                 if attempt == 0:
                     logger.warning(f"Callback connection error (retrying in 2s): {e}")
                     await asyncio.sleep(2)

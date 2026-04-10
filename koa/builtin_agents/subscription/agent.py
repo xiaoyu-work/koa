@@ -9,7 +9,7 @@ to query them.
 from koa import valet
 from koa.standard_agent import StandardAgent
 
-from .tools import query_subscriptions, check_expiring_subscriptions
+from .tools import check_expiring_subscriptions, query_subscriptions
 
 
 @valet(domain="lifestyle")
@@ -38,8 +38,8 @@ Instructions:
     def get_system_prompt(self) -> str:
         now, _ = self._user_now()
         return self._SYSTEM_PROMPT_TEMPLATE.format(
-            today=now.strftime('%Y-%m-%d'),
-            weekday=now.strftime('%A'),
+            today=now.strftime("%Y-%m-%d"),
+            weekday=now.strftime("%A"),
         )
 
     tools = (

@@ -36,9 +36,7 @@ class PostgresCronJobStore:
 
     async def load(self) -> None:
         """Load all active (non-deleted) jobs from database into memory cache."""
-        rows = await self._db.fetch(
-            "SELECT id, data FROM cron_jobs WHERE deleted_at IS NULL"
-        )
+        rows = await self._db.fetch("SELECT id, data FROM cron_jobs WHERE deleted_at IS NULL")
         self._jobs = {}
         for row in rows:
             try:
@@ -157,4 +155,3 @@ class PostgresCronJobStore:
         if job and (user_id is None or job.user_id == user_id):
             return job
         return self.find_by_name(hint, user_id)
-

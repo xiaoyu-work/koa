@@ -16,26 +16,25 @@ Example:
         result3 = await hub.execute(reviewer, "Review the document")
 """
 
-from .models import (
-    # Message types
-    Message,
-    MessageRole,
-    MessageType,
-    # Participant
-    ParticipantInfo,
-    # Configuration
-    MsgHubConfig,
-    VisibilityMode,
-    SharedContext,
-    # State and results
-    MsgHubState,
-    HubExecutionResult,
-)
-
 from .hub import (
     MsgHub,
     MsgHubError,
     msghub,
+)
+from .models import (
+    HubExecutionResult,
+    # Message types
+    Message,
+    MessageRole,
+    MessageType,
+    # Configuration
+    MsgHubConfig,
+    # State and results
+    MsgHubState,
+    # Participant
+    ParticipantInfo,
+    SharedContext,
+    VisibilityMode,
 )
 
 __all__ = [

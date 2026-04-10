@@ -51,10 +51,13 @@ class AuditLogger:
         self._request_id = request_id or uuid.uuid4().hex[:12]
         self._request_start = time.monotonic()
         self._default_tenant_id = tenant_id
-        self._emit("request_start", {
-            "tenant_id": tenant_id,
-            "message_preview": message[:120] if message else "",
-        })
+        self._emit(
+            "request_start",
+            {
+                "tenant_id": tenant_id,
+                "message_preview": message[:120] if message else "",
+            },
+        )
         return self._request_id
 
     def end_request(
@@ -130,14 +133,17 @@ class AuditLogger:
         tenant_id: Optional[str] = None,
     ) -> None:
         """Log a tool-policy routing decision."""
-        self._emit("policy_decision", {
-            "tenant_id": self._tid(tenant_id),
-            "intent": intent,
-            "must_use_tools": must_use_tools,
-            "selected_tools": selected_tools,
-            "selected_tools_count": len(selected_tools),
-            "reason_code": reason_code,
-        })
+        self._emit(
+            "policy_decision",
+            {
+                "tenant_id": self._tid(tenant_id),
+                "intent": intent,
+                "must_use_tools": must_use_tools,
+                "selected_tools": selected_tools,
+                "selected_tools_count": len(selected_tools),
+                "reason_code": reason_code,
+            },
+        )
 
     def log_route_decision(
         self,
@@ -147,12 +153,15 @@ class AuditLogger:
         reason: str,
     ) -> None:
         """Log a WAITING-agent routing decision."""
-        self._emit("route_decision", {
-            "tenant_id": tenant_id,
-            "target_agent_id": target_agent_id,
-            "waiting_agents_count": waiting_agents_count,
-            "reason": reason,
-        })
+        self._emit(
+            "route_decision",
+            {
+                "tenant_id": tenant_id,
+                "target_agent_id": target_agent_id,
+                "waiting_agents_count": waiting_agents_count,
+                "reason": reason,
+            },
+        )
 
     def log_tool_execution(
         self,
@@ -184,13 +193,16 @@ class AuditLogger:
         tenant_id: Optional[str] = None,
     ) -> None:
         """Log an approval decision."""
-        self._emit("approval_decision", {
-            "tenant_id": self._tid(tenant_id),
-            "agent_name": agent_name,
-            "tool_name": tool_name,
-            "risk_level": risk_level,
-            "decision": decision,
-        })
+        self._emit(
+            "approval_decision",
+            {
+                "tenant_id": self._tid(tenant_id),
+                "agent_name": agent_name,
+                "tool_name": tool_name,
+                "risk_level": risk_level,
+                "decision": decision,
+            },
+        )
 
     def log_react_turn(
         self,
@@ -200,10 +212,13 @@ class AuditLogger:
         tenant_id: Optional[str] = None,
     ) -> None:
         """Log a ReAct turn summary."""
-        self._emit("react_turn", {
-            "tenant_id": self._tid(tenant_id),
-            "turn": turn,
-            "tool_calls": tool_calls,
-            "tool_calls_count": len(tool_calls),
-            "final_answer": final_answer,
-        })
+        self._emit(
+            "react_turn",
+            {
+                "tenant_id": self._tid(tenant_id),
+                "turn": turn,
+                "tool_calls": tool_calls,
+                "tool_calls_count": len(tool_calls),
+                "final_answer": final_answer,
+            },
+        )

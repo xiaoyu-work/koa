@@ -3,7 +3,6 @@
 Actions: status, list, add, update, remove, run, runs.
 """
 
-import json
 import logging
 from datetime import datetime, timezone
 from typing import Annotated, Optional
@@ -34,6 +33,7 @@ def _format_relative(ms: Optional[int]) -> str:
     if ms is None:
         return "—"
     import time
+
     now = int(time.time() * 1000)
     diff_s = (ms - now) / 1000
 
@@ -71,6 +71,7 @@ def _format_schedule(job) -> str:
 # cron_status
 # =============================================================================
 
+
 @tool
 async def cron_status(*, context: AgentToolContext) -> str:
     """Show overall cron system status including job counts and next scheduled run."""
@@ -86,7 +87,9 @@ async def cron_status(*, context: AgentToolContext) -> str:
         f"Currently running: {status['running_jobs']}",
     ]
     if status["next_due_at_ms"]:
-        lines.append(f"Next run: {_format_ms(status['next_due_at_ms'])} ({_format_relative(status['next_due_at_ms'])})")
+        lines.append(
+            f"Next run: {_format_ms(status['next_due_at_ms'])} ({_format_relative(status['next_due_at_ms'])})"
+        )
     else:
         lines.append("Next run: none scheduled")
     return "\n".join(lines)
@@ -96,10 +99,12 @@ async def cron_status(*, context: AgentToolContext) -> str:
 # cron_list
 # =============================================================================
 
+
 @tool
 async def cron_list(
     include_disabled: Annotated[bool, "Whether to include disabled jobs"] = False,
-    *, context: AgentToolContext,
+    *,
+    context: AgentToolContext,
 ) -> str:
     """List all cron jobs for the current user."""
     service = _get_service(context)
@@ -133,20 +138,40 @@ async def cron_list(
 # cron_add
 # =============================================================================
 
+
 @tool
 async def cron_add(
     name: Annotated[str, "Name for the cron job"],
     instruction: Annotated[str, "What the agent should do when the job fires"],
-    schedule_type: Annotated[str, "Schedule type: 'at' (one-shot datetime), 'every' (recurring interval), 'cron' (cron expression)"],
-    schedule_value: Annotated[str, "Schedule value: ISO datetime for 'at', seconds number for 'every', cron expression for 'cron' (e.g. '0 8 * * *')"],
-    timezone: Annotated[str, "IANA timezone for cron expressions (e.g. 'America/Los_Angeles')"] = "",
-    session_target: Annotated[str, "Execution mode: 'main' (with context) or 'isolated' (fresh)"] = "isolated",
-    delivery_mode: Annotated[str, "How to deliver results: 'announce' (notify user, default), 'none' (silent), or 'webhook'"] = "announce",
+    schedule_type: Annotated[
+        str,
+        "Schedule type: 'at' (one-shot datetime), 'every' (recurring interval), 'cron' (cron expression)",
+    ],
+    schedule_value: Annotated[
+        str,
+        "Schedule value: ISO datetime for 'at', seconds number for 'every', cron expression for 'cron' (e.g. '0 8 * * *')",
+    ],
+    timezone: Annotated[
+        str, "IANA timezone for cron expressions (e.g. 'America/Los_Angeles')"
+    ] = "",
+    session_target: Annotated[
+        str, "Execution mode: 'main' (with context) or 'isolated' (fresh)"
+    ] = "isolated",
+    delivery_mode: Annotated[
+        str,
+        "How to deliver results: 'announce' (notify user, default), 'none' (silent), or 'webhook'",
+    ] = "announce",
     delivery_channel: Annotated[Optional[str], "Channel for announce delivery"] = None,
     webhook_url: Annotated[Optional[str], "URL for webhook delivery"] = None,
-    conditional: Annotated[bool, "If true, only notify when a condition is met. The agent will have a notify_user tool to decide when to send notifications. Use for 'alert me when X happens' type requests."] = False,
-    delete_after_run: Annotated[bool, "Auto-delete after successful execution (default true for one-shot)"] = False,
-    *, context: AgentToolContext,
+    conditional: Annotated[
+        bool,
+        "If true, only notify when a condition is met. The agent will have a notify_user tool to decide when to send notifications. Use for 'alert me when X happens' type requests.",
+    ] = False,
+    delete_after_run: Annotated[
+        bool, "Auto-delete after successful execution (default true for one-shot)"
+    ] = False,
+    *,
+    context: AgentToolContext,
 ) -> str:
     """Create a new cron job with the specified schedule and configuration."""
     service = _get_service(context)
@@ -154,11 +179,16 @@ async def cron_add(
         return "Cron service is not available."
 
     from koa.triggers.cron.models import (
-        AtSchedule, EverySchedule, CronScheduleSpec,
-        SessionTarget, WakeMode,
-        SystemEventPayload, AgentTurnPayload,
-        DeliveryMode, DeliveryConfig,
+        AgentTurnPayload,
+        AtSchedule,
         CronJobCreate,
+        CronScheduleSpec,
+        DeliveryConfig,
+        DeliveryMode,
+        EverySchedule,
+        SessionTarget,
+        SystemEventPayload,
+        WakeMode,
     )
 
     # Build schedule
@@ -172,7 +202,9 @@ async def cron_add(
             return f"Invalid interval value: {schedule_value}. Provide seconds (e.g. '3600' for 1 hour)."
     elif schedule_type == "cron":
         # Prefer explicit timezone param, fall back to user's timezone from context
-        tz = timezone or (context.context_hints.get("timezone", "") if context.context_hints else "")
+        tz = timezone or (
+            context.context_hints.get("timezone", "") if context.context_hints else ""
+        )
         schedule = CronScheduleSpec(
             expr=schedule_value,
             tz=tz or None,
@@ -228,16 +260,20 @@ async def cron_add(
 # cron_update
 # =============================================================================
 
+
 @tool
 async def cron_update(
     job_hint: Annotated[str, "Name or ID of the cron job to update"],
     enabled: Annotated[Optional[bool], "Enable or disable the job"] = None,
     new_name: Annotated[Optional[str], "New name for the job"] = None,
     new_instruction: Annotated[Optional[str], "New instruction/message for the job"] = None,
-    new_schedule_type: Annotated[Optional[str], "New schedule type: 'at', 'every', or 'cron'"] = None,
+    new_schedule_type: Annotated[
+        Optional[str], "New schedule type: 'at', 'every', or 'cron'"
+    ] = None,
     new_schedule_value: Annotated[Optional[str], "New schedule value"] = None,
     new_timezone: Annotated[Optional[str], "New timezone for cron expressions"] = None,
-    *, context: AgentToolContext,
+    *,
+    context: AgentToolContext,
 ) -> str:
     """Update an existing cron job's configuration."""
     service = _get_service(context)
@@ -249,9 +285,12 @@ async def cron_update(
         return f"No cron job found matching '{job_hint}'."
 
     from koa.triggers.cron.models import (
-        AtSchedule, EverySchedule, CronScheduleSpec,
-        SystemEventPayload, AgentTurnPayload,
+        AgentTurnPayload,
+        AtSchedule,
         CronJobPatch,
+        CronScheduleSpec,
+        EverySchedule,
+        SystemEventPayload,
     )
 
     patch = CronJobPatch()
@@ -296,10 +335,12 @@ async def cron_update(
 # cron_remove
 # =============================================================================
 
+
 @tool
 async def cron_remove(
     job_hint: Annotated[str, "Name or ID of the cron job to remove"],
-    *, context: AgentToolContext,
+    *,
+    context: AgentToolContext,
 ) -> str:
     """Delete a cron job permanently."""
     service = _get_service(context)
@@ -320,10 +361,12 @@ async def cron_remove(
 # cron_run
 # =============================================================================
 
+
 @tool
 async def cron_run(
     job_hint: Annotated[str, "Name or ID of the cron job to run immediately"],
-    *, context: AgentToolContext,
+    *,
+    context: AgentToolContext,
 ) -> str:
     """Manually trigger a cron job to run immediately, outside its normal schedule."""
     service = _get_service(context)
@@ -353,11 +396,13 @@ async def cron_run(
 # cron_runs
 # =============================================================================
 
+
 @tool
 async def cron_runs(
     job_hint: Annotated[str, "Name or ID of the cron job to view history for"],
     limit: Annotated[int, "Maximum number of runs to show"] = 10,
-    *, context: AgentToolContext,
+    *,
+    context: AgentToolContext,
 ) -> str:
     """View the run history for a specific cron job."""
     service = _get_service(context)

@@ -3,11 +3,12 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 
 class TaskStatus(str, Enum):
     """Trigger task lifecycle states."""
+
     ACTIVE = "active"
     PAUSED = "paused"
     DISABLED = "disabled"
@@ -18,6 +19,7 @@ class TaskStatus(str, Enum):
 
 class TriggerType(str, Enum):
     """Types of triggers."""
+
     SCHEDULE = "schedule"
     EVENT = "event"
     CONDITION = "condition"
@@ -26,6 +28,7 @@ class TriggerType(str, Enum):
 @dataclass
 class TriggerConfig:
     """Configuration for a trigger."""
+
     type: TriggerType
     params: Dict[str, Any] = field(default_factory=dict)
     # Schedule: {"cron": "0 8 * * *"} or {"interval_minutes": 5} or {"run_at": "2024-01-01T08:00:00"}
@@ -36,6 +39,7 @@ class TriggerConfig:
 @dataclass
 class ActionConfig:
     """Configuration for what to do when a trigger fires."""
+
     executor: str = "orchestrator"  # executor name (default: OrchestratorExecutor)
     instruction: str = ""  # instruction for the LLM (when using orchestrator executor)
     config: Dict[str, Any] = field(default_factory=dict)  # custom executor config
@@ -44,6 +48,7 @@ class ActionConfig:
 @dataclass
 class Task:
     """A trigger task — combines trigger condition with action."""
+
     id: str
     user_id: str  # tenant_id
     name: str = ""
@@ -100,10 +105,18 @@ class Task:
                 config=action_data.get("config", {}),
             ),
             status=TaskStatus(data.get("status", "active")),
-            created_at=datetime.fromisoformat(data["created_at"]) if data.get("created_at") else datetime.now(),
-            updated_at=datetime.fromisoformat(data["updated_at"]) if data.get("updated_at") else datetime.now(),
-            last_run_at=datetime.fromisoformat(data["last_run_at"]) if data.get("last_run_at") else None,
-            next_run_at=datetime.fromisoformat(data["next_run_at"]) if data.get("next_run_at") else None,
+            created_at=datetime.fromisoformat(data["created_at"])
+            if data.get("created_at")
+            else datetime.now(),
+            updated_at=datetime.fromisoformat(data["updated_at"])
+            if data.get("updated_at")
+            else datetime.now(),
+            last_run_at=datetime.fromisoformat(data["last_run_at"])
+            if data.get("last_run_at")
+            else None,
+            next_run_at=datetime.fromisoformat(data["next_run_at"])
+            if data.get("next_run_at")
+            else None,
             run_count=data.get("run_count", 0),
             max_runs=data.get("max_runs"),
             metadata=data.get("metadata", {}),
@@ -113,6 +126,7 @@ class Task:
 @dataclass
 class TriggerContext:
     """Context passed to executors when a trigger fires."""
+
     task: Task
     trigger_type: str  # "schedule", "event", "condition"
     fired_at: datetime = field(default_factory=datetime.now)
@@ -123,6 +137,7 @@ class TriggerContext:
 @dataclass
 class ActionResult:
     """Result from executing a triggered action."""
+
     success: bool = True
     output: str = ""
     error: Optional[str] = None

@@ -8,19 +8,17 @@ Tests cover:
 """
 
 import json
-import pytest
 from dataclasses import dataclass
 from typing import Optional
 from unittest.mock import AsyncMock, MagicMock
 
-from koa.orchestrator.intent_analyzer import (
-    IntentAnalyzer,
-    IntentAnalysis,
-    SubTask,
-    VALID_DOMAINS,
-    MAX_SUB_TASKS,
-)
+import pytest
 
+from koa.orchestrator.intent_analyzer import (
+    MAX_SUB_TASKS,
+    VALID_DOMAINS,
+    IntentAnalyzer,
+)
 
 # ── Mock LLM Response ──
 
@@ -76,7 +74,7 @@ class TestExtractJson:
         assert IntentAnalyzer._extract_json("no json here") is None
 
     def test_json_array_not_object(self):
-        assert IntentAnalyzer._extract_json('[1, 2, 3]') is None
+        assert IntentAnalyzer._extract_json("[1, 2, 3]") is None
 
     def test_malformed_json(self):
         assert IntentAnalyzer._extract_json('{"broken": }') is None
@@ -104,7 +102,12 @@ class TestParseResult:
             "domains": ["communication", "productivity"],
             "sub_tasks": [
                 {"id": 1, "description": "Send email", "domain": "communication", "depends_on": []},
-                {"id": 2, "description": "Check calendar", "domain": "productivity", "depends_on": []},
+                {
+                    "id": 2,
+                    "description": "Check calendar",
+                    "domain": "productivity",
+                    "depends_on": [],
+                },
             ],
         }
         result = self.analyzer._parse_result(data, "Send email and check calendar")
@@ -121,8 +124,18 @@ class TestParseResult:
             "intent_type": "multi",
             "domains": ["productivity", "communication"],
             "sub_tasks": [
-                {"id": 1, "description": "Check calendar", "domain": "productivity", "depends_on": []},
-                {"id": 2, "description": "Email free times", "domain": "communication", "depends_on": [1]},
+                {
+                    "id": 1,
+                    "description": "Check calendar",
+                    "domain": "productivity",
+                    "depends_on": [],
+                },
+                {
+                    "id": 2,
+                    "description": "Email free times",
+                    "domain": "communication",
+                    "depends_on": [1],
+                },
             ],
         }
         result = self.analyzer._parse_result(data, "Check calendar then email Bob")
@@ -153,7 +166,11 @@ class TestParseResult:
         assert result.sub_tasks == []
 
     def test_invalid_domains_filtered(self):
-        data = {"intent_type": "single", "domains": ["invalid_domain", "productivity"], "sub_tasks": []}
+        data = {
+            "intent_type": "single",
+            "domains": ["invalid_domain", "productivity"],
+            "sub_tasks": [],
+        }
         result = self.analyzer._parse_result(data, "test")
 
         assert result.domains == ["productivity"]
@@ -248,11 +265,13 @@ class TestFallback:
 class TestAnalyze:
     @pytest.mark.asyncio
     async def test_single_intent(self):
-        response = json.dumps({
-            "intent_type": "single",
-            "domains": ["productivity"],
-            "sub_tasks": [],
-        })
+        response = json.dumps(
+            {
+                "intent_type": "single",
+                "domains": ["productivity"],
+                "sub_tasks": [],
+            }
+        )
         client = _make_llm_client(response)
         analyzer = IntentAnalyzer(llm_client=client)
 
@@ -265,14 +284,26 @@ class TestAnalyze:
 
     @pytest.mark.asyncio
     async def test_multi_intent(self):
-        response = json.dumps({
-            "intent_type": "multi",
-            "domains": ["lifestyle", "communication"],
-            "sub_tasks": [
-                {"id": 1, "description": "Log expense", "domain": "lifestyle", "depends_on": []},
-                {"id": 2, "description": "Send slack", "domain": "communication", "depends_on": []},
-            ],
-        })
+        response = json.dumps(
+            {
+                "intent_type": "multi",
+                "domains": ["lifestyle", "communication"],
+                "sub_tasks": [
+                    {
+                        "id": 1,
+                        "description": "Log expense",
+                        "domain": "lifestyle",
+                        "depends_on": [],
+                    },
+                    {
+                        "id": 2,
+                        "description": "Send slack",
+                        "domain": "communication",
+                        "depends_on": [],
+                    },
+                ],
+            }
+        )
         client = _make_llm_client(response)
         analyzer = IntentAnalyzer(llm_client=client)
 
@@ -333,7 +364,11 @@ class TestAnalyze:
 
         call_args = client.chat_completion.call_args
         messages = call_args.kwargs.get("messages") or call_args[0][0]
-        config = call_args.kwargs.get("config") or call_args[1] if len(call_args) > 1 else call_args.kwargs.get("config")
+        config = (
+            call_args.kwargs.get("config") or call_args[1]
+            if len(call_args) > 1
+            else call_args.kwargs.get("config")
+        )
 
         assert len(messages) == 2
         assert messages[0]["role"] == "system"

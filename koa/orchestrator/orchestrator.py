@@ -45,57 +45,58 @@ Example (hooks, no subclass):
     )
 """
 
+import asyncio
 import copy
 import json
-import asyncio
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Any, AsyncIterator, Callable, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, AsyncIterator, Callable, Dict, List, Optional
 
-from ..message import Message
+from ..constants import GENERATE_PLAN_TOOL_NAME
 from ..memory.governance import MemoryGovernance
 from ..memory.session_memory import SessionMemoryManager
 from ..memory.true_memory import extract_true_memory_proposals, format_true_memory_for_prompt
+from ..message import Message
 from ..models import AgentToolContext
 from ..result import AgentResult, AgentStatus
-from ..streaming.models import StreamMode, AgentEvent, EventType
-
+from ..streaming.models import AgentEvent, EventType, StreamMode
+from .audit_logger import AuditLogger
+from .context_manager import ContextManager
+from .execution_policy import ExecutionPolicyEngine
+from .llm_manager import LLMManagerMixin
 from .models import (
-    OrchestratorConfig,
-    AgentPoolEntry,
-    AgentCallback,
     CALLBACK_HANDLER_ATTR,
+    AgentCallback,
+    AgentPoolEntry,
+    OrchestratorConfig,
     callback_handler,
 )
 from .pool import AgentPoolManager
-from .react_config import ReactLoopConfig
-from ..constants import GENERATE_PLAN_TOOL_NAME
-from .context_manager import ContextManager
 from .prompts import build_system_prompt
-from .audit_logger import AuditLogger
-from .execution_policy import ExecutionPolicyEngine
-from .tool_policy import ToolPolicyFilter
-
+from .react_config import ReactLoopConfig
 from .react_loop import ReactLoopMixin
 from .tool_manager import ToolManagerMixin
-from .llm_manager import LLMManagerMixin
+from .tool_policy import ToolPolicyFilter
 
 if TYPE_CHECKING:
     from ..checkpoint import CheckpointManager
     from ..llm.router import ModelRouter
+    from ..memory.momex import MomexMemory
     from ..msghub import MessageHub
     from ..protocols import LLMClientProtocol
-    from ..memory.momex import MomexMemory
+    from .dag_executor import SubTaskResult
+    from .intent_analyzer import IntentAnalysis, SubTask
 
-from ..standard_agent import StandardAgent
 from ..config import AgentRegistry
+from ..standard_agent import StandardAgent
 
 logger = logging.getLogger(__name__)
 
 
-from .tool_pipeline import ToolPipeline, credential_check_hook, result_audit_hook
-from .state_persistence import PlanStore
+from .state_persistence import PlanStore  # noqa: E402
+from .tool_pipeline import ToolPipeline, credential_check_hook, result_audit_hook  # noqa: E402
+
 
 class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
     """
@@ -151,7 +152,7 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
         # Start with parent's handlers
         handler_map: Dict[str, str] = {}
         for base in cls.__mro__[1:]:  # Skip cls itself
-            if hasattr(base, '_callback_handler_map'):
+            if hasattr(base, "_callback_handler_map"):
                 handler_map.update(base._callback_handler_map)
 
         # Add handlers defined in this class (cls.__dict__ only has this class's attrs)
@@ -312,9 +313,7 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
 
         # Validate LLM client is available
         if not self.llm_client:
-            raise RuntimeError(
-                "LLM client is required. Pass llm_client to Orchestrator()."
-            )
+            raise RuntimeError("LLM client is required. Pass llm_client to Orchestrator().")
 
         # Restore sessions if configured
         if self.config.session.enabled and self.config.session.auto_restore_on_start:
@@ -385,7 +384,7 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
         tenant_id: str,
         message: str,
         images: Optional[List[Dict[str, Any]]] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> AgentResult:
         """
         Main entry point - handle user message via ReAct loop.
@@ -424,7 +423,7 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
         message: str,
         images: Optional[List[Dict[str, Any]]] = None,
         mode: StreamMode = StreamMode.EVENTS,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> AsyncIterator[AgentEvent]:
         """
         Stream agent execution events via ReAct loop.
@@ -473,7 +472,6 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
             tenant_id=tenant_id,
             message=message,
         )
-        context_trace_status = "completed"
 
         # Step 0: Clean up stale/completed agents to prevent cross-request state leakage
         await self._cleanup_stale_agents(tenant_id)
@@ -523,18 +521,23 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
         speculative_tasks: Dict[str, asyncio.Task] = {}
         if images and message.strip():
             speculative_tasks = self._start_speculative_tasks(
-                message, tenant_id, metadata,
+                message,
+                tenant_id,
+                metadata,
             )
             if speculative_tasks:
                 context["_speculative_tasks"] = speculative_tasks
 
         # Step 4: Intent Analysis — classify domains and detect multi-intent
         intent = await self._analyze_intent(message, context)
-        self._audit.log_phase("intent_analysis", {
-            "intent_type": intent.intent_type,
-            "domains": intent.domains,
-            "sub_tasks": len(intent.sub_tasks) if intent.sub_tasks else 0,
-        })
+        self._audit.log_phase(
+            "intent_analysis",
+            {
+                "intent_type": intent.intent_type,
+                "domains": intent.domains,
+                "sub_tasks": len(intent.sub_tasks) if intent.sub_tasks else 0,
+            },
+        )
 
         # Step 4b: Multi-intent → DAG execution
         if intent.intent_type == "multi" and intent.sub_tasks:
@@ -577,16 +580,23 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
             tool_schemas.append(notify_schema)
 
         logger.info(f"[Tools] {len(tool_schemas)} tools available for ReAct")
-        self._audit.log_phase("tool_loading", {
-            "tool_count": len(tool_schemas),
-            "domains": intent.domains,
-        })
+        self._audit.log_phase(
+            "tool_loading",
+            {
+                "tool_count": len(tool_schemas),
+                "domains": intent.domains,
+            },
+        )
 
         # Convert images to media format for LLM
         media = None
         if images:
             media = [
-                {"type": "image", "data": img["data"], "media_type": img.get("media_type", "image/jpeg")}
+                {
+                    "type": "image",
+                    "data": img["data"],
+                    "media_type": img.get("media_type", "image/jpeg"),
+                }
                 for img in images
             ]
 
@@ -598,9 +608,14 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
 
         try:
             async for event in self._react_loop_events(
-                messages, tool_schemas, tenant_id,
-                context=context, user_message=message, media=media,
-                metadata=metadata, request_tools=request_tools,
+                messages,
+                tool_schemas,
+                tenant_id,
+                context=context,
+                user_message=message,
+                media=media,
+                metadata=metadata,
+                request_tools=request_tools,
             ):
                 if event.type == EventType.EXECUTION_END:
                     exec_data = event.data
@@ -617,12 +632,19 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
                     f"kind={loop_err.error_kind.value}), retrying with fallback model"
                 )
                 # Rebuild messages to get a clean context for retry
-                retry_messages = await self._build_llm_messages(context, message, needs_memory=intent.needs_memory)
+                retry_messages = await self._build_llm_messages(
+                    context, message, needs_memory=intent.needs_memory
+                )
                 try:
                     async for event in self._react_loop_events(
-                        retry_messages, tool_schemas, tenant_id,
-                        context=context, user_message=message, media=media,
-                        metadata=metadata, request_tools=request_tools,
+                        retry_messages,
+                        tool_schemas,
+                        tenant_id,
+                        context=context,
+                        user_message=message,
+                        media=media,
+                        metadata=metadata,
+                        request_tools=request_tools,
                         _llm_client_override=fallback_client,
                     ):
                         if event.type == EventType.EXECUTION_END:
@@ -630,25 +652,43 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
                             final_response = exec_data.get("final_response", "")
                         yield event
                 except _ReactLoopLLMError as retry_err:
-                    logger.error(
-                        f"[Orchestrator] Fallback model also failed: {retry_err.original}"
-                    )
+                    logger.error(f"[Orchestrator] Fallback model also failed: {retry_err.original}")
                     yield AgentEvent(
                         type=EventType.ERROR,
-                        data={"error": str(retry_err.original), "error_type": type(retry_err.original).__name__},
+                        data={
+                            "error": str(retry_err.original),
+                            "error_type": type(retry_err.original).__name__,
+                        },
                     )
                     final_response = "Sorry, I'm having trouble processing your request right now. Please try again later."
-                    exec_data = {"final_response": final_response, "turns": 0, "token_usage": {}, "duration_ms": 0, "tool_calls_count": 0, "tool_calls": []}
+                    exec_data = {
+                        "final_response": final_response,
+                        "turns": 0,
+                        "token_usage": {},
+                        "duration_ms": 0,
+                        "tool_calls_count": 0,
+                        "tool_calls": [],
+                    }
             else:
                 logger.error(
                     f"[Orchestrator] ReAct loop failed, no fallback available: {loop_err.original}"
                 )
                 yield AgentEvent(
                     type=EventType.ERROR,
-                    data={"error": str(loop_err.original), "error_type": type(loop_err.original).__name__},
+                    data={
+                        "error": str(loop_err.original),
+                        "error_type": type(loop_err.original).__name__,
+                    },
                 )
                 final_response = "Sorry, I'm having trouble processing your request right now. Please try again later."
-                exec_data = {"final_response": final_response, "turns": 0, "token_usage": {}, "duration_ms": 0, "tool_calls_count": 0, "tool_calls": []}
+                exec_data = {
+                    "final_response": final_response,
+                    "turns": 0,
+                    "token_usage": {},
+                    "duration_ms": 0,
+                    "tool_calls_count": 0,
+                    "tool_calls": [],
+                }
 
         # Step 8: Map loop results -> AgentResult
         pending_approvals = exec_data.get("pending_approvals", [])
@@ -699,7 +739,9 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
         await self._save_tool_call_history(tenant_id, tool_calls)
 
         # Step 9: Post-process
-        self._audit.log_phase("post_process", {"has_proposals": bool(result.metadata.get("true_memory_proposals"))})
+        self._audit.log_phase(
+            "post_process", {"has_proposals": bool(result.metadata.get("true_memory_proposals"))}
+        )
         result = await self.post_process(result, context)
         self._audit.end_request(
             status=result.status.value if hasattr(result.status, "value") else str(result.status),
@@ -770,9 +812,7 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
         tasks["google_search:web"] = asyncio.create_task(_run_web_search())
         tasks["google_search:image"] = asyncio.create_task(_run_image_search())
 
-        logger.info(
-            f"[Speculative] Started {len(tasks)} speculative tasks for image request"
-        )
+        logger.info(f"[Speculative] Started {len(tasks)} speculative tasks for image request")
         return tasks
 
     @staticmethod
@@ -814,13 +854,9 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
         for step in plan_data.get("steps", []):
             deps = step.get("depends_on", [])
             dep_str = (
-                f" (after step {', '.join(map(str, deps))})"
-                if deps
-                else " (can start immediately)"
+                f" (after step {', '.join(map(str, deps))})" if deps else " (can start immediately)"
             )
-            lines.append(
-                f"{step['id']}. [{step.get('agent', '?')}] {step['action']}{dep_str}"
-            )
+            lines.append(f"{step['id']}. [{step.get('agent', '?')}] {step['action']}{dep_str}")
             if step.get("reason"):
                 lines.append(f"   Reason: {step['reason']}")
         return "\n".join(lines)
@@ -864,7 +900,8 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
         """
         agents = await self.agent_pool.list_agents(tenant_id)
         waiting_agents = [
-            a for a in agents
+            a
+            for a in agents
             if a.status in (AgentStatus.WAITING_FOR_INPUT, AgentStatus.WAITING_FOR_APPROVAL)
         ]
 
@@ -985,6 +1022,7 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
         if tz and tz != "UTC":
             try:
                 from zoneinfo import ZoneInfo
+
                 user_tz = ZoneInfo(tz)
                 user_now = now.astimezone(user_tz)
                 context_lines = [f"Current time: {user_now.strftime('%Y-%m-%d %H:%M:%S')} ({tz})"]
@@ -1020,7 +1058,9 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
         if profile_text:
             system_parts.append("\n[User Profile]\n" + profile_text)
 
-        session_prompt = context.get("session_memory_prompt") or self.session_memory.build_prompt_section(
+        session_prompt = context.get(
+            "session_memory_prompt"
+        ) or self.session_memory.build_prompt_section(
             context.get("session_id", context.get("tenant_id", "")),
         )
         if session_prompt:
@@ -1051,24 +1091,30 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
             except Exception as e:
                 logger.warning(f"Failed to auto-recall memories: {e}")
 
-        messages.append({
-            "role": "system",
-            "content": "\n\n".join(system_parts),
-        })
+        messages.append(
+            {
+                "role": "system",
+                "content": "\n\n".join(system_parts),
+            }
+        )
 
         # Conversation history (from Momex short-term memory)
         history = context.get("conversation_history", [])
         if history:
-            logger.info(f"[ReAct] history: {len(history)} messages, roles: {[m.get('role') for m in history[:6]]}...")
+            logger.info(
+                f"[ReAct] history: {len(history)} messages, roles: {[m.get('role') for m in history[:6]]}..."
+            )
             messages.extend(history)
         else:
             logger.info("[ReAct] history: 0 messages (clean session)")
 
         # Current user message
-        messages.append({
-            "role": "user",
-            "content": user_message,
-        })
+        messages.append(
+            {
+                "role": "user",
+                "content": user_message,
+            }
+        )
 
         return messages
 
@@ -1089,7 +1135,7 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
         if identity.get("birthday"):
             lines.append(f"Birthday: {identity['birthday']}")
 
-        for addr in (profile.get("addresses") or []):
+        for addr in profile.get("addresses") or []:
             parts = [addr.get("street"), addr.get("city"), addr.get("state")]
             loc = ", ".join(p for p in parts if p)
             label = addr.get("label", "Address").title()
@@ -1104,7 +1150,7 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
                 lines.append(line)
 
         work = profile.get("work") or {}
-        for job in (work.get("jobs") or []):
+        for job in work.get("jobs") or []:
             if job.get("is_current"):
                 parts = [job.get("title", ""), job.get("employer", "")]
                 desc = " at ".join(p for p in parts if p)
@@ -1112,7 +1158,7 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
                     lines.append(f"Work: {desc}")
 
         education = profile.get("education") or {}
-        for school in (education.get("schools") or []):
+        for school in education.get("schools") or []:
             parts = [school.get("degree"), school.get("major")]
             desc = " in ".join(p for p in parts if p)
             name = school.get("name", "")
@@ -1123,7 +1169,7 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
                 lines.append(line)
 
         relationships = profile.get("relationships") or {}
-        for person in (relationships.get("family") or []):
+        for person in relationships.get("family") or []:
             line = f"{person.get('relationship', 'Family')}: {person.get('name', '')}"
             if person.get("birthday"):
                 line += f" (birthday: {person['birthday']})"
@@ -1136,16 +1182,20 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
             lines.append(line)
 
         lifestyle = profile.get("lifestyle") or {}
-        for pet in (lifestyle.get("pets") or []):
+        for pet in lifestyle.get("pets") or []:
             if pet.get("name"):
                 lines.append(f"Pet: {pet['name']} ({pet.get('type', '')})")
-        for vehicle in (lifestyle.get("vehicles") or []):
+        for vehicle in lifestyle.get("vehicles") or []:
             if vehicle.get("is_current") and vehicle.get("make"):
-                parts = [str(vehicle.get("year", "")), vehicle.get("make", ""), vehicle.get("model", "")]
+                parts = [
+                    str(vehicle.get("year", "")),
+                    vehicle.get("make", ""),
+                    vehicle.get("model", ""),
+                ]
                 lines.append(f"Vehicle: {' '.join(p for p in parts if p)}")
 
         travel = profile.get("travel") or {}
-        for prog in (travel.get("loyalty_programs") or []):
+        for prog in travel.get("loyalty_programs") or []:
             name = prog.get("program", "")
             if name:
                 line = f"Loyalty: {name}"
@@ -1184,7 +1234,8 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
         builtin_names = {t.name for t in getattr(self, "builtin_tools", [])}
         builtin_names.add("complete_task")
         agent_tool_count = sum(
-            1 for s in schemas
+            1
+            for s in schemas
             if s.get("function", {}).get("name", s.get("name", "")) not in builtin_names
         )
 
@@ -1289,10 +1340,10 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
         - Collect and yield events from parallel sub-tasks
         """
         from .dag_executor import (
-            topological_sort,
             SubTaskResult,
-            get_runnable_tasks,
             aggregate_token_usage,
+            get_runnable_tasks,
+            topological_sort,
         )
 
         start_time = time.monotonic()
@@ -1304,8 +1355,7 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
 
         # Fix 5: DAG-level timeout (generous but bounded)
         dag_timeout_seconds = (
-            self._react_config.max_turns
-            * self._react_config.agent_tool_execution_timeout
+            self._react_config.max_turns * self._react_config.agent_tool_execution_timeout
         )
         deadline = start_time + dag_timeout_seconds
 
@@ -1328,7 +1378,7 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
                         status="skipped",
                     )
                 # Also mark tasks in remaining levels
-                for remaining_level in levels[level_idx + 1:]:
+                for remaining_level in levels[level_idx + 1 :]:
                     for st in remaining_level:
                         all_results[st.id] = SubTaskResult(
                             sub_task_id=st.id,
@@ -1377,18 +1427,23 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
                 # Single task in level: stream events in real-time
                 st = runnable[0]
                 augmented_message = self._build_dag_augmented_message(
-                    st, all_results,
+                    st,
+                    all_results,
                 )
                 tool_schemas = await self._build_tool_schemas_with_domain_fallback(
-                    tenant_id, domains=[st.domain],
+                    tenant_id,
+                    domains=[st.domain],
                 )
                 task_context = copy.deepcopy(context)
                 messages = await self._build_llm_messages(task_context, augmented_message)
 
                 exec_data: Dict[str, Any] = {}
                 async for event in self._react_loop_events(
-                    messages, tool_schemas, tenant_id,
-                    context=task_context, user_message=augmented_message,
+                    messages,
+                    tool_schemas,
+                    tenant_id,
+                    context=task_context,
+                    user_message=augmented_message,
                 ):
                     if event.type == EventType.EXECUTION_END:
                         exec_data = event.data
@@ -1423,10 +1478,12 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
 
                 async def _run_collecting(sub_task):
                     aug_msg = self._build_dag_augmented_message(
-                        sub_task, all_results,
+                        sub_task,
+                        all_results,
                     )
                     t_schemas = await self._build_tool_schemas_with_domain_fallback(
-                        tenant_id, domains=[sub_task.domain],
+                        tenant_id,
+                        domains=[sub_task.domain],
                     )
                     # Fully isolated context per sub-task
                     task_context = copy.deepcopy(context)
@@ -1434,8 +1491,11 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
                     exec_d: Dict[str, Any] = {}
                     events: list = []
                     async for ev in self._react_loop_events(
-                        msgs, t_schemas, tenant_id,
-                        context=task_context, user_message=aug_msg,
+                        msgs,
+                        t_schemas,
+                        tenant_id,
+                        context=task_context,
+                        user_message=aug_msg,
                     ):
                         if ev.type == EventType.EXECUTION_END:
                             exec_d = ev.data
@@ -1489,7 +1549,9 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
             data={"sub_task_id": -1, "description": "Synthesizing results"},
         )
         final_response = await self._synthesize_dag_results(
-            intent.raw_message, all_results, context,
+            intent.raw_message,
+            all_results,
+            context,
         )
         yield AgentEvent(type=EventType.MESSAGE_START, data={})
         yield AgentEvent(type=EventType.MESSAGE_CHUNK, data={"chunk": final_response})
@@ -1544,9 +1606,7 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
         result_parts = []
         for sub_id in sorted(results.keys()):
             r = results[sub_id]
-            result_parts.append(
-                f"## Sub-task {sub_id}: {r.description}\n{r.response}"
-            )
+            result_parts.append(f"## Sub-task {sub_id}: {r.description}\n{r.response}")
 
         synthesis_message = (
             f'The user asked: "{original_message}"\n\n'
@@ -1566,9 +1626,7 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
         if user_profile:
             profile_str = user_profile if isinstance(user_profile, str) else str(user_profile)
             if len(profile_str) < 500:
-                synthesis_system_parts.append(
-                    f"\n[User Profile]\n{profile_str}"
-                )
+                synthesis_system_parts.append(f"\n[User Profile]\n{profile_str}")
 
         # Inject language preference so synthesis matches user's language
         language = context.get("language") or context.get("locale")
@@ -1631,10 +1689,7 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
     # ==========================================================================
 
     async def prepare_context(
-        self,
-        tenant_id: str,
-        message: str,
-        metadata: Optional[Dict[str, Any]]
+        self, tenant_id: str, message: str, metadata: Optional[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """
         Prepare context for processing.
@@ -1655,8 +1710,7 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
             Context dict passed to all subsequent methods
         """
         # Lazy restore if needed
-        if (self.config.session.lazy_restore and
-            not self.agent_pool.has_agents_in_memory(tenant_id)):
+        if self.config.session.lazy_restore and not self.agent_pool.has_agents_in_memory(tenant_id):
             await self._restore_tenant_session(tenant_id)
 
         # Get active agents
@@ -1690,11 +1744,7 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
 
         return context
 
-    async def should_process(
-        self,
-        message: str,
-        context: Dict[str, Any]
-    ) -> bool:
+    async def should_process(self, message: str, context: Dict[str, Any]) -> bool:
         """
         Check if message should be processed.
 
@@ -1741,11 +1791,7 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
 
         return True
 
-    async def reject_message(
-        self,
-        message: str,
-        context: Dict[str, Any]
-    ) -> AgentResult:
+    async def reject_message(self, message: str, context: Dict[str, Any]) -> AgentResult:
         """
         Handle rejected messages (when should_process returns False).
 
@@ -1768,7 +1814,7 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
         tenant_id: str,
         agent_type: str,
         context_hints: Optional[Dict[str, Any]] = None,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Dict[str, Any]] = None,
     ) -> Optional[StandardAgent]:
         """
         Create a new agent instance.
@@ -1839,11 +1885,7 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
             logger.error(f"Failed to create agent {agent_type}: {e}", exc_info=True)
             return None
 
-    async def post_process(
-        self,
-        result: AgentResult,
-        context: Dict[str, Any]
-    ) -> AgentResult:
+    async def post_process(self, result: AgentResult, context: Dict[str, Any]) -> AgentResult:
         """
         Post-process result before returning to user.
 
@@ -1871,7 +1913,9 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
         tenant_id = context["tenant_id"]
         session_id = context.get("session_id", tenant_id)
         user_message = context.get("message", "")
-        status_value = result.status.value if hasattr(result.status, "value") else str(result.status)
+        status_value = (
+            result.status.value if hasattr(result.status, "value") else str(result.status)
+        )
 
         # Build conversation messages for storage
         messages = []
@@ -1942,7 +1986,8 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
         if self.guardrails_checker and result.raw_message:
             try:
                 safety_result = await self.guardrails_checker.check_output(
-                    result.raw_message, tenant_id,
+                    result.raw_message,
+                    tenant_id,
                 )
                 if safety_result.get("modified"):
                     result.raw_message = safety_result.get("output", result.raw_message)
@@ -1972,15 +2017,9 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
         Returns:
             Async function that agents call to invoke registered handlers
         """
-        async def invoke_callback(
-            name: str,
-            data: Optional[Dict[str, Any]] = None
-        ) -> Any:
-            callback = AgentCallback(
-                event=name,
-                tenant_id=tenant_id,
-                data=data or {}
-            )
+
+        async def invoke_callback(name: str, data: Optional[Dict[str, Any]] = None) -> Any:
+            callback = AgentCallback(event=name, tenant_id=tenant_id, data=data or {})
             return await self.handle_callback(callback)
 
         return invoke_callback
@@ -2029,11 +2068,13 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
 
         result = []
         for name, metadata in self._agent_registry.get_all_agent_metadata().items():
-            result.append({
-                "name": name,
-                "description": metadata.description,
-                "capabilities": getattr(metadata, "capabilities", []),
-            })
+            result.append(
+                {
+                    "name": name,
+                    "description": metadata.description,
+                    "capabilities": getattr(metadata, "capabilities", []),
+                }
+            )
         return result
 
     @callback_handler("get_agent_config")
@@ -2208,27 +2249,32 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
         agents = await self.agent_pool.list_agents(tenant_id)
         for agent in agents:
             if agent.status == AgentStatus.WAITING_FOR_APPROVAL:
-                results.append({
-                    "agent_id": agent.agent_id,
-                    "agent_type": agent.agent_type,
-                    "agent_name": agent.agent_type,
-                    "action_summary": getattr(agent, 'raw_message', '') or f"{agent.agent_type} awaiting approval",
-                    "source": "user",
-                    "created_at": getattr(agent, 'created_at', None),
-                })
+                results.append(
+                    {
+                        "agent_id": agent.agent_id,
+                        "agent_type": agent.agent_type,
+                        "agent_name": agent.agent_type,
+                        "action_summary": getattr(agent, "raw_message", "")
+                        or f"{agent.agent_type} awaiting approval",
+                        "source": "user",
+                        "created_at": getattr(agent, "created_at", None),
+                    }
+                )
 
         # TriggerEngine: tasks pending approval
         if self.trigger_engine:
             pending_tasks = await self.trigger_engine.list_pending_approvals(tenant_id)
             for task in pending_tasks:
-                results.append({
-                    "task_id": task.id,
-                    "task_name": task.name,
-                    "agent_name": task.name,
-                    "action_summary": getattr(task, 'description', '') or task.name,
-                    "source": "trigger",
-                    "trigger_type": task.trigger.type.value,
-                })
+                results.append(
+                    {
+                        "task_id": task.id,
+                        "task_name": task.name,
+                        "agent_name": task.name,
+                        "action_summary": getattr(task, "description", "") or task.name,
+                        "source": "trigger",
+                        "trigger_type": task.trigger.type.value,
+                    }
+                )
 
         return results
 
@@ -2244,22 +2290,14 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
             for a in agents
         ]
 
-    async def get_agent_status(
-        self,
-        tenant_id: str,
-        agent_id: str
-    ) -> Optional[Dict[str, Any]]:
+    async def get_agent_status(self, tenant_id: str, agent_id: str) -> Optional[Dict[str, Any]]:
         """Get detailed status of a specific agent."""
         agent = await self.agent_pool.get_agent(tenant_id, agent_id)
         if not agent:
             return None
         return agent.get_state_summary()
 
-    async def cancel_agent(
-        self,
-        tenant_id: str,
-        agent_id: str
-    ) -> bool:
+    async def cancel_agent(self, tenant_id: str, agent_id: str) -> bool:
         """Cancel an agent."""
         agent = await self.agent_pool.get_agent(tenant_id, agent_id)
         if agent:
@@ -2268,11 +2306,7 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
             return True
         return False
 
-    async def pause_agent(
-        self,
-        tenant_id: str,
-        agent_id: str
-    ) -> Optional[AgentResult]:
+    async def pause_agent(self, tenant_id: str, agent_id: str) -> Optional[AgentResult]:
         """Pause an agent."""
         agent = await self.agent_pool.get_agent(tenant_id, agent_id)
         if not agent:
@@ -2282,7 +2316,7 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
             AgentStatus.RUNNING,
             AgentStatus.WAITING_FOR_INPUT,
             AgentStatus.WAITING_FOR_APPROVAL,
-            AgentStatus.INITIALIZING
+            AgentStatus.INITIALIZING,
         }
 
         if agent.status not in pauseable_states:
@@ -2294,10 +2328,7 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
         return result
 
     async def resume_agent(
-        self,
-        tenant_id: str,
-        agent_id: str,
-        message: Optional[str] = None
+        self, tenant_id: str, agent_id: str, message: Optional[str] = None
     ) -> Optional[AgentResult]:
         """Resume a paused agent."""
         agent = await self.agent_pool.get_agent(tenant_id, agent_id)
@@ -2328,12 +2359,3 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
             await self.agent_pool.update_agent(agent)
 
         return result
-
-
-
-
-
-
-
-
-

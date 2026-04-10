@@ -6,8 +6,8 @@ manage reactions, user presence, invitations, status, and create reminders
 using the Composio OAuth proxy platform.
 """
 
-import os
 import logging
+import os
 from typing import Annotated, Optional
 
 from koa import valet
@@ -48,6 +48,7 @@ def _check_api_key() -> Optional[str]:
 # =============================================================================
 # Approval preview functions
 # =============================================================================
+
 
 async def _send_message_preview(args: dict, context) -> str:
     channel = args.get("channel", "")
@@ -96,6 +97,7 @@ async def _set_status_preview(args: dict, context) -> str:
 # Tool executors
 # =============================================================================
 
+
 @tool(needs_approval=True, risk_level="write", get_preview=_send_message_preview)
 async def send_message(
     channel: Annotated[str, "Channel name (e.g. '#general') or channel/user ID"],
@@ -116,7 +118,9 @@ async def send_message(
         client = ComposioClient()
         data = await client.execute_action(
             _ACTION_SEND_MESSAGE,
-            params={"channel": channel, "text": text}, entity_id=context.tenant_id or "default")
+            params={"channel": channel, "text": text},
+            entity_id=context.tenant_id or "default",
+        )
         result = ComposioClient.format_action_result(data)
         if data.get("successfull") or data.get("successful"):
             return f"Message sent to {channel}.\n\n{result}"
@@ -144,7 +148,9 @@ async def fetch_messages(
         client = ComposioClient()
         data = await client.execute_action(
             _ACTION_FETCH_MESSAGES,
-            params={"channel": channel, "limit": limit}, entity_id=context.tenant_id or "default")
+            params={"channel": channel, "limit": limit},
+            entity_id=context.tenant_id or "default",
+        )
         result = ComposioClient.format_action_result(data)
         if data.get("successfull") or data.get("successful"):
             return f"Messages from {channel}:\n\n{result}"
@@ -168,8 +174,8 @@ async def list_channels(
     try:
         client = ComposioClient()
         data = await client.execute_action(
-            _ACTION_LIST_CHANNELS,
-            params={"limit": limit}, entity_id=context.tenant_id or "default")
+            _ACTION_LIST_CHANNELS, params={"limit": limit}, entity_id=context.tenant_id or "default"
+        )
         result = ComposioClient.format_action_result(data)
         if data.get("successfull") or data.get("successful"):
             return f"Slack channels:\n\n{result}"
@@ -195,8 +201,8 @@ async def find_users(
     try:
         client = ComposioClient()
         data = await client.execute_action(
-            _ACTION_FIND_USERS,
-            params={"query": query}, entity_id=context.tenant_id or "default")
+            _ACTION_FIND_USERS, params={"query": query}, entity_id=context.tenant_id or "default"
+        )
         result = ComposioClient.format_action_result(data)
         if data.get("successfull") or data.get("successful"):
             return f"Slack users matching '{query}':\n\n{result}"
@@ -209,7 +215,9 @@ async def find_users(
 @tool(needs_approval=True, risk_level="write", get_preview=_create_reminder_preview)
 async def create_reminder(
     text: Annotated[str, "Reminder text (what to be reminded about)"],
-    time: Annotated[str, "When to remind, e.g. 'in 30 minutes', 'tomorrow at 9am', or Unix timestamp"],
+    time: Annotated[
+        str, "When to remind, e.g. 'in 30 minutes', 'tomorrow at 9am', or Unix timestamp"
+    ],
     *,
     context: AgentToolContext,
 ) -> str:
@@ -226,7 +234,9 @@ async def create_reminder(
         client = ComposioClient()
         data = await client.execute_action(
             _ACTION_CREATE_REMINDER,
-            params={"text": text, "time": time}, entity_id=context.tenant_id or "default")
+            params={"text": text, "time": time},
+            entity_id=context.tenant_id or "default",
+        )
         result = ComposioClient.format_action_result(data)
         if data.get("successfull") or data.get("successful"):
             return f"Reminder created: {text}\n\n{result}"
@@ -597,6 +607,7 @@ async def connect_slack(
 # =============================================================================
 # Agent
 # =============================================================================
+
 
 @valet(domain="communication")
 class SlackComposioAgent(StandardAgent):

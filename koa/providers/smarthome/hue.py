@@ -120,14 +120,16 @@ class PhilipsHueProvider(BaseSmartHomeProvider):
                     dimming = light.get("dimming", {})
                     color_temp = light.get("color_temperature", {})
                     owner = light.get("owner", {})
-                    lights.append({
-                        "id": light.get("id", ""),
-                        "name": metadata.get("name", ""),
-                        "on": on_state.get("on", False),
-                        "brightness": dimming.get("brightness", 0.0),
-                        "color_temp": color_temp.get("mirek", 0),
-                        "room": owner.get("rid", ""),
-                    })
+                    lights.append(
+                        {
+                            "id": light.get("id", ""),
+                            "name": metadata.get("name", ""),
+                            "on": on_state.get("on", False),
+                            "brightness": dimming.get("brightness", 0.0),
+                            "color_temp": color_temp.get("mirek", 0),
+                            "room": owner.get("rid", ""),
+                        }
+                    )
 
                 logger.info(f"Hue listed {len(lights)} lights")
                 return {"success": True, "data": lights}
@@ -325,7 +327,9 @@ class PhilipsHueProvider(BaseSmartHomeProvider):
                 if response.status_code != 200:
                     return {"success": False, "error": f"Hue API error: {response.status_code}"}
 
-                logger.info(f"Hue set color to RGB({r},{g},{b}) -> xy({x},{y}) for light {light_id}")
+                logger.info(
+                    f"Hue set color to RGB({r},{g},{b}) -> xy({x},{y}) for light {light_id}"
+                )
                 return {"success": True}
 
         except Exception as e:
@@ -403,15 +407,15 @@ class PhilipsHueProvider(BaseSmartHomeProvider):
                     metadata = room.get("metadata", {})
                     children = room.get("children", [])
                     light_ids = [
-                        child["rid"]
-                        for child in children
-                        if child.get("rtype") == "device"
+                        child["rid"] for child in children if child.get("rtype") == "device"
                     ]
-                    rooms.append({
-                        "id": room.get("id", ""),
-                        "name": metadata.get("name", ""),
-                        "lights": light_ids,
-                    })
+                    rooms.append(
+                        {
+                            "id": room.get("id", ""),
+                            "name": metadata.get("name", ""),
+                            "lights": light_ids,
+                        }
+                    )
 
                 logger.info(f"Hue listed {len(rooms)} rooms")
                 return {"success": True, "data": rooms}
@@ -506,11 +510,13 @@ class PhilipsHueProvider(BaseSmartHomeProvider):
                 for scene in raw_scenes:
                     metadata = scene.get("metadata", {})
                     group = scene.get("group", {})
-                    scenes.append({
-                        "id": scene.get("id", ""),
-                        "name": metadata.get("name", ""),
-                        "room_id": group.get("rid", ""),
-                    })
+                    scenes.append(
+                        {
+                            "id": scene.get("id", ""),
+                            "name": metadata.get("name", ""),
+                            "room_id": group.get("rid", ""),
+                        }
+                    )
 
                 logger.info(f"Hue listed {len(scenes)} scenes")
                 return {"success": True, "data": scenes}
@@ -592,8 +598,13 @@ class PhilipsHueProvider(BaseSmartHomeProvider):
                 )
 
                 if response.status_code != 200:
-                    logger.error(f"Hue token refresh failed: {response.status_code} - {response.text}")
-                    return {"success": False, "error": f"Token refresh failed: {response.status_code}"}
+                    logger.error(
+                        f"Hue token refresh failed: {response.status_code} - {response.text}"
+                    )
+                    return {
+                        "success": False,
+                        "error": f"Token refresh failed: {response.status_code}",
+                    }
 
                 token_data = response.json()
                 new_access_token = token_data["access_token"]

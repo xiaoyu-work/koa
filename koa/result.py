@@ -5,12 +5,13 @@ Provides a unified result structure for all agent operations.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, Any, Optional, List
 from enum import Enum
+from typing import Any, Dict, List, Optional
 
 
 class AgentStatus(str, Enum):
     """Standardized agent status states"""
+
     INITIALIZING = "initializing"
     RUNNING = "running"
     WAITING_FOR_INPUT = "waiting_for_input"
@@ -28,6 +29,7 @@ class AgentStatus(str, Enum):
 
 class ApprovalResult(str, Enum):
     """Result of parsing user's approval response."""
+
     APPROVED = "approved"
     REJECTED = "rejected"
     MODIFY = "modify"
@@ -57,6 +59,7 @@ class AgentResult:
             agent_id="SendEmailAgent_abc123"
         )
     """
+
     agent_type: str
     status: AgentStatus
     data: Dict[str, Any] = field(default_factory=dict)

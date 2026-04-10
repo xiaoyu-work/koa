@@ -65,7 +65,10 @@ class PostgresCronRunLog:
                 ORDER BY created_at DESC
                 LIMIT $3 OFFSET $4
                 """,
-                job_id, status_filter, limit, offset,
+                job_id,
+                status_filter,
+                limit,
+                offset,
             )
         else:
             rows = await self._db.fetch(
@@ -75,7 +78,9 @@ class PostgresCronRunLog:
                 ORDER BY created_at DESC
                 LIMIT $2 OFFSET $3
                 """,
-                job_id, limit, offset,
+                job_id,
+                limit,
+                offset,
             )
 
         entries = []
@@ -105,7 +110,8 @@ class PostgresCronRunLog:
                     LIMIT $2
                 )
                 """,
-                job_id, keep_lines,
+                job_id,
+                keep_lines,
             )
             # asyncpg returns "DELETE N"
             if result and result.startswith("DELETE "):
@@ -119,14 +125,13 @@ class PostgresCronRunLog:
         """Delete all run entries for a job."""
         try:
             await self._db.execute(
-                "DELETE FROM cron_runs WHERE job_id = $1", job_id,
+                "DELETE FROM cron_runs WHERE job_id = $1",
+                job_id,
             )
         except Exception as e:
             logger.warning(f"Failed to delete run log for {job_id}: {e}")
 
     async def list_job_ids(self) -> List[str]:
         """List all job IDs that have run logs."""
-        rows = await self._db.fetch(
-            "SELECT DISTINCT job_id FROM cron_runs"
-        )
+        rows = await self._db.fetch("SELECT DISTINCT job_id FROM cron_runs")
         return [row["job_id"] for row in rows]

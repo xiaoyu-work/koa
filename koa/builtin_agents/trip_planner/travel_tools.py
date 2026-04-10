@@ -7,9 +7,8 @@ Weather data via WeatherAPI.
 
 import logging
 import os
-import re
 import urllib.parse
-from typing import Annotated, Any, Optional
+from typing import Annotated
 
 import httpx
 
@@ -24,7 +23,10 @@ logger = logging.getLogger(__name__)
 # search_flights  (via Jina Reader + Google Flights)
 # =============================================================================
 
-def _build_google_flights_query_url(origin: str, destination: str, date: str, return_date: str = "") -> str:
+
+def _build_google_flights_query_url(
+    origin: str, destination: str, date: str, return_date: str = ""
+) -> str:
     """Build a Google Flights search URL using natural language query."""
     query = f"flights from {origin} to {destination} on {date}"
     if return_date:
@@ -47,7 +49,9 @@ async def search_flights(
         return "Error: origin, destination, and date are all required."
 
     url = _build_google_flights_query_url(origin, destination, date, return_date)
-    logger.info("Flight search via Jina Reader: %s -> %s on %s | URL: %s", origin, destination, date, url)
+    logger.info(
+        "Flight search via Jina Reader: %s -> %s on %s | URL: %s", origin, destination, date, url
+    )
 
     content = await jina_fetch(url, max_chars=20000)
     if not content:
@@ -62,7 +66,10 @@ async def search_flights(
     in_results = False
     for line in lines:
         stripped = line.strip()
-        if any(kw in stripped.lower() for kw in ["departing flight", "top departing", "search results", "sorted by"]):
+        if any(
+            kw in stripped.lower()
+            for kw in ["departing flight", "top departing", "search results", "sorted by"]
+        ):
             in_results = True
         if in_results:
             result_lines.append(line)
@@ -91,6 +98,7 @@ async def search_flights(
 # search_hotels  (via Jina Reader + Google Hotels)
 # =============================================================================
 
+
 def _build_google_hotels_url(location: str, check_in: str, check_out: str = "") -> str:
     """Build a Google Hotels search URL."""
     query = f"hotels in {location}"
@@ -115,7 +123,9 @@ async def search_hotels(
         return "Error: location and check_in date are required."
 
     url = _build_google_hotels_url(location, check_in, check_out)
-    logger.info("Hotel search via Jina Reader: %s (%s to %s) | URL: %s", location, check_in, check_out, url)
+    logger.info(
+        "Hotel search via Jina Reader: %s (%s to %s) | URL: %s", location, check_in, check_out, url
+    )
 
     content = await jina_fetch(url, max_chars=20000)
     if not content:
@@ -138,6 +148,7 @@ async def search_hotels(
 # =============================================================================
 # get_weather  (unchanged — WeatherAPI works fine)
 # =============================================================================
+
 
 @tool
 async def get_weather(
@@ -181,7 +192,7 @@ async def get_weather(
                 )
             else:
                 url = "http://api.weatherapi.com/v1/forecast.json"
-                params = {"key": api_key, "q": location, "days": days + 1, "aqi": "no"}
+                params = {"key": api_key, "q": location, "days": str(days + 1), "aqi": "no"}
                 response = await client.get(url, params=params, timeout=10.0)
                 response.raise_for_status()
                 data = response.json()

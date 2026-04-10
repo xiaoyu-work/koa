@@ -30,23 +30,23 @@ Usage:
             )
 """
 
+from ..models import (
+    AgentTool,
+    AgentToolContext,
+)
 from .decorator import (
-    valet,
-    get_agent_metadata,
-    is_valet,
+    AGENT_REGISTRY,
     AgentMetadata,
     InputSpec,
     OutputSpec,
-    AGENT_REGISTRY,
+    get_agent_metadata,
+    is_valet,
+    valet,
 )
 from .discovery import (
     AgentDiscovery,
     discover_agents,
     discover_agents_from_paths,
-)
-from ..models import (
-    AgentTool,
-    AgentToolContext,
 )
 
 __all__ = [

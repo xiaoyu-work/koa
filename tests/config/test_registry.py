@@ -1,11 +1,11 @@
 """Tests for tenant-aware credential filtering in AgentRegistry."""
 
-import pytest
 from unittest.mock import AsyncMock
+
+import pytest
 
 from koa.agents.decorator import AGENT_REGISTRY, valet
 from koa.config.registry import AgentRegistry
-
 
 # ── Fixtures ──
 
@@ -22,10 +22,11 @@ def _clean_registry():
 def _make_credential_store(services: list[str]) -> AsyncMock:
     """Create a mock CredentialStore that returns the given services."""
     store = AsyncMock()
-    store.list = AsyncMock(return_value=[
-        {"service": s, "account_name": "primary", "credentials": {}}
-        for s in services
-    ])
+    store.list = AsyncMock(
+        return_value=[
+            {"service": s, "account_name": "primary", "credentials": {}} for s in services
+        ]
+    )
     return store
 
 
@@ -51,7 +52,6 @@ def _register_test_agents():
 
 
 class TestCredentialFiltering:
-
     @pytest.mark.asyncio
     async def test_filters_by_credential(self):
         _register_test_agents()
@@ -59,13 +59,14 @@ class TestCredentialFiltering:
         store = _make_credential_store(["gmail"])  # only gmail
 
         schemas = await registry.get_all_agent_tool_schemas(
-            tenant_id="t1", credential_store=store,
+            tenant_id="t1",
+            credential_store=store,
         )
         names = [s["function"]["name"] for s in schemas]
 
-        assert "_EmailAgent" in names       # gmail matches
+        assert "_EmailAgent" in names  # gmail matches
         assert "_SmartHomeAgent" not in names  # no hue/sonos
-        assert "_MapsAgent" in names         # no requires_service
+        assert "_MapsAgent" in names  # no requires_service
 
     @pytest.mark.asyncio
     async def test_partial_match(self):
@@ -75,7 +76,8 @@ class TestCredentialFiltering:
         store = _make_credential_store(["gmail"])
 
         schemas = await registry.get_all_agent_tool_schemas(
-            tenant_id="t1", credential_store=store,
+            tenant_id="t1",
+            credential_store=store,
         )
         names = [s["function"]["name"] for s in schemas]
         assert "_EmailAgent" in names  # gmail is sufficient (any-of)
@@ -99,12 +101,13 @@ class TestCredentialFiltering:
         store = _make_credential_store([])  # no services at all
 
         schemas = await registry.get_all_agent_tool_schemas(
-            tenant_id="t1", credential_store=store,
+            tenant_id="t1",
+            credential_store=store,
         )
         names = [s["function"]["name"] for s in schemas]
 
-        assert "_MapsAgent" in names         # always available
-        assert "_EmailAgent" not in names    # no gmail/outlook
+        assert "_MapsAgent" in names  # always available
+        assert "_EmailAgent" not in names  # no gmail/outlook
         assert "_SmartHomeAgent" not in names  # no hue/sonos
 
     @pytest.mark.asyncio
@@ -114,7 +117,8 @@ class TestCredentialFiltering:
         store = _make_credential_store(["gmail"])
 
         desc = await registry.get_agent_descriptions(
-            tenant_id="t1", credential_store=store,
+            tenant_id="t1",
+            credential_store=store,
         )
 
         assert "_EmailAgent" in desc

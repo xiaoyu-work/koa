@@ -19,10 +19,10 @@ from .base import (
     BaseLLMClient,
     LLMConfig,
     LLMResponse,
+    StopReason,
     StreamChunk,
     ToolCall,
     Usage,
-    StopReason,
 )
 from .prompt_caching import apply_anthropic_cache_control, is_anthropic_model
 
@@ -181,8 +181,7 @@ class LiteLLMClient(BaseLLMClient):
             params.pop("max_tokens", None)
 
         logger.info(
-            f"[LiteLLM] model={model}, tools={len(tools) if tools else 0}, "
-            f"messages={len(messages)}"
+            f"[LiteLLM] model={model}, tools={len(tools) if tools else 0}, messages={len(messages)}"
         )
 
         # Apply Anthropic prompt caching: inject cache_control breakpoints
@@ -203,9 +202,7 @@ class LiteLLMClient(BaseLLMClient):
                 arguments = tc.function.arguments
                 if isinstance(arguments, str):
                     arguments = json.loads(arguments)
-                tool_calls.append(
-                    ToolCall(id=tc.id, name=tc.function.name, arguments=arguments)
-                )
+                tool_calls.append(ToolCall(id=tc.id, name=tc.function.name, arguments=arguments))
 
         stop_reason = self._parse_stop_reason(choice.finish_reason)
 
@@ -213,8 +210,8 @@ class LiteLLMClient(BaseLLMClient):
         usage = None
         if response.usage:
             # Cache stats (Anthropic returns these when prompt caching is active)
-            cache_read = getattr(response.usage, 'cache_read_input_tokens', 0) or 0
-            cache_creation = getattr(response.usage, 'cache_creation_input_tokens', 0) or 0
+            cache_read = getattr(response.usage, "cache_read_input_tokens", 0) or 0
+            cache_creation = getattr(response.usage, "cache_creation_input_tokens", 0) or 0
 
             usage = Usage(
                 prompt_tokens=response.usage.prompt_tokens,
@@ -225,7 +222,11 @@ class LiteLLMClient(BaseLLMClient):
             )
 
             if self._use_prompt_caching and (cache_read or cache_creation):
-                hit_pct = cache_read / response.usage.prompt_tokens * 100 if response.usage.prompt_tokens else 0
+                hit_pct = (
+                    cache_read / response.usage.prompt_tokens * 100
+                    if response.usage.prompt_tokens
+                    else 0
+                )
                 logger.info(
                     f"[LiteLLM] Cache: {cache_read:,}/{response.usage.prompt_tokens:,} "
                     f"tokens ({hit_pct:.0f}% hit, {cache_creation:,} written)"
@@ -254,7 +255,7 @@ class LiteLLMClient(BaseLLMClient):
             raw_response=response,
         )
 
-    async def _stream_api(
+    async def _stream_api(  # type: ignore[override]
         self,
         messages: List[Dict[str, Any]],
         tools: Optional[List[Dict[str, Any]]] = None,
@@ -299,8 +300,8 @@ class LiteLLMClient(BaseLLMClient):
             if not chunk.choices:
                 # Final chunk may carry only usage
                 if chunk.usage:
-                    cache_read = getattr(chunk.usage, 'cache_read_input_tokens', 0) or 0
-                    cache_creation = getattr(chunk.usage, 'cache_creation_input_tokens', 0) or 0
+                    cache_read = getattr(chunk.usage, "cache_read_input_tokens", 0) or 0
+                    cache_creation = getattr(chunk.usage, "cache_creation_input_tokens", 0) or 0
                     prompt_tokens = chunk.usage.prompt_tokens
                     if self._use_prompt_caching and (cache_read or cache_creation):
                         hit_pct = cache_read / prompt_tokens * 100 if prompt_tokens else 0
@@ -353,9 +354,7 @@ class LiteLLMClient(BaseLLMClient):
                             args = json.loads(tc["arguments"]) if tc["arguments"] else {}
                         except json.JSONDecodeError:
                             args = {}
-                        tool_calls.append(
-                            ToolCall(id=tc["id"], name=tc["name"], arguments=args)
-                        )
+                        tool_calls.append(ToolCall(id=tc["id"], name=tc["name"], arguments=args))
 
             yield StreamChunk(
                 content=content,

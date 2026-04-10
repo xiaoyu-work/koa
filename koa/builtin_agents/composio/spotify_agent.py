@@ -5,8 +5,8 @@ Provides playback control, music search, playlist management, and now-playing
 info using the Composio OAuth proxy platform.
 """
 
-import os
 import logging
+import os
 from typing import Annotated, Optional
 
 from koa import valet
@@ -53,6 +53,7 @@ def _check_api_key() -> Optional[str]:
 # Approval preview functions
 # =============================================================================
 
+
 async def _play_music_preview(args: dict, context) -> str:
     uri = args.get("uri", "")
     device_id = args.get("device_id", "")
@@ -71,11 +72,7 @@ async def _pause_music_preview(args: dict, context) -> str:
 async def _add_to_playlist_preview(args: dict, context) -> str:
     playlist_id = args.get("playlist_id", "")
     uris = args.get("uris", "")
-    return (
-        f"Add items to Spotify playlist?\n\n"
-        f"Playlist ID: {playlist_id}\n"
-        f"URIs: {uris}"
-    )
+    return f"Add items to Spotify playlist?\n\nPlaylist ID: {playlist_id}\nURIs: {uris}"
 
 
 async def _skip_next_preview(args: dict, context) -> str:
@@ -109,16 +106,13 @@ async def _save_tracks_preview(args: dict, context) -> str:
 async def _create_playlist_preview(args: dict, context) -> str:
     name = args.get("name", "")
     public = args.get("public", True)
-    return (
-        f"Create a new Spotify playlist?\n\n"
-        f"Name: {name}\n"
-        f"Public: {public}"
-    )
+    return f"Create a new Spotify playlist?\n\nName: {name}\nPublic: {public}"
 
 
 # =============================================================================
 # Tool executors
 # =============================================================================
+
 
 @tool(needs_approval=True, risk_level="write", get_preview=_play_music_preview)
 async def play_music(
@@ -169,8 +163,8 @@ async def pause_music(
     try:
         client = ComposioClient()
         data = await client.execute_action(
-            _ACTION_PAUSE_PLAYBACK,
-            params={}, entity_id=context.tenant_id or "default")
+            _ACTION_PAUSE_PLAYBACK, params={}, entity_id=context.tenant_id or "default"
+        )
         result = ComposioClient.format_action_result(data)
         if data.get("successfull") or data.get("successful"):
             return f"Playback paused.\n\n{result}"
@@ -199,7 +193,9 @@ async def search_music(
         client = ComposioClient()
         data = await client.execute_action(
             _ACTION_SEARCH_FOR_ITEM,
-            params={"q": query, "type": type, "limit": limit}, entity_id=context.tenant_id or "default")
+            params={"q": query, "type": type, "limit": limit},
+            entity_id=context.tenant_id or "default",
+        )
         result = ComposioClient.format_action_result(data)
         if data.get("successfull") or data.get("successful"):
             return f"Spotify search results for '{query}' ({type}):\n\n{result}"
@@ -223,8 +219,8 @@ async def get_playlists(
     try:
         client = ComposioClient()
         data = await client.execute_action(
-            _ACTION_GET_PLAYLISTS,
-            params={"limit": limit}, entity_id=context.tenant_id or "default")
+            _ACTION_GET_PLAYLISTS, params={"limit": limit}, entity_id=context.tenant_id or "default"
+        )
         result = ComposioClient.format_action_result(data)
         if data.get("successfull") or data.get("successful"):
             return f"Your Spotify playlists:\n\n{result}"
@@ -237,7 +233,9 @@ async def get_playlists(
 @tool(needs_approval=True, risk_level="write", get_preview=_add_to_playlist_preview)
 async def add_to_playlist(
     playlist_id: Annotated[str, "Spotify playlist ID to add items to"],
-    uris: Annotated[str, "Comma-separated Spotify URIs to add (e.g. 'spotify:track:xxx,spotify:track:yyy')"],
+    uris: Annotated[
+        str, "Comma-separated Spotify URIs to add (e.g. 'spotify:track:xxx,spotify:track:yyy')"
+    ],
     *,
     context: AgentToolContext,
 ) -> str:
@@ -254,7 +252,9 @@ async def add_to_playlist(
         client = ComposioClient()
         data = await client.execute_action(
             _ACTION_ADD_ITEMS_TO_PLAYLIST,
-            params={"playlist_id": playlist_id, "uris": uris}, entity_id=context.tenant_id or "default")
+            params={"playlist_id": playlist_id, "uris": uris},
+            entity_id=context.tenant_id or "default",
+        )
         result = ComposioClient.format_action_result(data)
         if data.get("successfull") or data.get("successful"):
             return f"Items added to playlist {playlist_id}.\n\n{result}"
@@ -277,8 +277,8 @@ async def now_playing(
     try:
         client = ComposioClient()
         data = await client.execute_action(
-            _ACTION_GET_CURRENTLY_PLAYING,
-            params={}, entity_id=context.tenant_id or "default")
+            _ACTION_GET_CURRENTLY_PLAYING, params={}, entity_id=context.tenant_id or "default"
+        )
         result = ComposioClient.format_action_result(data)
         if data.get("successfull") or data.get("successful"):
             return f"Currently playing on Spotify:\n\n{result}"
@@ -417,7 +417,9 @@ async def get_recently_played(
 @tool
 async def get_top_artists(
     limit: Annotated[int, "Maximum number of top artists to return"] = 10,
-    time_range: Annotated[str, "Time range: short_term (4 weeks), medium_term (6 months), or long_term (years)"] = "medium_term",
+    time_range: Annotated[
+        str, "Time range: short_term (4 weeks), medium_term (6 months), or long_term (years)"
+    ] = "medium_term",
     *,
     context: AgentToolContext,
 ) -> str:
@@ -445,7 +447,9 @@ async def get_top_artists(
 @tool
 async def get_top_tracks(
     limit: Annotated[int, "Maximum number of top tracks to return"] = 10,
-    time_range: Annotated[str, "Time range: short_term (4 weeks), medium_term (6 months), or long_term (years)"] = "medium_term",
+    time_range: Annotated[
+        str, "Time range: short_term (4 weeks), medium_term (6 months), or long_term (years)"
+    ] = "medium_term",
     *,
     context: AgentToolContext,
 ) -> str:
@@ -526,7 +530,9 @@ async def toggle_shuffle(
 
 @tool(needs_approval=True, risk_level="write", get_preview=_set_repeat_preview)
 async def set_repeat(
-    state: Annotated[str, "Repeat mode: 'track' (repeat current), 'context' (repeat playlist/album), or 'off'"],
+    state: Annotated[
+        str, "Repeat mode: 'track' (repeat current), 'context' (repeat playlist/album), or 'off'"
+    ],
     *,
     context: AgentToolContext,
 ) -> str:
@@ -609,9 +615,15 @@ async def save_tracks(
 
 @tool
 async def get_recommendations(
-    seed_artists: Annotated[str, "Comma-separated Spotify artist IDs for seeding recommendations"] = "",
-    seed_tracks: Annotated[str, "Comma-separated Spotify track IDs for seeding recommendations"] = "",
-    seed_genres: Annotated[str, "Comma-separated genre names for seeding recommendations (e.g. 'pop,rock')"] = "",
+    seed_artists: Annotated[
+        str, "Comma-separated Spotify artist IDs for seeding recommendations"
+    ] = "",
+    seed_tracks: Annotated[
+        str, "Comma-separated Spotify track IDs for seeding recommendations"
+    ] = "",
+    seed_genres: Annotated[
+        str, "Comma-separated genre names for seeding recommendations (e.g. 'pop,rock')"
+    ] = "",
     limit: Annotated[int, "Maximum number of recommendations to return"] = 10,
     *,
     context: AgentToolContext,
@@ -737,6 +749,7 @@ async def get_saved_tracks(
 # =============================================================================
 # Agent
 # =============================================================================
+
 
 @valet(domain="lifestyle")
 class SpotifyComposioAgent(StandardAgent):

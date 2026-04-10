@@ -9,10 +9,10 @@ import json
 import logging
 import re
 from datetime import datetime, timezone
-from typing import Annotated, Any, Dict, List, Optional
+from typing import Annotated, Dict, List, Optional
 
-from koa.tool_decorator import tool
 from koa.models import AgentToolContext, ToolOutput
+from koa.tool_decorator import tool
 
 logger = logging.getLogger(__name__)
 
@@ -21,23 +21,26 @@ logger = logging.getLogger(__name__)
 # Shared Helpers
 # =============================================================================
 
+
 async def _resolve_accounts(tenant_id: str):
     """Resolve all todo accounts for a tenant."""
     from koa.providers.todo.resolver import TodoAccountResolver
+
     return await TodoAccountResolver.resolve_accounts(tenant_id, ["all"])
 
 
 async def _resolve_single_account(tenant_id: str, account_spec: str = "primary"):
     """Resolve a single todo account."""
     from koa.providers.todo.resolver import TodoAccountResolver
+
     return await TodoAccountResolver.resolve_account(tenant_id, account_spec)
 
 
 def _get_provider(account):
     """Create a todo provider for the given account."""
     from koa.providers.todo.factory import TodoProviderFactory
-    return TodoProviderFactory.create_provider(account)
 
+    return TodoProviderFactory.create_provider(account)
 
 
 def _format_due_date(due_str: str) -> str:
@@ -46,6 +49,7 @@ def _format_due_date(due_str: str) -> str:
         return ""
     try:
         from dateutil import parser as date_parser
+
         dt = date_parser.parse(due_str)
         now = datetime.now()
         if dt.year == now.year:
@@ -60,9 +64,13 @@ def _format_due_date(due_str: str) -> str:
 # query_tasks
 # =============================================================================
 
+
 @tool
 async def query_tasks(
-    search_query: Annotated[Optional[str], "Keywords to search for specific tasks. Omit or leave empty to list all pending tasks."] = None,
+    search_query: Annotated[
+        Optional[str],
+        "Keywords to search for specific tasks. Omit or leave empty to list all pending tasks.",
+    ] = None,
     show_completed: Annotated[bool, "Whether to include completed tasks (default false)."] = False,
     *,
     context: AgentToolContext,
@@ -86,11 +94,15 @@ async def query_tasks(
         for account in accounts:
             provider = _get_provider(account)
             if not provider:
-                failed_accounts.append(account.get("email") or account.get("account_name", "unknown"))
+                failed_accounts.append(
+                    account.get("email") or account.get("account_name", "unknown")
+                )
                 continue
 
             if not await provider.ensure_valid_token():
-                failed_accounts.append(account.get("email") or account.get("account_name", "unknown"))
+                failed_accounts.append(
+                    account.get("email") or account.get("account_name", "unknown")
+                )
                 continue
 
             try:
@@ -109,7 +121,9 @@ async def query_tasks(
 
             except Exception as e:
                 logger.error(f"Failed to query {account.get('account_name')}: {e}", exc_info=True)
-                failed_accounts.append(account.get("email") or account.get("account_name", "unknown"))
+                failed_accounts.append(
+                    account.get("email") or account.get("account_name", "unknown")
+                )
 
         # Sort by due date (None dates last)
         all_tasks.sort(key=lambda t: t.get("due") or "9999-12-31")
@@ -169,12 +183,14 @@ async def query_tasks(
                     card["priority"] = priority
                 task_cards.append(card)
 
-            media = [{
-                "type": "inline_cards",
-                "data": json.dumps(task_cards),
-                "media_type": "application/json",
-                "metadata": {"for_storage": False},
-            }]
+            media = [
+                {
+                    "type": "inline_cards",
+                    "data": json.dumps(task_cards),
+                    "media_type": "application/json",
+                    "metadata": {"for_storage": False},
+                }
+            ]
             return ToolOutput(text=text_result, media=media)
 
         return text_result
@@ -187,6 +203,7 @@ async def query_tasks(
 # =============================================================================
 # create_task
 # =============================================================================
+
 
 async def _preview_create_task(args: dict, context) -> str:
     title = args.get("title", "")
@@ -205,8 +222,12 @@ async def _preview_create_task(args: dict, context) -> str:
 async def create_task(
     title: Annotated[str, "The task title or what needs to be done."],
     due: Annotated[Optional[str], "Due date in YYYY-MM-DD format (optional)."] = None,
-    priority: Annotated[Optional[str], "Priority level: low, medium, high, or urgent (optional)."] = None,
-    account: Annotated[str, "Todo account name if the user specifies one (optional, defaults to primary)."] = "primary",
+    priority: Annotated[
+        Optional[str], "Priority level: low, medium, high, or urgent (optional)."
+    ] = None,
+    account: Annotated[
+        str, "Todo account name if the user specifies one (optional, defaults to primary)."
+    ] = "primary",
     *,
     context: AgentToolContext,
 ) -> str:
@@ -231,31 +252,44 @@ async def create_task(
         if result.get("success"):
             # Auto-schedule due date reminder
             if due:
-                cron_service = context.context_hints.get("cron_service") if context.context_hints else None
+                cron_service = (
+                    context.context_hints.get("cron_service") if context.context_hints else None
+                )
                 if cron_service:
                     try:
                         from dateutil.parser import parse as dateparse
+
                         due_dt = dateparse(due)
                         remind_at = due_dt.replace(hour=9, minute=0, second=0)
                         if remind_at.tzinfo is None:
                             remind_at = remind_at.replace(tzinfo=timezone.utc)
                         if remind_at > datetime.now(timezone.utc):
                             from koa.triggers.cron.models import (
-                                CronJobCreate, AtSchedule, SessionTarget,
-                                WakeMode, AgentTurnPayload, DeliveryConfig, DeliveryMode,
+                                AgentTurnPayload,
+                                AtSchedule,
+                                CronJobCreate,
+                                DeliveryConfig,
+                                DeliveryMode,
+                                SessionTarget,
+                                WakeMode,
                             )
-                            await cron_service.add(CronJobCreate(
-                                name=f"Due: {title}",
-                                description="Task due date reminder",
-                                user_id=context.tenant_id,
-                                schedule=AtSchedule(at=remind_at.isoformat()),
-                                session_target=SessionTarget.ISOLATED,
-                                wake_mode=WakeMode.NEXT_HEARTBEAT,
-                                payload=AgentTurnPayload(
-                                    message=f"Remind the user: task '{title}' is due today."
-                                ),
-                                delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
-                            ))
+
+                            await cron_service.add(
+                                CronJobCreate(
+                                    name=f"Due: {title}",
+                                    description="Task due date reminder",
+                                    user_id=context.tenant_id,
+                                    schedule=AtSchedule(at=remind_at.isoformat()),
+                                    session_target=SessionTarget.ISOLATED,
+                                    wake_mode=WakeMode.NEXT_HEARTBEAT,
+                                    payload=AgentTurnPayload(
+                                        message=f"Remind the user: task '{title}' is due today."
+                                    ),
+                                    delivery=DeliveryConfig(
+                                        mode=DeliveryMode.ANNOUNCE, channel="callback"
+                                    ),
+                                )
+                            )
                             logger.info(f"Auto-scheduled due-date reminder for task '{title}'")
                     except Exception as e:
                         logger.debug(f"Task reminder scheduling failed: {e}")
@@ -276,18 +310,22 @@ async def create_task(
 # update_task
 # =============================================================================
 
+
 async def _preview_update_task(args: dict, context) -> str:
     search_query = args.get("search_query", "")
     indices = args.get("task_indices")
     if indices:
         return f"Mark task(s) #{', #'.join(str(i) for i in indices)} as complete?"
-    return f"Search for and complete task matching: \"{search_query}\"?"
+    return f'Search for and complete task matching: "{search_query}"?'
 
 
 @tool(needs_approval=True, get_preview=_preview_update_task)
 async def update_task(
     search_query: Annotated[str, "Keywords to find the task to complete."],
-    task_indices: Annotated[Optional[List[int]], "1-based indices of tasks to complete (use after seeing search results with multiple matches)."] = None,
+    task_indices: Annotated[
+        Optional[List[int]],
+        "1-based indices of tasks to complete (use after seeing search results with multiple matches).",
+    ] = None,
     *,
     context: AgentToolContext,
 ) -> str:
@@ -315,7 +353,9 @@ async def update_task(
                         task["_account_email"] = account_obj.get("email", "")
                     all_tasks.extend(tasks)
             except Exception as e:
-                logger.error(f"Failed to search {account_obj.get('account_name')}: {e}", exc_info=True)
+                logger.error(
+                    f"Failed to search {account_obj.get('account_name')}: {e}", exc_info=True
+                )
 
         # Fallback: list all tasks and filter with LLM
         if not all_tasks and context.llm_client:
@@ -333,7 +373,9 @@ async def update_task(
                 account_name = task.get("_account_name", "")
                 prefix = f"[{account_name}] " if account_name else ""
                 lines.append(f"{i}. {prefix}{title}{due_str}")
-            lines.append("\nPlease specify which task(s) to complete by calling update_task again with task_indices.")
+            lines.append(
+                "\nPlease specify which task(s) to complete by calling update_task again with task_indices."
+            )
             return "\n".join(lines)
 
         # Determine which tasks to complete
@@ -369,8 +411,7 @@ async def update_task(
             for task in tasks:
                 try:
                     result = await provider.complete_task(
-                        task_id=task.get("id", ""),
-                        list_id=task.get("list_id")
+                        task_id=task.get("id", ""), list_id=task.get("list_id")
                     )
                     if result.get("success"):
                         completed_count += 1
@@ -383,7 +424,7 @@ async def update_task(
         if completed_count > 0 and failed_count == 0:
             if completed_count == 1:
                 title = tasks_to_complete[0].get("title", "task")
-                return f"Done! Marked \"{title}\" as complete."
+                return f'Done! Marked "{title}" as complete.'
             return f"Done! Completed {completed_count} task(s)."
         elif completed_count > 0:
             return f"Completed {completed_count} task(s), but {failed_count} failed."
@@ -399,18 +440,22 @@ async def update_task(
 # delete_task
 # =============================================================================
 
+
 async def _preview_delete_task(args: dict, context) -> str:
     search_query = args.get("search_query", "")
     indices = args.get("task_indices")
     if indices:
         return f"Delete task(s) #{', #'.join(str(i) for i in indices)}?"
-    return f"Search for and delete task matching: \"{search_query}\"?"
+    return f'Search for and delete task matching: "{search_query}"?'
 
 
 @tool(needs_approval=True, get_preview=_preview_delete_task)
 async def delete_task(
     search_query: Annotated[str, "Keywords to find the task to delete."],
-    task_indices: Annotated[Optional[List[int]], "1-based indices of tasks to delete (use after seeing search results with multiple matches)."] = None,
+    task_indices: Annotated[
+        Optional[List[int]],
+        "1-based indices of tasks to delete (use after seeing search results with multiple matches).",
+    ] = None,
     *,
     context: AgentToolContext,
 ) -> str:
@@ -438,7 +483,9 @@ async def delete_task(
                         task["_account_email"] = account_obj.get("email", "")
                     all_tasks.extend(tasks)
             except Exception as e:
-                logger.error(f"Failed to search {account_obj.get('account_name')}: {e}", exc_info=True)
+                logger.error(
+                    f"Failed to search {account_obj.get('account_name')}: {e}", exc_info=True
+                )
 
         if not all_tasks and context.llm_client:
             all_tasks = await _fallback_search(accounts, search_query, context.llm_client)
@@ -455,7 +502,9 @@ async def delete_task(
                 account_name = task.get("_account_name", "")
                 prefix = f"[{account_name}] " if account_name else ""
                 lines.append(f"{i}. {prefix}{title}{due_str}")
-            lines.append("\nPlease specify which task(s) to delete by calling delete_task again with task_indices.")
+            lines.append(
+                "\nPlease specify which task(s) to delete by calling delete_task again with task_indices."
+            )
             return "\n".join(lines)
 
         # Determine which tasks to delete
@@ -491,8 +540,7 @@ async def delete_task(
             for task in tasks:
                 try:
                     result = await provider.delete_task(
-                        task_id=task.get("id", ""),
-                        list_id=task.get("list_id")
+                        task_id=task.get("id", ""), list_id=task.get("list_id")
                     )
                     if result.get("success"):
                         deleted_count += 1
@@ -518,13 +566,20 @@ async def delete_task(
 # set_reminder
 # =============================================================================
 
+
 @tool
 async def set_reminder(
-    schedule_datetime: Annotated[str, "ISO 8601 datetime when the reminder should fire (e.g., 2024-01-15T14:30:00)."],
+    schedule_datetime: Annotated[
+        str, "ISO 8601 datetime when the reminder should fire (e.g., 2024-01-15T14:30:00)."
+    ],
     reminder_message: Annotated[str, "What to remind the user about."],
     schedule_type: Annotated[str, "Whether this is a one-time or recurring reminder."] = "one_time",
-    cron_expression: Annotated[Optional[str], "Cron expression for recurring reminders (e.g., '0 8 * * *' for daily 8am)."] = None,
-    human_readable_time: Annotated[str, "Friendly time description (e.g., 'in 5 minutes', 'every day at 8am')."] = "",
+    cron_expression: Annotated[
+        Optional[str], "Cron expression for recurring reminders (e.g., '0 8 * * *' for daily 8am)."
+    ] = None,
+    human_readable_time: Annotated[
+        str, "Friendly time description (e.g., 'in 5 minutes', 'every day at 8am')."
+    ] = "",
     *,
     context: AgentToolContext,
 ) -> str:
@@ -540,10 +595,14 @@ async def set_reminder(
         return "Sorry, I can't create reminders right now. Please try again later."
 
     from koa.triggers.cron.models import (
-        AtSchedule, CronScheduleSpec,
-        SessionTarget, WakeMode,
-        SystemEventPayload, AgentTurnPayload, DeliveryConfig, DeliveryMode,
+        AtSchedule,
         CronJobCreate,
+        CronScheduleSpec,
+        DeliveryConfig,
+        DeliveryMode,
+        SessionTarget,
+        SystemEventPayload,
+        WakeMode,
     )
 
     # Resolve user timezone
@@ -554,8 +613,8 @@ async def set_reminder(
         if schedule_type == "recurring" and cron_expression:
             schedule = CronScheduleSpec(expr=cron_expression, tz=user_tz or None)
         else:
-            if 'T' in schedule_datetime:
-                local_dt = datetime.fromisoformat(schedule_datetime.replace('Z', '+00:00'))
+            if "T" in schedule_datetime:
+                local_dt = datetime.fromisoformat(schedule_datetime.replace("Z", "+00:00"))
             else:
                 local_dt = datetime.fromisoformat(schedule_datetime)
 
@@ -564,6 +623,7 @@ async def set_reminder(
             if local_dt.tzinfo is None and user_tz:
                 try:
                     from zoneinfo import ZoneInfo
+
                     local_dt = local_dt.replace(tzinfo=ZoneInfo(user_tz))
                 except Exception:
                     pass
@@ -574,17 +634,19 @@ async def set_reminder(
         return "I couldn't process that time. Could you try again?"
 
     try:
-        job = await cron_service.add(CronJobCreate(
-            name=reminder_message[:50],
-            description=f"Reminder: {reminder_message}",
-            user_id=context.tenant_id,
-            schedule=schedule,
-            session_target=SessionTarget.MAIN,
-            wake_mode=WakeMode.NOW,
-            payload=SystemEventPayload(text=f"Reminder: {reminder_message}"),
-            delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
-            delete_after_run=isinstance(schedule, AtSchedule),
-        ))
+        job = await cron_service.add(
+            CronJobCreate(
+                name=reminder_message[:50],
+                description=f"Reminder: {reminder_message}",
+                user_id=context.tenant_id,
+                schedule=schedule,
+                session_target=SessionTarget.MAIN,
+                wake_mode=WakeMode.NOW,
+                payload=SystemEventPayload(text=f"Reminder: {reminder_message}"),
+                delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
+                delete_after_run=isinstance(schedule, AtSchedule),
+            )
+        )
 
         logger.info(f"Created reminder via CronService: {job.id}")
         time_desc = human_readable_time or schedule_datetime
@@ -599,12 +661,19 @@ async def set_reminder(
 # manage_reminders
 # =============================================================================
 
+
 @tool
 async def manage_reminders(
     action: Annotated[str, "What to do with the reminder/automation."],
-    task_hint: Annotated[str, "Keywords to identify which reminder/automation (for show/update/pause/resume/delete)."] = "",
-    status_filter: Annotated[str, "Filter by status when listing: 'all', 'active', 'paused' (default 'all')."] = "all",
-    new_schedule_datetime: Annotated[Optional[str], "New ISO 8601 datetime for update action."] = None,
+    task_hint: Annotated[
+        str, "Keywords to identify which reminder/automation (for show/update/pause/resume/delete)."
+    ] = "",
+    status_filter: Annotated[
+        str, "Filter by status when listing: 'all', 'active', 'paused' (default 'all')."
+    ] = "all",
+    new_schedule_datetime: Annotated[
+        Optional[str], "New ISO 8601 datetime for update action."
+    ] = None,
     new_cron_expression: Annotated[Optional[str], "New cron expression for update action."] = None,
     new_message: Annotated[Optional[str], "New reminder message for update action."] = None,
     human_readable_time: Annotated[str, "Friendly time description for update action."] = "",
@@ -630,15 +699,22 @@ async def manage_reminders(
     elif action == "update":
         user_tz = context.context_hints.get("timezone", "") if context.context_hints else ""
         return await _update_reminder(
-            cron_service, context.tenant_id, task_hint,
-            new_schedule_datetime, new_cron_expression, new_message,
-            human_readable_time, update_type, user_tz,
+            cron_service,
+            context.tenant_id,
+            task_hint,
+            new_schedule_datetime,
+            new_cron_expression,
+            new_message,
+            human_readable_time,
+            update_type,
+            user_tz,
         )
     else:
         return "I'm not sure what you want to do. Try 'show my reminders' or 'delete my medicine reminder'."
 
 
 # ---- Reminder sub-actions (CronService-backed) ----
+
 
 def _match_jobs(jobs, hint: str):
     """Match CronJob objects by hint keywords. Returns list of matching jobs."""
@@ -843,14 +919,23 @@ async def _delete_reminder(cron_service, tenant_id: str, task_hint: str) -> str:
 
 
 async def _update_reminder(
-    cron_service, tenant_id: str, task_hint: str,
-    new_schedule_datetime, new_cron_expression, new_message,
-    human_readable_time, update_type, user_tz: str = "",
+    cron_service,
+    tenant_id: str,
+    task_hint: str,
+    new_schedule_datetime,
+    new_cron_expression,
+    new_message,
+    human_readable_time,
+    update_type,
+    user_tz: str = "",
 ) -> str:
     """Update a reminder's schedule or message via CronService."""
     from koa.triggers.cron.models import (
-        AtSchedule, CronScheduleSpec, AgentTurnPayload,
-        SystemEventPayload, CronJobPatch,
+        AgentTurnPayload,
+        AtSchedule,
+        CronJobPatch,
+        CronScheduleSpec,
+        SystemEventPayload,
     )
 
     if not task_hint:
@@ -874,13 +959,17 @@ async def _update_reminder(
                 response_parts.append(f"changed to {time_desc}")
             elif new_schedule_datetime:
                 try:
-                    if 'T' in new_schedule_datetime:
-                        local_dt = datetime.fromisoformat(new_schedule_datetime.replace('Z', '+00:00'))
+                    if "T" in new_schedule_datetime:
+                        local_dt = datetime.fromisoformat(
+                            new_schedule_datetime.replace("Z", "+00:00")
+                        )
                     else:
                         local_dt = datetime.fromisoformat(new_schedule_datetime)
                     patch.schedule = AtSchedule(at=local_dt.isoformat())
                     patch.delete_after_run = True
-                    time_desc = human_readable_time or _format_datetime_display(local_dt.isoformat())
+                    time_desc = human_readable_time or _format_datetime_display(
+                        local_dt.isoformat()
+                    )
                     response_parts.append(f"changed to {time_desc}")
                 except Exception:
                     pass
@@ -928,6 +1017,7 @@ def _format_job_disambiguation(jobs, prompt: str) -> str:
 # Shared fallback search helper
 # =============================================================================
 
+
 async def _fallback_search(accounts, search_query: str, llm_client) -> List[Dict]:
     """Fallback: list all tasks and filter with LLM."""
     all_tasks = []
@@ -968,7 +1058,7 @@ Return a JSON array of matching indices (0-based), like: [0, 3, 5]"""
             messages=[{"role": "user", "content": prompt}],
             enable_thinking=False,
         )
-        match = re.search(r'\[[\d,\s]*\]', result.content)
+        match = re.search(r"\[[\d,\s]*\]", result.content)
         if match:
             indices = json.loads(match.group())
             return [all_tasks[i] for i in indices if 0 <= i < len(all_tasks)]
@@ -981,6 +1071,7 @@ Return a JSON array of matching indices (0-based), like: [0, 3, 5]"""
 # =============================================================================
 # check_overdue_tasks
 # =============================================================================
+
 
 @tool
 async def check_overdue_tasks(*, context: AgentToolContext) -> str:

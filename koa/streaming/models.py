@@ -9,8 +9,8 @@ This module defines:
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Any, List, Optional, Literal, Union
 from enum import Enum
+from typing import Any, Dict, Optional
 
 
 class StreamMode(str, Enum):
@@ -22,14 +22,16 @@ class StreamMode(str, Enum):
     - MESSAGES: LLM messages token-by-token (for real-time chat)
     - EVENTS: All events including state changes, tool calls, etc.
     """
-    VALUES = "values"       # Complete state after each update
-    UPDATES = "updates"     # Only incremental changes
-    MESSAGES = "messages"   # LLM messages (token-by-token)
-    EVENTS = "events"       # All events (state changes, tool calls)
+
+    VALUES = "values"  # Complete state after each update
+    UPDATES = "updates"  # Only incremental changes
+    MESSAGES = "messages"  # LLM messages (token-by-token)
+    EVENTS = "events"  # All events (state changes, tool calls)
 
 
 class EventType(str, Enum):
     """Types of events that can be streamed"""
+
     # State events
     STATE_CHANGE = "state_change"
     FIELD_COLLECTED = "field_collected"
@@ -83,6 +85,7 @@ class AgentEvent:
     - agent_id: Which agent generated the event
     - sequence: Sequence number for ordering
     """
+
     type: EventType
     data: Dict[str, Any]
     timestamp: datetime = field(default_factory=datetime.now)
@@ -124,7 +127,7 @@ class StateChangeEvent(AgentEvent):
         new_status: str,
         agent_id: Optional[str] = None,
         agent_type: Optional[str] = None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(
             type=EventType.STATE_CHANGE,
@@ -134,7 +137,7 @@ class StateChangeEvent(AgentEvent):
             },
             agent_id=agent_id,
             agent_type=agent_type,
-            **kwargs
+            **kwargs,
         )
 
 
@@ -148,7 +151,7 @@ class MessageChunkEvent(AgentEvent):
         message_id: Optional[str] = None,
         agent_id: Optional[str] = None,
         agent_type: Optional[str] = None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(
             type=EventType.MESSAGE_CHUNK,
@@ -158,7 +161,7 @@ class MessageChunkEvent(AgentEvent):
             },
             agent_id=agent_id,
             agent_type=agent_type,
-            **kwargs
+            **kwargs,
         )
 
 
@@ -173,7 +176,7 @@ class ToolCallEvent(AgentEvent):
         call_id: Optional[str] = None,
         agent_id: Optional[str] = None,
         agent_type: Optional[str] = None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(
             type=EventType.TOOL_CALL_START,
@@ -184,7 +187,7 @@ class ToolCallEvent(AgentEvent):
             },
             agent_id=agent_id,
             agent_type=agent_type,
-            **kwargs
+            **kwargs,
         )
 
 
@@ -201,7 +204,7 @@ class ToolResultEvent(AgentEvent):
         call_id: Optional[str] = None,
         agent_id: Optional[str] = None,
         agent_type: Optional[str] = None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(
             type=EventType.TOOL_RESULT,
@@ -214,7 +217,7 @@ class ToolResultEvent(AgentEvent):
             },
             agent_id=agent_id,
             agent_type=agent_type,
-            **kwargs
+            **kwargs,
         )
 
 
@@ -230,7 +233,7 @@ class ProgressEvent(AgentEvent):
         percentage: Optional[float] = None,
         agent_id: Optional[str] = None,
         agent_type: Optional[str] = None,
-        **kwargs
+        **kwargs,
     ):
         if percentage is None and total > 0:
             percentage = (current / total) * 100
@@ -245,7 +248,7 @@ class ProgressEvent(AgentEvent):
             },
             agent_id=agent_id,
             agent_type=agent_type,
-            **kwargs
+            **kwargs,
         )
 
 
@@ -262,7 +265,7 @@ class ErrorEvent(AgentEvent):
         agent_type: Optional[str] = None,
         code: Optional[str] = None,
         details: Optional[dict] = None,
-        **kwargs
+        **kwargs,
     ):
         data = {
             "error": error,
@@ -274,20 +277,13 @@ class ErrorEvent(AgentEvent):
         if details:
             data["details"] = details
         super().__init__(
-            type=EventType.ERROR,
-            data=data,
-            agent_id=agent_id,
-            agent_type=agent_type,
-            **kwargs
+            type=EventType.ERROR, data=data, agent_id=agent_id, agent_type=agent_type, **kwargs
         )
 
 
 # Factory functions for creating events
 def create_state_change_event(
-    old_status: str,
-    new_status: str,
-    agent_id: str = None,
-    agent_type: str = None
+    old_status: str, new_status: str, agent_id: str = None, agent_type: str = None
 ) -> AgentEvent:
     """Create a state change event"""
     return AgentEvent(
@@ -299,10 +295,7 @@ def create_state_change_event(
 
 
 def create_message_chunk_event(
-    chunk: str,
-    message_id: str = None,
-    agent_id: str = None,
-    agent_type: str = None
+    chunk: str, message_id: str = None, agent_id: str = None, agent_type: str = None
 ) -> AgentEvent:
     """Create a message chunk event"""
     return AgentEvent(
@@ -318,7 +311,7 @@ def create_tool_call_event(
     tool_input: Dict[str, Any],
     call_id: str = None,
     agent_id: str = None,
-    agent_type: str = None
+    agent_type: str = None,
 ) -> AgentEvent:
     """Create a tool call event"""
     return AgentEvent(
@@ -330,11 +323,7 @@ def create_tool_call_event(
 
 
 def create_progress_event(
-    current: int,
-    total: int,
-    message: str = None,
-    agent_id: str = None,
-    agent_type: str = None
+    current: int, total: int, message: str = None, agent_id: str = None, agent_type: str = None
 ) -> AgentEvent:
     """Create a progress update event"""
     percentage = (current / total) * 100 if total > 0 else 0

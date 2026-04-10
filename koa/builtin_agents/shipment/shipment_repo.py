@@ -61,9 +61,7 @@ class ShipmentRepository(Repository):
 
         # Build SET clause for ON CONFLICT — update everything except the key columns
         update_cols = [c for c in columns if c not in ("tenant_id", "tracking_number")]
-        set_clause = ", ".join(
-            f"{c} = EXCLUDED.{c}" for c in update_cols
-        )
+        set_clause = ", ".join(f"{c} = EXCLUDED.{c}" for c in update_cols)
         set_clause += ", updated_at = NOW()"
 
         query = (
@@ -96,10 +94,7 @@ class ShipmentRepository(Repository):
 
         values.append(shipment_id)
 
-        query = (
-            f"UPDATE shipments SET {', '.join(set_clauses)} "
-            f"WHERE id = ${idx}::uuid RETURNING *"
-        )
+        query = f"UPDATE shipments SET {', '.join(set_clauses)} WHERE id = ${idx}::uuid RETURNING *"
         row = await self.db.fetchrow(query, *values)
         return dict(row) if row else None
 

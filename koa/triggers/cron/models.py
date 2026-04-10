@@ -5,18 +5,18 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Literal, Optional, Union
-
+from typing import Any, Dict, Literal, Optional, Union
 
 # ---------------------------------------------------------------------------
 # Schedule types (discriminated union via "kind")
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class AtSchedule:
     """One-shot schedule at a specific ISO timestamp."""
+
     kind: Literal["at"] = "at"
     at: str = ""  # ISO 8601 datetime string
 
@@ -31,6 +31,7 @@ class AtSchedule:
 @dataclass
 class EverySchedule:
     """Recurring interval schedule."""
+
     kind: Literal["every"] = "every"
     every_ms: int = 0  # interval in milliseconds
     anchor_ms: Optional[int] = None  # optional anchor point
@@ -52,6 +53,7 @@ class EverySchedule:
 @dataclass
 class CronScheduleSpec:
     """Cron expression schedule with timezone and stagger."""
+
     kind: Literal["cron"] = "cron"
     expr: str = ""  # cron expression (5 or 6 fields)
     tz: Optional[str] = None  # IANA timezone (e.g. "America/Los_Angeles")
@@ -97,6 +99,7 @@ def schedule_to_dict(schedule: Schedule) -> Dict[str, Any]:
 # Execution modes
 # ---------------------------------------------------------------------------
 
+
 class SessionTarget(str, Enum):
     MAIN = "main"
     ISOLATED = "isolated"
@@ -111,9 +114,11 @@ class WakeMode(str, Enum):
 # Payload types (discriminated union via "kind")
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class SystemEventPayload:
     """Payload for main-session system events."""
+
     kind: Literal["systemEvent"] = "systemEvent"
     text: str = ""
 
@@ -128,6 +133,7 @@ class SystemEventPayload:
 @dataclass
 class AgentTurnPayload:
     """Payload for isolated agent turns."""
+
     kind: Literal["agentTurn"] = "agentTurn"
     message: str = ""
     model: Optional[str] = None
@@ -174,6 +180,7 @@ def payload_to_dict(payload: CronPayload) -> Dict[str, Any]:
 # Delivery
 # ---------------------------------------------------------------------------
 
+
 class DeliveryMode(str, Enum):
     NONE = "none"
     ANNOUNCE = "announce"
@@ -190,6 +197,7 @@ class DeliveryStatus(str, Enum):
 @dataclass
 class DeliveryConfig:
     """Delivery configuration for cron job results."""
+
     mode: DeliveryMode = DeliveryMode.NONE
     channel: Optional[str] = None  # "sms", "push", "callback", or channel ID
     to: Optional[str] = None  # destination (phone, user_id, URL, etc.)
@@ -235,9 +243,11 @@ class DeliveryConfig:
 # Job state
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class CronJobState:
     """Mutable runtime state for a cron job."""
+
     next_run_at_ms: Optional[int] = None
     running_at_ms: Optional[int] = None
     last_run_at_ms: Optional[int] = None
@@ -297,6 +307,7 @@ class CronJobState:
 # CronJob — the main model
 # ---------------------------------------------------------------------------
 
+
 def _now_ms() -> int:
     return int(time.time() * 1000)
 
@@ -304,6 +315,7 @@ def _now_ms() -> int:
 @dataclass
 class CronJob:
     """A cron job — the primary model for scheduled execution."""
+
     id: str = ""
     agent_id: Optional[str] = None
     session_key: Optional[str] = None
@@ -365,7 +377,9 @@ class CronJob:
             created_at_ms=d.get("createdAtMs", d.get("created_at_ms", 0)),
             updated_at_ms=d.get("updatedAtMs", d.get("updated_at_ms", 0)),
             schedule=schedule_from_dict(d.get("schedule", {"kind": "cron"})),
-            session_target=SessionTarget(d.get("sessionTarget", d.get("session_target", "isolated"))),
+            session_target=SessionTarget(
+                d.get("sessionTarget", d.get("session_target", "isolated"))
+            ),
             wake_mode=WakeMode(d.get("wakeMode", d.get("wake_mode", "next-heartbeat"))),
             payload=payload_from_dict(d.get("payload", {"kind": "agentTurn"})),
             delivery=DeliveryConfig.from_dict(delivery_data) if delivery_data else None,
@@ -378,9 +392,11 @@ class CronJob:
 # Run log entry
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class CronRunEntry:
     """A single run log entry."""
+
     ts: int = 0  # timestamp ms
     job_id: str = ""
     action: str = "finished"  # "finished"
@@ -458,9 +474,11 @@ class CronRunEntry:
 # Events
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class CronEvent:
     """Event emitted on cron job state changes."""
+
     job_id: str = ""
     action: str = ""  # "added" | "updated" | "removed" | "started" | "finished"
     run_at_ms: Optional[int] = None
@@ -483,9 +501,11 @@ class CronEvent:
 # CRUD input types
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class CronJobCreate:
     """Input for creating a new cron job."""
+
     name: str = ""
     description: Optional[str] = None
     user_id: str = ""
@@ -530,6 +550,7 @@ class CronJobCreate:
 @dataclass
 class CronJobPatch:
     """Partial update for a cron job."""
+
     name: Optional[str] = None
     description: Optional[str] = None
     enabled: Optional[bool] = None

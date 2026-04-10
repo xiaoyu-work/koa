@@ -5,7 +5,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Request
 
-from ...errors import KoaError, E
+from ...errors import E, KoaError
 from ..app import require_app, sanitize_credential, verify_api_key, verify_service_key
 from ..models import CredentialSaveRequest
 
@@ -13,12 +13,29 @@ router = APIRouter()
 
 # Issue #4: Known service allowlist for credential validation
 _KNOWN_SERVICES = {
-    "gmail", "google_calendar", "google_tasks", "google_drive",
-    "outlook", "outlook_calendar", "microsoft_todo", "onedrive",
-    "todoist", "notion", "philips_hue", "sonos", "dropbox",
-    "amadeus", "weather_api", "google_api", "google_oauth_app",
-    "microsoft_oauth_app", "composio", "todoist_oauth_app",
-    "hue_oauth_app", "sonos_oauth_app", "dropbox_oauth_app",
+    "gmail",
+    "google_calendar",
+    "google_tasks",
+    "google_drive",
+    "outlook",
+    "outlook_calendar",
+    "microsoft_todo",
+    "onedrive",
+    "todoist",
+    "notion",
+    "philips_hue",
+    "sonos",
+    "dropbox",
+    "amadeus",
+    "weather_api",
+    "google_api",
+    "google_oauth_app",
+    "microsoft_oauth_app",
+    "composio",
+    "todoist_oauth_app",
+    "hue_oauth_app",
+    "sonos_oauth_app",
+    "dropbox_oauth_app",
 }
 
 # Valid account_name: alphanumeric, underscores, hyphens, 1-64 chars
@@ -84,35 +101,48 @@ async def delete_credential(service: str, account_name: str, tenant_id: str = "d
 
 @router.get("/api/internal/credentials/by-email")
 async def internal_credentials_by_email(
-    request: Request, email: str, tenant_id: Optional[str] = None, service: Optional[str] = None,
+    request: Request,
+    email: str,
+    tenant_id: Optional[str] = None,
+    service: Optional[str] = None,
 ):
     """Lookup credentials by email, optionally scoped to a tenant. Internal use only."""
     verify_service_key(request)
     app = require_app()
     result = await app.find_credential_by_email(email, service, tenant_id=tenant_id)
     if not result:
-        raise KoaError(E.NOT_FOUND, "No credentials found for email",
-                            details={"resource": "credential"})
+        raise KoaError(
+            E.NOT_FOUND, "No credentials found for email", details={"resource": "credential"}
+        )
     return result
 
 
 @router.get("/api/internal/credentials")
 async def internal_credentials_get(
-    request: Request, tenant_id: str, service: str, account_name: str = "primary",
+    request: Request,
+    tenant_id: str,
+    service: str,
+    account_name: str = "primary",
 ):
     """Get full credentials including tokens. Internal use only."""
     verify_service_key(request)
     app = require_app()
     creds = await app.get_credential(tenant_id, service, account_name)
     if not creds:
-        raise KoaError(E.NOT_FOUND, "Credentials not found",
-                            details={"resource": "credential"})
-    return {"tenant_id": tenant_id, "service": service, "account_name": account_name, "credentials": creds}
+        raise KoaError(E.NOT_FOUND, "Credentials not found", details={"resource": "credential"})
+    return {
+        "tenant_id": tenant_id,
+        "service": service,
+        "account_name": account_name,
+        "credentials": creds,
+    }
 
 
 @router.get("/api/internal/credentials/list")
 async def internal_credentials_list(
-    request: Request, tenant_id: str, service: Optional[str] = None,
+    request: Request,
+    tenant_id: str,
+    service: Optional[str] = None,
 ):
     """List all credentials WITH token fields (unsanitized). Internal use only."""
     verify_service_key(request)
@@ -122,7 +152,8 @@ async def internal_credentials_list(
 
 @router.get("/api/internal/credentials/by-service")
 async def internal_credentials_by_service(
-    request: Request, service: str,
+    request: Request,
+    service: str,
 ):
     """List all credentials for a given service across all tenants. Internal use only."""
     verify_service_key(request)
@@ -132,7 +163,9 @@ async def internal_credentials_by_service(
 
 @router.put("/api/internal/credentials")
 async def internal_credentials_update(
-    request: Request, tenant_id: str, service: str,
+    request: Request,
+    tenant_id: str,
+    service: str,
     account_name: str = "primary",
 ):
     """Update credentials (e.g. after token refresh). Internal use only."""

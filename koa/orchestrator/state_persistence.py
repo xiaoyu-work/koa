@@ -35,12 +35,15 @@ class PlanStore:
 
         try:
             row = await self._db.fetchrow(
-                "SELECT plan_data FROM agent_plans "
-                "WHERE tenant_id = $1 AND status = 'pending'",
+                "SELECT plan_data FROM agent_plans WHERE tenant_id = $1 AND status = 'pending'",
                 tenant_id,
             )
             if row:
-                plan = json.loads(row["plan_data"]) if isinstance(row["plan_data"], str) else row["plan_data"]
+                plan = (
+                    json.loads(row["plan_data"])
+                    if isinstance(row["plan_data"], str)
+                    else row["plan_data"]
+                )
                 self._cache[tenant_id] = plan
                 return plan
         except Exception as e:
@@ -83,7 +86,11 @@ class PlanStore:
                         tenant_id,
                     )
                     if row:
-                        plan = json.loads(row["plan_data"]) if isinstance(row["plan_data"], str) else row["plan_data"]
+                        plan = (
+                            json.loads(row["plan_data"])
+                            if isinstance(row["plan_data"], str)
+                            else row["plan_data"]
+                        )
                 else:
                     await self._db.execute(
                         "DELETE FROM agent_plans WHERE tenant_id = $1",
@@ -126,8 +133,7 @@ class PlanStore:
 
         try:
             result = await self._db.execute(
-                "DELETE FROM agent_plans "
-                "WHERE updated_at < NOW() - INTERVAL '1 minute' * $1",
+                "DELETE FROM agent_plans WHERE updated_at < NOW() - INTERVAL '1 minute' * $1",
                 max_age_minutes,
             )
             # Parse the DELETE count if available

@@ -1,11 +1,11 @@
 """Koa Pipeline Executor — multi-step action execution with optional LLM condition gating."""
 
 import logging
-from typing import Any, Dict, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from jinja2 import Template
 
-from .models import TriggerContext, ActionResult
+from .models import ActionResult, TriggerContext
 
 if TYPE_CHECKING:
     from ..orchestrator.orchestrator import Orchestrator
@@ -91,10 +91,16 @@ class PipelineExecutor:
                     return ActionResult(
                         success=True,
                         output="",
-                        metadata={"skipped": True, "reason": "condition_not_met", "step_outputs": step_outputs},
+                        metadata={
+                            "skipped": True,
+                            "reason": "condition_not_met",
+                            "step_outputs": step_outputs,
+                        },
                     )
             except Exception as e:
-                logger.error(f"Pipeline condition evaluation failed for task {context.task.id}: {e}")
+                logger.error(
+                    f"Pipeline condition evaluation failed for task {context.task.id}: {e}"
+                )
                 # On condition evaluation failure, continue with output
 
         # -- Render output template --

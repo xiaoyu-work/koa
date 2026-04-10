@@ -71,9 +71,7 @@ class SeedreamProvider(BaseImageProvider):
 
                 if response.status_code != 200:
                     error_detail = response.text
-                    logger.error(
-                        f"Seedream API error: {response.status_code} - {error_detail}"
-                    )
+                    logger.error(f"Seedream API error: {response.status_code} - {error_detail}")
                     return {
                         "success": False,
                         "error": f"Seedream API error: {response.status_code} - {error_detail}",
@@ -82,11 +80,13 @@ class SeedreamProvider(BaseImageProvider):
                 data = response.json()
                 images = []
                 for item in data.get("data", []):
-                    images.append({
-                        "base64": item.get("b64_json"),
-                        "url": item.get("url"),
-                        "revised_prompt": item.get("revised_prompt"),
-                    })
+                    images.append(
+                        {
+                            "base64": item.get("b64_json"),
+                            "url": item.get("url"),
+                            "revised_prompt": item.get("revised_prompt"),
+                        }
+                    )
 
                 logger.info(f"Seedream generated {len(images)} image(s)")
                 return {"success": True, "data": {"images": images}}

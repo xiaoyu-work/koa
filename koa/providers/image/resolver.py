@@ -12,7 +12,7 @@ Services stored in CredentialStore:
 """
 
 import logging
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from koa.constants import IMAGE_SERVICES
 from koa.providers.email.resolver import AccountResolver

@@ -6,8 +6,7 @@ Used by the expense tracking agent to record, query, and analyze expenses.
 
 import logging
 from datetime import date
-from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from koa.db.repository import Repository
 
@@ -85,9 +84,7 @@ class ExpenseRepository(Repository):
             limit=limit,
         )
 
-    async def update_receipt_id(
-        self, expense_id: str, receipt_id: str
-    ) -> dict:
+    async def update_receipt_id(self, expense_id: str, receipt_id: str) -> dict:
         """Attach a receipt to an expense by updating its receipt_id."""
         return await self._update("id", expense_id, {"receipt_id": receipt_id})
 
@@ -137,7 +134,10 @@ class ExpenseRepository(Repository):
         return [dict(r) for r in rows]
 
     async def monthly_total(
-        self, tenant_id: str, year: int, month: int,
+        self,
+        tenant_id: str,
+        year: int,
+        month: int,
         category: Optional[str] = None,
     ) -> float:
         """Return the total expense amount for a given month.
@@ -152,7 +152,10 @@ class ExpenseRepository(Repository):
                 "AND EXTRACT(YEAR FROM date) = $2 "
                 "AND EXTRACT(MONTH FROM date) = $3 "
                 "AND category = $4",
-                tenant_id, year, month, category,
+                tenant_id,
+                year,
+                month,
+                category,
             )
         else:
             row = await self._db.fetchrow(
@@ -161,13 +164,13 @@ class ExpenseRepository(Repository):
                 "WHERE tenant_id = $1 "
                 "AND EXTRACT(YEAR FROM date) = $2 "
                 "AND EXTRACT(MONTH FROM date) = $3",
-                tenant_id, year, month,
+                tenant_id,
+                year,
+                month,
             )
         return float(row["total"]) if row else 0.0
 
-    async def search(
-        self, tenant_id: str, query: str, limit: int = 20
-    ) -> list[dict]:
+    async def search(self, tenant_id: str, query: str, limit: int = 20) -> list[dict]:
         """Search expenses by description or merchant using ILIKE."""
         pattern = f"%{query}%"
         rows = await self._db.fetch(

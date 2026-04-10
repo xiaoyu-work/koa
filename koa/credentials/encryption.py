@@ -14,12 +14,13 @@ import hashlib
 import json
 import logging
 import secrets
-from typing import Any, Dict, Optional, Union
+from typing import Optional, Union
 
 logger = logging.getLogger(__name__)
 
 try:
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
     _HAS_CRYPTO = True
 except ImportError:
     _HAS_CRYPTO = False
@@ -84,11 +85,9 @@ class CredentialEncryptor:
                 return data
 
         if not self._enabled:
-            raise ValueError(
-                "Encrypted credentials found but KOA_CREDENTIAL_KEY is not set."
-            )
+            raise ValueError("Encrypted credentials found but KOA_CREDENTIAL_KEY is not set.")
 
-        payload = data[len(_ENCRYPTED_PREFIX):]
+        payload = data[len(_ENCRYPTED_PREFIX) :]
         raw = base64.b64decode(payload)
         nonce = raw[:12]
         ciphertext = raw[12:]

@@ -10,28 +10,24 @@ This module provides:
 
 from __future__ import annotations
 
-import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import (
-    Dict, Any, List, Optional, Union, AsyncIterator, Callable
-)
 from enum import Enum
+from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, List, Optional, Union
 
-from ..protocols import LLMClientProtocol
-from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..models import AgentTool
 
 
 class StopReason(str, Enum):
     """Reason why the LLM stopped generating"""
-    END_TURN = "end_turn"           # Natural completion
-    MAX_TOKENS = "max_tokens"       # Hit token limit
-    STOP_SEQUENCE = "stop_sequence" # Hit stop sequence
-    TOOL_USE = "tool_use"           # Model wants to use a tool
+
+    END_TURN = "end_turn"  # Natural completion
+    MAX_TOKENS = "max_tokens"  # Hit token limit
+    STOP_SEQUENCE = "stop_sequence"  # Hit stop sequence
+    TOOL_USE = "tool_use"  # Model wants to use a tool
     CONTENT_FILTER = "content_filter"  # Blocked by content filter
-    ERROR = "error"                 # Error occurred
+    ERROR = "error"  # Error occurred
 
 
 @dataclass
@@ -50,6 +46,7 @@ class LLMConfig:
         max_retries: Maximum number of retries on failure
         default_headers: Additional headers to send with requests
     """
+
     api_key: Optional[str] = None
     model: str = "gpt-4"
     base_url: Optional[str] = None
@@ -82,6 +79,7 @@ class LLMConfig:
 @dataclass
 class ToolCall:
     """A tool call from the LLM"""
+
     id: str
     name: str
     arguments: Dict[str, Any]
@@ -97,6 +95,7 @@ class ToolCall:
 @dataclass
 class Usage:
     """Token usage information"""
+
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
@@ -135,6 +134,7 @@ class LLMResponse:
 
     All provider clients return this format for consistency.
     """
+
     content: str
     tool_calls: Optional[List[ToolCall]] = None
     stop_reason: StopReason = StopReason.END_TURN
@@ -170,6 +170,7 @@ class StreamChunk:
 
     Used for real-time token-by-token streaming.
     """
+
     content: str = ""
     tool_calls: Optional[List[ToolCall]] = None
     is_final: bool = False
@@ -248,9 +249,7 @@ class BaseLLMClient(ABC):
         """
         if self._is_restricted_model(model):
             return {
-                "max_completion_tokens": kwargs.get(
-                    "max_tokens", self.config.max_tokens
-                ),
+                "max_completion_tokens": kwargs.get("max_tokens", self.config.max_tokens),
             }
         return {
             "max_tokens": kwargs.get("max_tokens", self.config.max_tokens),
@@ -259,9 +258,7 @@ class BaseLLMClient(ABC):
         }
 
     def _add_media_to_messages_openai(
-        self,
-        messages: List[Dict[str, Any]],
-        media: List[Dict[str, Any]]
+        self, messages: List[Dict[str, Any]], media: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """
         Add media (images) to the last user message in OpenAI vision format.
@@ -293,15 +290,14 @@ class BaseLLMClient(ABC):
                         media_type = item.get("media_type", "image/jpeg")
 
                         if data.startswith(("http://", "https://")):
-                            content_parts.append({
-                                "type": "image_url",
-                                "image_url": {"url": data}
-                            })
+                            content_parts.append({"type": "image_url", "image_url": {"url": data}})
                         else:
-                            content_parts.append({
-                                "type": "image_url",
-                                "image_url": {"url": f"data:{media_type};base64,{data}"}
-                            })
+                            content_parts.append(
+                                {
+                                    "type": "image_url",
+                                    "image_url": {"url": f"data:{media_type};base64,{data}"},
+                                }
+                            )
 
                 messages[i]["content"] = content_parts
                 break
@@ -310,10 +306,7 @@ class BaseLLMClient(ABC):
 
     @abstractmethod
     async def _call_api(
-        self,
-        messages: List[Dict[str, Any]],
-        tools: Optional[List[Dict[str, Any]]] = None,
-        **kwargs
+        self, messages: List[Dict[str, Any]], tools: Optional[List[Dict[str, Any]]] = None, **kwargs
     ) -> LLMResponse:
         """
         Make the actual API call (provider-specific).
@@ -330,10 +323,7 @@ class BaseLLMClient(ABC):
 
     @abstractmethod
     async def _stream_api(
-        self,
-        messages: List[Dict[str, Any]],
-        tools: Optional[List[Dict[str, Any]]] = None,
-        **kwargs
+        self, messages: List[Dict[str, Any]], tools: Optional[List[Dict[str, Any]]] = None, **kwargs
     ) -> AsyncIterator[StreamChunk]:
         """
         Make streaming API call (provider-specific).
@@ -353,7 +343,7 @@ class BaseLLMClient(ABC):
         messages: List[Dict[str, Any]],
         tools: Optional[List[Union[Dict[str, Any], AgentTool]]] = None,
         config: Optional[Dict[str, Any]] = None,
-        **kwargs
+        **kwargs,
     ) -> LLMResponse:
         """
         Send a chat completion request.
@@ -407,7 +397,7 @@ class BaseLLMClient(ABC):
         messages: List[Dict[str, Any]],
         tools: Optional[List[Union[Dict[str, Any], AgentTool]]] = None,
         config: Optional[Dict[str, Any]] = None,
-        **kwargs
+        **kwargs,
     ) -> AsyncIterator[StreamChunk]:
         """
         Send a streaming chat completion request.
@@ -465,7 +455,7 @@ class BaseLLMClient(ABC):
                 "name": tool.name,
                 "description": tool.description,
                 "parameters": tool.parameters,
-            }
+            },
         }
 
     def _calculate_cost(self, usage: Usage, model: Optional[str] = None) -> Optional[float]:

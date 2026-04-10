@@ -17,8 +17,8 @@ object with these async methods:
 If the store is not provided, the tools return an error message.
 """
 
-import re
 import logging
+import re
 from datetime import datetime
 from typing import Optional
 
@@ -47,7 +47,11 @@ def _format_timing(d: dict) -> str:
     upcoming = d.get("upcoming_date") or d.get("date")
     if upcoming:
         try:
-            dt = datetime.strptime(str(upcoming)[:10], "%Y-%m-%d") if isinstance(upcoming, str) else upcoming
+            dt = (
+                datetime.strptime(str(upcoming)[:10], "%Y-%m-%d")
+                if isinstance(upcoming, str)
+                else upcoming
+            )
             return dt.strftime("%b %d")
         except Exception:
             return str(upcoming)[:10]
@@ -65,11 +69,29 @@ def _parse_date(date_str: str) -> Optional[datetime]:
     # Natural language fallback
     date_lower = date_str.lower()
     month_map = {
-        "january": 1, "february": 2, "march": 3, "april": 4,
-        "may": 5, "june": 6, "july": 7, "august": 8,
-        "september": 9, "october": 10, "november": 11, "december": 12,
-        "jan": 1, "feb": 2, "mar": 3, "apr": 4, "jun": 6,
-        "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+        "january": 1,
+        "february": 2,
+        "march": 3,
+        "april": 4,
+        "may": 5,
+        "june": 6,
+        "july": 7,
+        "august": 8,
+        "september": 9,
+        "october": 10,
+        "november": 11,
+        "december": 12,
+        "jan": 1,
+        "feb": 2,
+        "mar": 3,
+        "apr": 4,
+        "jun": 6,
+        "jul": 7,
+        "aug": 8,
+        "sep": 9,
+        "oct": 10,
+        "nov": 11,
+        "dec": 12,
     }
     for month_name, month_num in month_map.items():
         if month_name in date_lower:
@@ -82,6 +104,7 @@ def _parse_date(date_str: str) -> Optional[datetime]:
 # ---------------------------------------------------------------------------
 # Executors
 # ---------------------------------------------------------------------------
+
 
 async def get_important_dates_executor(args: dict, context: AgentToolContext = None) -> str:
     """Get upcoming important dates."""
@@ -135,7 +158,9 @@ async def search_important_dates_executor(args: dict, context: AgentToolContext 
 
     try:
         dates = await store.search_important_dates(
-            tenant_id=context.tenant_id, search_term=search_term, limit=10,
+            tenant_id=context.tenant_id,
+            search_term=search_term,
+            limit=10,
         )
         if not dates:
             return f"No important dates found matching '{search_term}'."
@@ -148,7 +173,11 @@ async def search_important_dates_executor(args: dict, context: AgentToolContext 
 
             if date_str:
                 try:
-                    dt = datetime.strptime(str(date_str)[:10], "%Y-%m-%d") if isinstance(date_str, str) else date_str
+                    dt = (
+                        datetime.strptime(str(date_str)[:10], "%Y-%m-%d")
+                        if isinstance(date_str, str)
+                        else date_str
+                    )
                     date_display = dt.strftime("%B %d") if recurring else dt.strftime("%B %d, %Y")
                 except Exception:
                     date_display = str(date_str)[:10]
@@ -189,7 +218,9 @@ async def add_important_date_executor(args: dict, context: AgentToolContext = No
     date_data = {
         "title": title,
         "date": date_obj.strftime("%Y-%m-%d"),
-        "date_type": date_type if date_type in ("birthday", "anniversary", "holiday", "custom") else "custom",
+        "date_type": date_type
+        if date_type in ("birthday", "anniversary", "holiday", "custom")
+        else "custom",
         "recurring": recurring,
         "remind_days_before": [0, 1, 7],
     }
@@ -294,11 +325,11 @@ async def delete_important_date_executor(args: dict, context: AgentToolContext =
 
 
 _DATE_TYPE_EMOJI = {
-    "birthday": "\U0001f382",    # 🎂
-    "anniversary": "\U0001f48d", # 💍
-    "holiday": "\U0001f389",     # 🎉
+    "birthday": "\U0001f382",  # 🎂
+    "anniversary": "\U0001f48d",  # 💍
+    "holiday": "\U0001f389",  # 🎉
 }
-_DEFAULT_EMOJI = "\U0001f4c5"    # 📅
+_DEFAULT_EMOJI = "\U0001f4c5"  # 📅
 
 
 async def get_today_reminders_executor(args: dict, context: AgentToolContext = None) -> str:

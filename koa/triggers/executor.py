@@ -2,9 +2,9 @@
 
 import json
 import logging
-from typing import Any, Dict, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
-from .models import TriggerContext, ActionResult
+from .models import ActionResult, TriggerContext
 
 if TYPE_CHECKING:
     from ..orchestrator.orchestrator import Orchestrator
@@ -50,7 +50,8 @@ class OrchestratorExecutor:
             if result.metadata and result.metadata.get("pending_approvals"):
                 action_result.metadata["pending_approval"] = True
                 action_result.metadata["agent_ids"] = [
-                    a.get("agent_id") for a in result.metadata.get("pending_approvals", [])
+                    a.get("agent_id")
+                    for a in result.metadata.get("pending_approvals", [])
                     if a.get("agent_id")
                 ]
 
@@ -66,7 +67,11 @@ class OrchestratorExecutor:
         instruction = task.action.instruction
 
         if context.trigger_type == "schedule":
-            return f"[Scheduled Task] {instruction}" if instruction else f"[Scheduled Task] {task.name or task.description}"
+            return (
+                f"[Scheduled Task] {instruction}"
+                if instruction
+                else f"[Scheduled Task] {task.name or task.description}"
+            )
         elif context.trigger_type == "event":
             event_info = json.dumps(context.event_data) if context.event_data else ""
             return f"[Event Trigger] {task.action.instruction or task.name}: {event_info}"

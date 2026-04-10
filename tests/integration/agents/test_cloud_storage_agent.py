@@ -48,6 +48,7 @@ async def test_routes_to_cloud_storage_agent(orchestrator_factory, user_input):
 # Field extraction — verify the agent extracts correct action and query
 # ---------------------------------------------------------------------------
 
+
 async def test_search_action_extracted(orchestrator_factory):
     """A file search request should extract action=search and a query keyword."""
     orch, recorder = await orchestrator_factory()
@@ -126,6 +127,7 @@ async def test_provider_extraction(orchestrator_factory):
 # ---------------------------------------------------------------------------
 # Response quality
 # ---------------------------------------------------------------------------
+
 
 async def test_response_quality_routing(orchestrator_factory, llm_judge):
     """Cloud storage requests should get a relevant response (even if provider is unavailable)."""

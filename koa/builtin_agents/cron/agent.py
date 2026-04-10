@@ -4,19 +4,17 @@ Follows the TodoAgent pattern: a single StandardAgent with a mini ReAct loop
 that decides which cron tools to call based on the user's request.
 """
 
-from datetime import datetime
-
 from koa import valet
 from koa.standard_agent import StandardAgent
 
 from .tools import (
-    cron_status,
-    cron_list,
     cron_add,
-    cron_update,
+    cron_list,
     cron_remove,
     cron_run,
     cron_runs,
+    cron_status,
+    cron_update,
 )
 
 

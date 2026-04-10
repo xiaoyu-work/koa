@@ -1,7 +1,5 @@
 """Tests for per-tenant deny in ToolPolicyFilter."""
 
-import pytest
-
 from koa.orchestrator.tool_policy import ToolPolicyFilter
 
 
@@ -13,7 +11,6 @@ def _make_schema(name: str, description: str = "") -> dict:
 
 
 class TestTenantDeny:
-
     def test_tenant_deny_blocks_tool(self):
         policy = ToolPolicyFilter()
         policy.set_tenant_deny("t1", {"SmartHomeAgent"})

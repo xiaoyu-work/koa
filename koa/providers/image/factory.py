@@ -74,24 +74,28 @@ def _register_providers():
     """Auto-register all available image providers."""
     try:
         from .openai_image import OpenAIImageProvider
+
         ImageProviderFactory.register_provider("openai", OpenAIImageProvider)
     except ImportError as e:
         logger.warning(f"OpenAI image provider not available: {e}")
 
     try:
         from .azure_image import AzureImageProvider
+
         ImageProviderFactory.register_provider("azure", AzureImageProvider)
     except ImportError as e:
         logger.warning(f"Azure image provider not available: {e}")
 
     try:
         from .gemini_image import GeminiImageProvider
+
         ImageProviderFactory.register_provider("gemini", GeminiImageProvider)
     except ImportError as e:
         logger.warning(f"Gemini image provider not available: {e}")
 
     try:
         from .seedream import SeedreamProvider
+
         ImageProviderFactory.register_provider("seedream", SeedreamProvider)
     except ImportError as e:
         logger.warning(f"Seedream image provider not available: {e}")

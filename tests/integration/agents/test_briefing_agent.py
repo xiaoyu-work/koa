@@ -44,6 +44,7 @@ async def test_tool_selection(conversation, user_input, expected_tools):
 # Argument extraction
 # ---------------------------------------------------------------------------
 
+
 async def test_extracts_schedule_time(conversation):
     """setup_daily_briefing should receive the correct time."""
     conv = await conversation()
@@ -66,9 +67,7 @@ async def test_extracts_manage_action_disable(conversation):
 
     args = conv.get_tool_args("manage_briefing")[0]
     action = args.get("action", "").lower()
-    assert action in ("disable", "pause"), (
-        f"Expected action='disable' or 'pause', got '{action}'"
-    )
+    assert action in ("disable", "pause"), f"Expected action='disable' or 'pause', got '{action}'"
 
 
 async def test_extracts_manage_action_status(conversation):
@@ -84,6 +83,7 @@ async def test_extracts_manage_action_status(conversation):
 # ---------------------------------------------------------------------------
 # Response quality
 # ---------------------------------------------------------------------------
+
 
 async def test_response_quality_briefing(conversation, llm_judge):
     """On-demand briefing should present calendar, tasks, and emails clearly."""

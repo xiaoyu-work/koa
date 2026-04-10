@@ -18,12 +18,11 @@ import os
 import re
 from typing import Any, AsyncIterator, Dict, List, Optional
 
+from .config.schema import validate_config
 from .result import AgentResult
 from .streaming.models import AgentEvent
-from .config.schema import validate_config
 
 logger = logging.getLogger(__name__)
-
 
 
 def _load_config(path: str) -> dict:
@@ -32,8 +31,7 @@ def _load_config(path: str) -> dict:
         import yaml
     except ImportError:
         raise ImportError(
-            "pyyaml is required for config file loading. "
-            "Install with: pip install pyyaml"
+            "pyyaml is required for config file loading. Install with: pip install pyyaml"
         )
 
     with open(path, "r", encoding="utf-8") as f:
@@ -45,6 +43,7 @@ def _load_config(path: str) -> dict:
         stripped = line.lstrip()
         if stripped.startswith("#"):
             return line  # skip comment lines — they may reference unused vars
+
         def _replace_env(match):
             var_name = match.group(1)
             default = match.group(2)  # None if no :- syntax
@@ -57,6 +56,7 @@ def _load_config(path: str) -> dict:
                     f"(referenced in config file '{path}')"
                 )
             return value
+
         return re.sub(r"\$\{(\w+)(?::-([^}]*))?\}", _replace_env, line)
 
     resolved = "\n".join(_resolve_line(line) for line in raw.split("\n"))
@@ -89,11 +89,10 @@ class Koa:
             for e in errors:
                 logger.error(f"Config error: {e}")
             raise ValueError(f"Invalid config: {'; '.join(errors)}")
-        
+
         # Keep the embedding check since it's not covered by our validation
         if not self._config.get("embedding"):
             raise ValueError("Missing required config field: 'embedding'")
-
 
         # Will be set during lazy initialization
         self._llm_client = None
@@ -122,32 +121,39 @@ class Koa:
         # 1. LLM client
         api_key = llm_cfg.get("api_key")
 
-        from .llm.litellm_client import LiteLLMClient
         from .llm.base import LLMConfig
+        from .llm.litellm_client import LiteLLMClient
+
         llm_config = LLMConfig(model=model, api_key=api_key, base_url=llm_cfg.get("base_url"))
         self._llm_client = LiteLLMClient(config=llm_config, provider_name=provider)
         logger.info(f"LLM client: provider={provider}, model={model}")
 
         # 2. Database
         from .db import Database
+
         self._database = Database(dsn=cfg["database"])
         await self._database.initialize()
 
         # 3. CredentialStore
         from .credentials import CredentialStore
+
         self._credential_store = CredentialStore(db=self._database)
         await self._credential_store.initialize()
 
         # Set default store for AccountResolver (agents call it as classmethod)
         from .providers.email.resolver import AccountResolver
+
         AccountResolver.set_default_store(self._credential_store)
 
         # 4. MomexMemory
         from .memory.momex import MomexMemory
+
         momex_provider = provider
         # Map Koa provider names to momex provider names
         if momex_provider in ("gemini", "ollama"):
-            momex_provider = "openai"  # fallback: momex only supports openai/azure/anthropic/deepseek/qwen
+            momex_provider = (
+                "openai"  # fallback: momex only supports openai/azure/anthropic/deepseek/qwen
+            )
 
         # Embedding config
         embedding_cfg = cfg["embedding"]
@@ -172,20 +178,21 @@ class Koa:
 
         # 5. Agent discovery — scan builtin_agents
         from .agents.discovery import AgentDiscovery
+
         discovery = AgentDiscovery()
         discovery.scan_package("koa.builtin_agents")
         discovery.sync_from_global_registry()
-        logger.info(
-            f"Discovered {len(discovery.get_discovered_agents())} builtin agents"
-        )
+        logger.info(f"Discovered {len(discovery.get_discovered_agents())} builtin agents")
 
         # 6. AgentRegistry
         from .config import AgentRegistry
+
         self._agent_registry = AgentRegistry()
         await self._agent_registry.initialize()
 
         # Register LLM as default in LLMRegistry
         from .llm.registry import LLMRegistry
+
         llm_registry = LLMRegistry.get_instance()
         llm_registry.register("default", self._llm_client)
         llm_registry.set_default("default")
@@ -193,6 +200,7 @@ class Koa:
         # 6b. Additional LLM providers (for model routing)
         from .llm.base import LLMConfig as _LLMConfig
         from .llm.litellm_client import LiteLLMClient as _LiteLLMClient
+
         for name, prov_cfg in cfg.get("llm_providers", {}).items():
             if name == "default":
                 continue  # already registered above
@@ -207,7 +215,9 @@ class Koa:
                     provider_name=prov_cfg.get("provider", "openai"),
                 )
                 llm_registry.register(name, _prov_client)
-                logger.info(f"Registered LLM provider: {name} ({prov_cfg.get('provider')}/{prov_cfg['model']})")
+                logger.info(
+                    f"Registered LLM provider: {name} ({prov_cfg.get('provider')}/{prov_cfg['model']})"
+                )
             except Exception as e:
                 logger.warning(f"Failed to register LLM provider '{name}': {e}")
 
@@ -216,14 +226,17 @@ class Koa:
         routing_cfg = cfg.get("model_routing", {})
         if routing_cfg.get("enabled"):
             from .llm.router import ModelRouter, RoutingRule
+
             rules = []
             for rule_cfg in routing_cfg.get("rules", []):
                 score_range = rule_cfg.get("score_range", [0, 100])
-                rules.append(RoutingRule(
-                    min_score=score_range[0],
-                    max_score=score_range[1],
-                    provider=rule_cfg["provider"],
-                ))
+                rules.append(
+                    RoutingRule(
+                        min_score=score_range[0],
+                        max_score=score_range[1],
+                        provider=rule_cfg["provider"],
+                    )
+                )
             self._model_router = ModelRouter(
                 registry=llm_registry,
                 classifier_provider=routing_cfg.get("classifier_provider", "default"),
@@ -237,15 +250,22 @@ class Koa:
 
         # 7. TriggerEngine + Notifications
         from .triggers import (
-            TriggerEngine, OrchestratorExecutor,
-            PipelineExecutor, CallbackNotification, EmailEventHandler,
+            CallbackNotification,
+            EmailEventHandler,
+            OrchestratorExecutor,
+            PipelineExecutor,
+            TriggerEngine,
         )
 
         # TriggerEngine
         self._trigger_engine = TriggerEngine()
 
         # CallbackNotification — if callbacks.notify_url configured
-        callback_url = cfg.get("callbacks", {}).get("notify_url") if isinstance(cfg.get("callbacks"), dict) else None
+        callback_url = (
+            cfg.get("callbacks", {}).get("notify_url")
+            if isinstance(cfg.get("callbacks"), dict)
+            else None
+        )
         callback_notification = None
         if callback_url:
             callback_notification = CallbackNotification(callback_url=callback_url)
@@ -254,6 +274,7 @@ class Koa:
 
         # 8. Checkpoint storage (PostgreSQL)
         from .checkpoint import CheckpointManager, PostgreSQLStorage
+
         checkpoint_storage = PostgreSQLStorage(db=self._database)
         await checkpoint_storage.initialize()
         checkpoint_manager = CheckpointManager(storage=checkpoint_storage)
@@ -261,6 +282,7 @@ class Koa:
         # 9. Orchestrator
         from .orchestrator import Orchestrator
         from .orchestrator.reminder_guard import reminder_guard_hook
+
         self._orchestrator = Orchestrator(
             momex=self._momex,
             llm_client=self._llm_client,
@@ -325,10 +347,10 @@ class Koa:
                 )
 
         # CronService setup
-        from .triggers.cron.pg_store import PostgresCronJobStore
-        from .triggers.cron.pg_run_log import PostgresCronRunLog
-        from .triggers.cron.executor import CronExecutor as CronJobExecutor
         from .triggers.cron.delivery import CronDeliveryHandler
+        from .triggers.cron.executor import CronExecutor as CronJobExecutor
+        from .triggers.cron.pg_run_log import PostgresCronRunLog
+        from .triggers.cron.pg_store import PostgresCronJobStore
         from .triggers.cron.service import CronService
 
         cron_store = PostgresCronJobStore(db=self._database)
@@ -386,12 +408,15 @@ class Koa:
         supabase_cfg = cfg.get("supabase")
         if isinstance(supabase_cfg, dict) and supabase_cfg.get("url"):
             from .providers.cloud_storage.supabase_storage import SupabaseStorageProvider
-            self._supabase_storage = SupabaseStorageProvider(credentials={
-                "provider": "supabase",
-                "supabase_url": supabase_cfg["url"],
-                "supabase_key": supabase_cfg.get("service_role_key", ""),
-                "bucket": supabase_cfg.get("storage_bucket", "koa-files"),
-            })
+
+            self._supabase_storage = SupabaseStorageProvider(
+                credentials={
+                    "provider": "supabase",
+                    "supabase_url": supabase_cfg["url"],
+                    "supabase_key": supabase_cfg.get("service_role_key", ""),
+                    "bucket": supabase_cfg.get("storage_bucket", "koa-files"),
+                }
+            )
             self._orchestrator._supabase_storage = self._supabase_storage
             logger.info("Supabase Storage configured")
 
@@ -439,159 +464,180 @@ class Koa:
             existing_names = {j.name for j in existing}
 
             from .triggers.cron.models import (
-                CronJobCreate, CronScheduleSpec, SessionTarget,
-                WakeMode, AgentTurnPayload, DeliveryConfig, DeliveryMode,
+                AgentTurnPayload,
+                CronJobCreate,
+                CronScheduleSpec,
+                DeliveryConfig,
+                DeliveryMode,
+                SessionTarget,
+                WakeMode,
             )
 
             jobs_to_create = []
 
             if "Proactive: Calendar Check" not in existing_names:
-                jobs_to_create.append(CronJobCreate(
-                    name="Proactive: Calendar Check",
-                    description="Morning scan of today's calendar; schedules precise one-shot reminders.",
-                    user_id=tenant_id,
-                    schedule=CronScheduleSpec(expr="0 7 * * *"),
-                    session_target=SessionTarget.ISOLATED,
-                    wake_mode=WakeMode.NEXT_HEARTBEAT,
-                    payload=AgentTurnPayload(
-                        message="Scan today's calendar events. For each event with a start time: "
-                                "1) Create a reminder 30 minutes before the event with the event name, time, and meeting link. "
-                                "2) If the event has a location, create a reminder 45 minutes before suggesting when to leave. "
-                                "3) If the event has attendees, create a reminder 10 minutes before with attendee context. "
-                                "Use the cron system to schedule each reminder as a one-shot 'at' job. "
-                                "If no events today, respond with nothing_to_report."
-                    ),
-                    delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
-                ))
+                jobs_to_create.append(
+                    CronJobCreate(
+                        name="Proactive: Calendar Check",
+                        description="Morning scan of today's calendar; schedules precise one-shot reminders.",
+                        user_id=tenant_id,
+                        schedule=CronScheduleSpec(expr="0 7 * * *"),
+                        session_target=SessionTarget.ISOLATED,
+                        wake_mode=WakeMode.NEXT_HEARTBEAT,
+                        payload=AgentTurnPayload(
+                            message="Scan today's calendar events. For each event with a start time: "
+                            "1) Create a reminder 30 minutes before the event with the event name, time, and meeting link. "
+                            "2) If the event has a location, create a reminder 45 minutes before suggesting when to leave. "
+                            "3) If the event has attendees, create a reminder 10 minutes before with attendee context. "
+                            "Use the cron system to schedule each reminder as a one-shot 'at' job. "
+                            "If no events today, respond with nothing_to_report."
+                        ),
+                        delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
+                    )
+                )
 
             if "Proactive: Task Check" not in existing_names:
-                jobs_to_create.append(CronJobCreate(
-                    name="Proactive: Task Check",
-                    description="Check for overdue and today-due tasks.",
-                    user_id=tenant_id,
-                    schedule=CronScheduleSpec(expr="0 9 * * *"),
-                    session_target=SessionTarget.ISOLATED,
-                    wake_mode=WakeMode.NEXT_HEARTBEAT,
-                    payload=AgentTurnPayload(
-                        message="Check for overdue and today-due tasks. "
-                                "If any, notify the user with a brief summary. "
-                                "If nothing, respond with nothing_to_report."
-                    ),
-                    delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
-                ))
+                jobs_to_create.append(
+                    CronJobCreate(
+                        name="Proactive: Task Check",
+                        description="Check for overdue and today-due tasks.",
+                        user_id=tenant_id,
+                        schedule=CronScheduleSpec(expr="0 9 * * *"),
+                        session_target=SessionTarget.ISOLATED,
+                        wake_mode=WakeMode.NEXT_HEARTBEAT,
+                        payload=AgentTurnPayload(
+                            message="Check for overdue and today-due tasks. "
+                            "If any, notify the user with a brief summary. "
+                            "If nothing, respond with nothing_to_report."
+                        ),
+                        delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
+                    )
+                )
 
             if "Proactive: Subscription Check" not in existing_names:
-                jobs_to_create.append(CronJobCreate(
-                    name="Proactive: Subscription Check",
-                    description="Check for subscriptions renewing in the next 3 days.",
-                    user_id=tenant_id,
-                    schedule=CronScheduleSpec(expr="0 10 * * *"),
-                    session_target=SessionTarget.ISOLATED,
-                    wake_mode=WakeMode.NEXT_HEARTBEAT,
-                    payload=AgentTurnPayload(
-                        message="Check for subscriptions renewing in the next 3 days. "
-                                "If any, notify the user with name, price, and renewal date. "
-                                "If nothing, respond with nothing_to_report."
-                    ),
-                    delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
-                ))
+                jobs_to_create.append(
+                    CronJobCreate(
+                        name="Proactive: Subscription Check",
+                        description="Check for subscriptions renewing in the next 3 days.",
+                        user_id=tenant_id,
+                        schedule=CronScheduleSpec(expr="0 10 * * *"),
+                        session_target=SessionTarget.ISOLATED,
+                        wake_mode=WakeMode.NEXT_HEARTBEAT,
+                        payload=AgentTurnPayload(
+                            message="Check for subscriptions renewing in the next 3 days. "
+                            "If any, notify the user with name, price, and renewal date. "
+                            "If nothing, respond with nothing_to_report."
+                        ),
+                        delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
+                    )
+                )
 
             # --- Evening Summary (F3) ---
             if "Proactive: Evening Summary" not in existing_names:
-                jobs_to_create.append(CronJobCreate(
-                    name="Proactive: Evening Summary",
-                    description="End-of-day recap and tomorrow preview.",
-                    user_id=tenant_id,
-                    schedule=CronScheduleSpec(expr="0 21 * * *"),
-                    session_target=SessionTarget.ISOLATED,
-                    wake_mode=WakeMode.NEXT_HEARTBEAT,
-                    payload=AgentTurnPayload(
-                        message="Generate a brief evening summary for the user. Include: "
-                                "1) What they accomplished today (tasks completed, emails handled). "
-                                "2) Tomorrow's first event and how many meetings they have. "
-                                "3) Any overdue tasks they should tackle tomorrow. "
-                                "Keep it warm and concise (3-4 lines). "
-                                "If nothing notable happened and tomorrow is clear, respond with nothing_to_report."
-                    ),
-                    delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
-                ))
+                jobs_to_create.append(
+                    CronJobCreate(
+                        name="Proactive: Evening Summary",
+                        description="End-of-day recap and tomorrow preview.",
+                        user_id=tenant_id,
+                        schedule=CronScheduleSpec(expr="0 21 * * *"),
+                        session_target=SessionTarget.ISOLATED,
+                        wake_mode=WakeMode.NEXT_HEARTBEAT,
+                        payload=AgentTurnPayload(
+                            message="Generate a brief evening summary for the user. Include: "
+                            "1) What they accomplished today (tasks completed, emails handled). "
+                            "2) Tomorrow's first event and how many meetings they have. "
+                            "3) Any overdue tasks they should tackle tomorrow. "
+                            "Keep it warm and concise (3-4 lines). "
+                            "If nothing notable happened and tomorrow is clear, respond with nothing_to_report."
+                        ),
+                        delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
+                    )
+                )
 
             # --- Weekly Planning (F4) ---
             if "Proactive: Weekly Planning" not in existing_names:
-                jobs_to_create.append(CronJobCreate(
-                    name="Proactive: Weekly Planning",
-                    description="Sunday evening next-week overview.",
-                    user_id=tenant_id,
-                    schedule=CronScheduleSpec(expr="0 19 * * 0"),
-                    session_target=SessionTarget.ISOLATED,
-                    wake_mode=WakeMode.NEXT_HEARTBEAT,
-                    payload=AgentTurnPayload(
-                        message="Generate a brief weekly preview for next week. Include: "
-                                "1) Total meetings and busiest day. "
-                                "2) Any deadlines or important dates. "
-                                "3) Tasks carrying over from this week. "
-                                "Keep it to 4-5 lines max. Be encouraging. "
-                                "If next week is completely empty, say so briefly — don't skip."
-                    ),
-                    delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
-                ))
+                jobs_to_create.append(
+                    CronJobCreate(
+                        name="Proactive: Weekly Planning",
+                        description="Sunday evening next-week overview.",
+                        user_id=tenant_id,
+                        schedule=CronScheduleSpec(expr="0 19 * * 0"),
+                        session_target=SessionTarget.ISOLATED,
+                        wake_mode=WakeMode.NEXT_HEARTBEAT,
+                        payload=AgentTurnPayload(
+                            message="Generate a brief weekly preview for next week. Include: "
+                            "1) Total meetings and busiest day. "
+                            "2) Any deadlines or important dates. "
+                            "3) Tasks carrying over from this week. "
+                            "Keep it to 4-5 lines max. Be encouraging. "
+                            "If next week is completely empty, say so briefly — don't skip."
+                        ),
+                        delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
+                    )
+                )
 
             # --- Task Rollover (F20) ---
             if "Proactive: Task Rollover" not in existing_names:
-                jobs_to_create.append(CronJobCreate(
-                    name="Proactive: Task Rollover",
-                    description="Evening check for incomplete today-due tasks.",
-                    user_id=tenant_id,
-                    schedule=CronScheduleSpec(expr="0 20 * * *"),
-                    session_target=SessionTarget.ISOLATED,
-                    wake_mode=WakeMode.NEXT_HEARTBEAT,
-                    payload=AgentTurnPayload(
-                        message="Check for tasks that were due today but not completed. "
-                                "If any, list them briefly and suggest moving to tomorrow. "
-                                "If all tasks are done or none were due, respond with nothing_to_report."
-                    ),
-                    delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
-                ))
+                jobs_to_create.append(
+                    CronJobCreate(
+                        name="Proactive: Task Rollover",
+                        description="Evening check for incomplete today-due tasks.",
+                        user_id=tenant_id,
+                        schedule=CronScheduleSpec(expr="0 20 * * *"),
+                        session_target=SessionTarget.ISOLATED,
+                        wake_mode=WakeMode.NEXT_HEARTBEAT,
+                        payload=AgentTurnPayload(
+                            message="Check for tasks that were due today but not completed. "
+                            "If any, list them briefly and suggest moving to tomorrow. "
+                            "If all tasks are done or none were due, respond with nothing_to_report."
+                        ),
+                        delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
+                    )
+                )
 
             # --- Departure Weather Alert (F9) ---
             if "Proactive: Weather Alert" not in existing_names:
-                jobs_to_create.append(CronJobCreate(
-                    name="Proactive: Weather Alert",
-                    description="Intelligent weather alerts based on forecast changes.",
-                    user_id=tenant_id,
-                    schedule=CronScheduleSpec(expr="0 7,17 * * *"),
-                    session_target=SessionTarget.ISOLATED,
-                    wake_mode=WakeMode.NEXT_HEARTBEAT,
-                    payload=AgentTurnPayload(
-                        message="Check the weather forecast at the user's location for the next 24 hours. "
-                                "Look for WEATHER CHANGES — specifically:\n"
-                                "1. If rain/snow starts later today, tell the user WHEN it starts (e.g. 'Rain starting around 3 PM, bring an umbrella')\n"
-                                "2. If temperature drops >10°C in next 12 hours, warn them\n"
-                                "3. Extreme heat >35°C or cold <0°C expected\n"
-                                "4. Severe weather warnings (storms, high winds)\n"
-                                "If weather is stable and pleasant all day, respond with nothing_to_report.\n"
-                                "Be specific about TIMING — 'rain at 3 PM' is useful, 'it might rain' is not."
-                    ),
-                    delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
-                ))
+                jobs_to_create.append(
+                    CronJobCreate(
+                        name="Proactive: Weather Alert",
+                        description="Intelligent weather alerts based on forecast changes.",
+                        user_id=tenant_id,
+                        schedule=CronScheduleSpec(expr="0 7,17 * * *"),
+                        session_target=SessionTarget.ISOLATED,
+                        wake_mode=WakeMode.NEXT_HEARTBEAT,
+                        payload=AgentTurnPayload(
+                            message="Check the weather forecast at the user's location for the next 24 hours. "
+                            "Look for WEATHER CHANGES — specifically:\n"
+                            "1. If rain/snow starts later today, tell the user WHEN it starts (e.g. 'Rain starting around 3 PM, bring an umbrella')\n"
+                            "2. If temperature drops >10°C in next 12 hours, warn them\n"
+                            "3. Extreme heat >35°C or cold <0°C expected\n"
+                            "4. Severe weather warnings (storms, high winds)\n"
+                            "If weather is stable and pleasant all day, respond with nothing_to_report.\n"
+                            "Be specific about TIMING — 'rain at 3 PM' is useful, 'it might rain' is not."
+                        ),
+                        delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
+                    )
+                )
 
             # --- Habit Discovery (weekly) ---
             if "Proactive: Habit Discovery" not in existing_names:
-                jobs_to_create.append(CronJobCreate(
-                    name="Proactive: Habit Discovery",
-                    description="Weekly analysis of user behavior patterns.",
-                    user_id=tenant_id,
-                    schedule=CronScheduleSpec(expr="0 3 * * 0"),  # Sunday 3am
-                    session_target=SessionTarget.ISOLATED,
-                    wake_mode=WakeMode.NEXT_HEARTBEAT,
-                    payload=AgentTurnPayload(
-                        message="Analyze the user's behavior patterns from the past week. "
-                                "Discover habits like active hours, most-used features, and weekly rhythm. "
-                                "Store discoveries and adjust notification schedules accordingly. "
-                                "Respond with nothing_to_report (this is a background analysis, don't notify the user)."
-                    ),
-                    delivery=DeliveryConfig(mode=DeliveryMode.NONE),
-                ))
+                jobs_to_create.append(
+                    CronJobCreate(
+                        name="Proactive: Habit Discovery",
+                        description="Weekly analysis of user behavior patterns.",
+                        user_id=tenant_id,
+                        schedule=CronScheduleSpec(expr="0 3 * * 0"),  # Sunday 3am
+                        session_target=SessionTarget.ISOLATED,
+                        wake_mode=WakeMode.NEXT_HEARTBEAT,
+                        payload=AgentTurnPayload(
+                            message="Analyze the user's behavior patterns from the past week. "
+                            "Discover habits like active hours, most-used features, and weekly rhythm. "
+                            "Store discoveries and adjust notification schedules accordingly. "
+                            "Respond with nothing_to_report (this is a background analysis, don't notify the user)."
+                        ),
+                        delivery=DeliveryConfig(mode=DeliveryMode.NONE),
+                    )
+                )
 
             for job_input in jobs_to_create:
                 await self._cron_service.add(job_input)
@@ -645,15 +691,21 @@ class Koa:
 
     # ── Public API methods (issue #12) ──
 
-    async def list_credentials(self, tenant_id: str = "default", service: Optional[str] = None) -> List[dict]:
+    async def list_credentials(
+        self, tenant_id: str = "default", service: Optional[str] = None
+    ) -> List[dict]:
         """List stored credentials for a tenant."""
         await self._ensure_initialized()
         return await self._credential_store.list(tenant_id, service=service)
 
-    async def save_credential(self, tenant_id: str, service: str, credentials: dict, account_name: str = "primary") -> None:
+    async def save_credential(
+        self, tenant_id: str, service: str, credentials: dict, account_name: str = "primary"
+    ) -> None:
         """Save a credential entry and reload API keys into env."""
         await self._ensure_initialized()
-        await self._credential_store.save(tenant_id=tenant_id, service=service, credentials=credentials, account_name=account_name)
+        await self._credential_store.save(
+            tenant_id=tenant_id, service=service, credentials=credentials, account_name=account_name
+        )
         await self._load_credentials_to_env()
         # Auto-register proactive cron jobs when a service is first connected
         await self._ensure_proactive_jobs(tenant_id)
@@ -661,9 +713,13 @@ class Koa:
     async def delete_credential(self, tenant_id: str, service: str, account_name: str) -> bool:
         """Delete a credential entry. Returns True if deleted."""
         await self._ensure_initialized()
-        return await self._credential_store.delete(tenant_id=tenant_id, service=service, account_name=account_name)
+        return await self._credential_store.delete(
+            tenant_id=tenant_id, service=service, account_name=account_name
+        )
 
-    async def find_credential_by_email(self, email: str, service: Optional[str] = None, tenant_id: Optional[str] = None):
+    async def find_credential_by_email(
+        self, email: str, service: Optional[str] = None, tenant_id: Optional[str] = None
+    ):
         """Find credentials by email address, optionally scoped to a tenant."""
         await self._ensure_initialized()
         return await self._credential_store.find_by_email(email, service, tenant_id=tenant_id)
@@ -678,17 +734,29 @@ class Koa:
         await self._ensure_initialized()
         return await self._credential_store.get(tenant_id, service, account_name)
 
-    async def save_credential_raw(self, tenant_id: str, service: str, credentials: dict, account_name: str = "primary") -> None:
+    async def save_credential_raw(
+        self, tenant_id: str, service: str, credentials: dict, account_name: str = "primary"
+    ) -> None:
         """Save credentials without reloading API keys (for internal/OAuth use)."""
         await self._ensure_initialized()
-        await self._credential_store.save(tenant_id=tenant_id, service=service, credentials=credentials, account_name=account_name)
+        await self._credential_store.save(
+            tenant_id=tenant_id, service=service, credentials=credentials, account_name=account_name
+        )
 
-    async def save_oauth_state(self, tenant_id: str, service: str, redirect_after: Optional[str] = None, account_name: str = "primary") -> str:
+    async def save_oauth_state(
+        self,
+        tenant_id: str,
+        service: str,
+        redirect_after: Optional[str] = None,
+        account_name: str = "primary",
+    ) -> str:
         """Save OAuth state and return the state token."""
         await self._ensure_initialized()
         return await self._credential_store.save_oauth_state(
-            tenant_id=tenant_id, service=service,
-            redirect_after=redirect_after, account_name=account_name,
+            tenant_id=tenant_id,
+            service=service,
+            redirect_after=redirect_after,
+            account_name=account_name,
         )
 
     async def consume_oauth_state(self, state: str) -> Optional[dict]:
@@ -714,7 +782,10 @@ class Koa:
         """Send a message and get a response via the orchestrator."""
         await self._ensure_initialized()
         return await self._orchestrator.handle_message(
-            tenant_id=tenant_id, message=message, images=images, metadata=metadata,
+            tenant_id=tenant_id,
+            message=message,
+            images=images,
+            metadata=metadata,
         )
 
     async def stream_message(
@@ -727,7 +798,10 @@ class Koa:
         """Stream a message response via the orchestrator."""
         await self._ensure_initialized()
         async for event in self._orchestrator.stream_message(
-            tenant_id=tenant_id, message=message, images=images, metadata=metadata,
+            tenant_id=tenant_id,
+            message=message,
+            images=images,
+            metadata=metadata,
         ):
             yield event
 
@@ -766,7 +840,9 @@ class Koa:
         """Access the cron service (may be None)."""
         return self._cron_service
 
-    async def list_cron_jobs(self, tenant_id: str = "default", include_disabled: bool = False) -> list:
+    async def list_cron_jobs(
+        self, tenant_id: str = "default", include_disabled: bool = False
+    ) -> list:
         """List cron jobs for a tenant."""
         await self._ensure_initialized()
         if not self._cron_service:
@@ -786,6 +862,7 @@ class Koa:
         if not self._cron_service:
             raise RuntimeError("CronService not available")
         from .triggers.cron.models import CronJobCreate
+
         input_data = CronJobCreate(**kwargs)
         return await self._cron_service.add(input_data)
 

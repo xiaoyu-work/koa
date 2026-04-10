@@ -29,7 +29,7 @@ Usage::
 import json
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -100,6 +100,7 @@ Respond ONLY with a JSON object. No other text.
 # Data classes
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class RoutingRule:
     """Maps a complexity score range to an LLM provider name."""
@@ -125,6 +126,7 @@ class RoutingDecision:
 # ---------------------------------------------------------------------------
 # Router
 # ---------------------------------------------------------------------------
+
 
 class ModelRouter:
     """Routes requests to different LLM providers based on complexity.
@@ -179,10 +181,9 @@ class ModelRouter:
         try:
             # Build a lightweight context for the classifier: system prompt
             # plus the tail of the conversation (skip tool-call messages).
-            recent = [
-                m for m in messages
-                if m.get("role") in ("user", "assistant")
-            ][-self.HISTORY_TURNS:]
+            recent = [m for m in messages if m.get("role") in ("user", "assistant")][
+                -self.HISTORY_TURNS :
+            ]
 
             classifier_messages: List[Dict[str, Any]] = [
                 {"role": "system", "content": CLASSIFIER_SYSTEM_PROMPT},
@@ -192,8 +193,7 @@ class ModelRouter:
             classifier_client = self.registry.get(self.classifier_provider)
             if classifier_client is None:
                 raise RuntimeError(
-                    f"Classifier provider '{self.classifier_provider}' "
-                    f"not found in LLMRegistry"
+                    f"Classifier provider '{self.classifier_provider}' not found in LLMRegistry"
                 )
 
             resp = await classifier_client.chat_completion(
@@ -222,8 +222,7 @@ class ModelRouter:
 
             elapsed = (time.monotonic() - start) * 1000
             logger.info(
-                f"[ModelRouter] score={score} -> {provider} "
-                f"({elapsed:.0f}ms) | {reasoning}"
+                f"[ModelRouter] score={score} -> {provider} ({elapsed:.0f}ms) | {reasoning}"
             )
             return RoutingDecision(
                 provider=provider,

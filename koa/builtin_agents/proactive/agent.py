@@ -5,10 +5,9 @@ Designed to be triggered by CronService. Calls calendar, task, and
 subscription check tools, then formats a concise notification.
 """
 
-from datetime import datetime, timezone
-
 from koa import valet
 from koa.standard_agent import StandardAgent
+
 from .habit_discovery import analyze_user_habits
 
 
@@ -49,4 +48,6 @@ Rules:
             timezone=tz_name,
         )
 
-    tools = (analyze_user_habits,)  # Additional tools provided by the orchestrator based on user's connected services
+    tools = (
+        analyze_user_habits,
+    )  # Additional tools provided by the orchestrator based on user's connected services

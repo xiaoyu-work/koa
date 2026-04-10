@@ -1,12 +1,13 @@
 """Tests for the LLM circuit breaker."""
 
 import time
+
 import pytest
+
 from koa.llm.circuit_breaker import CircuitBreaker, CircuitBreakerOpenError, CircuitState
 
 
 class TestCircuitBreaker:
-
     def test_initial_state_is_closed(self):
         cb = CircuitBreaker(failure_threshold=3, recovery_timeout=10)
         assert cb.state == CircuitState.CLOSED

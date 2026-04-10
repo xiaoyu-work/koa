@@ -44,6 +44,7 @@ async def test_tool_selection(orchestrator_factory, user_input, expected_tools):
 # Argument extraction
 # ---------------------------------------------------------------------------
 
+
 async def test_lights_off_extracts_action_and_target(orchestrator_factory):
     """Turning off living room lights should pass action=off and target=living room."""
     orch, recorder = await orchestrator_factory()
@@ -73,9 +74,7 @@ async def test_lights_brightness_extracts_value(orchestrator_factory):
     # Value should be 50 (or "50")
     value = args.get("value")
     assert value is not None, f"Expected value in args, got {args}"
-    assert str(value).strip("%") == "50" or value == 50, (
-        f"Expected value=50, got {value}"
-    )
+    assert str(value).strip("%") == "50" or value == 50, f"Expected value=50, got {value}"
 
 
 async def test_speaker_play_action(orchestrator_factory):
@@ -110,12 +109,11 @@ async def test_speaker_volume_extracts_value(orchestrator_factory):
 # Response quality
 # ---------------------------------------------------------------------------
 
+
 async def test_response_quality_lights_off(orchestrator_factory, llm_judge):
     """Turning off lights should confirm the action."""
     orch, recorder = await orchestrator_factory()
-    result = await orch.handle_message(
-        "test_user", "Turn off the living room lights"
-    )
+    result = await orch.handle_message("test_user", "Turn off the living room lights")
     response = result.raw_message if hasattr(result, "raw_message") else str(result)
 
     passed = await llm_judge(
@@ -132,9 +130,7 @@ async def test_response_quality_lights_off(orchestrator_factory, llm_judge):
 async def test_response_quality_speaker_play(orchestrator_factory, llm_judge):
     """Playing music should confirm playback started."""
     orch, recorder = await orchestrator_factory()
-    result = await orch.handle_message(
-        "test_user", "Play music on the living room speaker"
-    )
+    result = await orch.handle_message("test_user", "Play music on the living room speaker")
     response = result.raw_message if hasattr(result, "raw_message") else str(result)
 
     passed = await llm_judge(

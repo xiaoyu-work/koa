@@ -32,6 +32,7 @@ def _ensure_litellm_imports():
         return
     try:
         import litellm.exceptions  # noqa: F401
+
         _LITELLM_AVAILABLE = True
     except ImportError:
         _LITELLM_AVAILABLE = False
@@ -47,16 +48,16 @@ def classify_llm_error(exc: Exception) -> LLMErrorKind:
 
     if _LITELLM_AVAILABLE:
         from litellm.exceptions import (
-            RateLimitError,
-            ContextWindowExceededError,
-            AuthenticationError,
-            Timeout,
-            BadRequestError,
-            ServiceUnavailableError,
-            PermissionDeniedError,
-            BadGatewayError,
-            InternalServerError,
             APIConnectionError,
+            AuthenticationError,
+            BadGatewayError,
+            BadRequestError,
+            ContextWindowExceededError,
+            InternalServerError,
+            PermissionDeniedError,
+            RateLimitError,
+            ServiceUnavailableError,
+            Timeout,
         )
 
         if isinstance(exc, RateLimitError):

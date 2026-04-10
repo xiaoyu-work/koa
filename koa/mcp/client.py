@@ -7,16 +7,14 @@ This provides a reference implementation. Users can:
 """
 
 import logging
-import json
-from typing import List, Dict, Any, Optional
-from abc import ABC, abstractmethod
+from typing import Any, Callable, Dict, List, Optional
 
 from .models import (
-    MCPServerConfig,
-    MCPTool,
-    MCPResource,
     MCPCallResult,
     MCPPrompt,
+    MCPResource,
+    MCPServerConfig,
+    MCPTool,
     MCPTransportType,
 )
 from .protocol import MCPClientProtocol
@@ -181,11 +179,7 @@ class MCPClient(MCPClientProtocol):
             raise ConnectionError("Not connected to MCP server")
         return self._tools
 
-    async def call_tool(
-        self,
-        name: str,
-        arguments: Dict[str, Any]
-    ) -> MCPCallResult:
+    async def call_tool(self, name: str, arguments: Dict[str, Any]) -> MCPCallResult:
         """
         Call a tool on the MCP server
 
@@ -202,22 +196,14 @@ class MCPClient(MCPClientProtocol):
         # Find the tool
         tool = next((t for t in self._tools if t.name == name), None)
         if not tool:
-            return MCPCallResult(
-                content=None,
-                is_error=True,
-                error_message=f"Unknown tool: {name}"
-            )
+            return MCPCallResult(content=None, is_error=True, error_message=f"Unknown tool: {name}")
 
         try:
             result = await self._execute_tool(name, arguments)
             return MCPCallResult(content=result)
         except Exception as e:
             logger.error(f"Tool execution failed: {name} - {e}")
-            return MCPCallResult(
-                content=None,
-                is_error=True,
-                error_message=str(e)
-            )
+            return MCPCallResult(content=None, is_error=True, error_message=str(e))
 
     async def _execute_tool(self, name: str, arguments: Dict[str, Any]) -> Any:
         """Execute tool - override for actual implementation"""
@@ -241,11 +227,7 @@ class MCPClient(MCPClientProtocol):
             raise ConnectionError("Not connected to MCP server")
         return self._prompts
 
-    async def get_prompt(
-        self,
-        name: str,
-        arguments: Optional[Dict[str, Any]] = None
-    ) -> str:
+    async def get_prompt(self, name: str, arguments: Optional[Dict[str, Any]] = None) -> str:
         """Get a rendered prompt"""
         if not self._connected:
             raise ConnectionError("Not connected to MCP server")
@@ -280,13 +262,9 @@ class MockMCPClient(MCPClient):
         name: str = "mock-server",
         tools: Optional[List[MCPTool]] = None,
         resources: Optional[List[MCPResource]] = None,
-        tool_handler: Optional[callable] = None
+        tool_handler: Optional[Callable] = None,
     ):
-        config = MCPServerConfig(
-            name=name,
-            transport=MCPTransportType.STDIO,
-            command="mock"
-        )
+        config = MCPServerConfig(name=name, transport=MCPTransportType.STDIO, command="mock")
         super().__init__(config)
         self._mock_tools = tools or []
         self._mock_resources = resources or []
@@ -304,5 +282,5 @@ class MockMCPClient(MCPClient):
 
     async def _execute_tool(self, name: str, arguments: Dict[str, Any]) -> Any:
         if self._tool_handler:
-            return await self._tool_handler(name, arguments)
+            return await self._tool_handler(name, arguments)  # type: ignore[misc]
         return {"result": f"Mock result for {name}", "arguments": arguments}

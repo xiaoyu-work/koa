@@ -53,6 +53,7 @@ async def test_tool_selection(conversation, user_input, expected_tools):
 # Argument extraction
 # ---------------------------------------------------------------------------
 
+
 async def test_extracts_create_task_title(conversation):
     """create_task should receive the correct title from the user message."""
     conv = await conversation()
@@ -69,9 +70,7 @@ async def test_extracts_create_task_title(conversation):
 async def test_extracts_create_task_due_date(conversation):
     """create_task should extract a due date when one is mentioned."""
     conv = await conversation()
-    await conv.send_until_tool_called(
-        "Create a task to submit the report by 2026-03-15"
-    )
+    await conv.send_until_tool_called("Create a task to submit the report by 2026-03-15")
     conv.assert_tool_called("create_task")
 
     args = conv.get_tool_args("create_task")[0]
@@ -103,14 +102,13 @@ async def test_extracts_manage_reminders_action(conversation):
 
     args = conv.get_tool_args("manage_reminders")[0]
     action = args.get("action", "").lower()
-    assert action in ("list", "show"), (
-        f"Expected action='list' or 'show', got '{action}'"
-    )
+    assert action in ("list", "show"), f"Expected action='list' or 'show', got '{action}'"
 
 
 # ---------------------------------------------------------------------------
 # Response quality
 # ---------------------------------------------------------------------------
+
 
 async def test_response_quality_list_tasks(conversation, llm_judge):
     """Listing tasks should produce a readable, structured output."""
@@ -161,6 +159,7 @@ async def test_response_quality_set_reminder(conversation, llm_judge):
 # ---------------------------------------------------------------------------
 # Approval flow
 # ---------------------------------------------------------------------------
+
 
 async def test_create_task_triggers_approval(conversation):
     """create_task should pause for user approval before executing."""

@@ -10,18 +10,19 @@ Tests cover:
 - Parent checkpoint chaining
 """
 
-import pytest
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import Any, Dict, List
 
-from koa.checkpoint.manager import CheckpointManager, CheckpointError
+import pytest
+
+from koa.checkpoint.manager import CheckpointManager
 from koa.checkpoint.storage import MemoryStorage
 
 
 @dataclass
 class MockAgent:
     """Mock agent implementing the AgentProtocol"""
+
     agent_id: str = "agent_1"
     user_id: str = "user_1"
     status: Any = "collecting"
@@ -192,7 +193,7 @@ class TestGetCheckpointTree:
 class TestGetLatestCheckpoint:
     async def test_returns_latest(self, manager):
         agent = MockAgent()
-        cp1_id = await manager.save_checkpoint(agent)
+        await manager.save_checkpoint(agent)
         cp2_id = await manager.save_checkpoint(agent)
         latest = await manager.get_latest_checkpoint("agent_1")
         assert latest is not None

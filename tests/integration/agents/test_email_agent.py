@@ -25,8 +25,14 @@ TOOL_SELECTION_CASES = [
     ("Do I have any unread emails?", ["search_emails"]),
     ("Show emails from John", ["search_emails"]),
     ("Find the email about Q4 Report", ["search_emails"]),
-    ("Send an email to alice@example.com with subject Meeting and body See you at 3pm", ["send_email"]),
-    ("Email bob@company.com with subject Running Late and body I'll be 10 minutes late", ["send_email"]),
+    (
+        "Send an email to alice@example.com with subject Meeting and body See you at 3pm",
+        ["send_email"],
+    ),
+    (
+        "Email bob@company.com with subject Running Late and body I'll be 10 minutes late",
+        ["send_email"],
+    ),
     ("Reply to the email from my boss saying sounds good", ["reply_email", "search_emails"]),
     ("Delete the promotional emails", ["delete_emails", "search_emails"]),
     ("Archive all emails from Amazon", ["archive_emails", "search_emails"]),
@@ -48,6 +54,7 @@ async def test_tool_selection(conversation, user_input, expected_tools):
 # ---------------------------------------------------------------------------
 # Argument extraction
 # ---------------------------------------------------------------------------
+
 
 async def test_extracts_send_email_fields(conversation):
     """send_email should receive to, subject, and body from the user message."""
@@ -94,6 +101,7 @@ async def test_extracts_search_query_keywords(conversation):
 # Response quality
 # ---------------------------------------------------------------------------
 
+
 async def test_response_quality_check_inbox(conversation, llm_judge):
     """Checking emails should produce a readable listing of messages."""
     conv = await conversation()
@@ -126,6 +134,7 @@ async def test_response_quality_send(conversation, llm_judge):
 # ---------------------------------------------------------------------------
 # Approval flow
 # ---------------------------------------------------------------------------
+
 
 async def test_send_email_triggers_approval(conversation):
     """send_email should pause for user approval before executing."""

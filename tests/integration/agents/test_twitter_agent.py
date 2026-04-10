@@ -43,6 +43,7 @@ async def test_tool_selection(orchestrator_factory, user_input, expected_tools):
 # Argument extraction
 # ---------------------------------------------------------------------------
 
+
 async def test_extracts_tweet_text(orchestrator_factory):
     """post_tweet should receive the correct text content from the user message."""
     orch, recorder = await orchestrator_factory()
@@ -64,6 +65,7 @@ async def test_extracts_tweet_text(orchestrator_factory):
 # ---------------------------------------------------------------------------
 # Response quality
 # ---------------------------------------------------------------------------
+
 
 async def test_response_quality_search(orchestrator_factory, llm_judge):
     """Searching tweets should produce a readable summary of matching tweets."""

@@ -43,10 +43,12 @@ def _resolve_timezone(tz: Optional[str]) -> Optional[object]:
         return None
     try:
         from zoneinfo import ZoneInfo
+
         return ZoneInfo(tz)
     except ImportError:
         try:
             import pytz
+
             return pytz.timezone(tz)
         except ImportError:
             logger.warning(f"No timezone library available for tz={tz}")
@@ -56,6 +58,7 @@ def _resolve_timezone(tz: Optional[str]) -> Optional[object]:
 # ---------------------------------------------------------------------------
 # Core schedule computation
 # ---------------------------------------------------------------------------
+
 
 def compute_next_run_at_ms(schedule: Schedule, now_ms_val: int) -> Optional[int]:
     """Compute the next run time in ms for a schedule, given current time."""
@@ -120,6 +123,7 @@ def _compute_cron_next_ms(expr: str, tz: Optional[str], now_ms_val: int) -> Opti
 # Stagger computation
 # ---------------------------------------------------------------------------
 
+
 def compute_stagger_offset_ms(job_id: str, stagger_ms: int) -> int:
     """Compute a deterministic stagger offset using SHA256(job_id) % stagger_ms."""
     if stagger_ms <= 0:
@@ -159,6 +163,7 @@ def compute_staggered_cron_next_ms(job: CronJob, now_ms_val: int) -> Optional[in
 # ---------------------------------------------------------------------------
 # Job-level computation
 # ---------------------------------------------------------------------------
+
 
 def compute_job_next_run_at_ms(job: CronJob, now_ms_val: int) -> Optional[int]:
     """Compute next run time for a job, including stagger and fast-path for 'every'."""
@@ -216,4 +221,6 @@ def recompute_next_runs(jobs: List[CronJob], now_ms_val: Optional[int] = None) -
                 logger.warning(f"Schedule computation failed for job {job.id}: {e}")
                 if job.state.schedule_error_count >= 3:
                     job.enabled = False
-                    logger.error(f"Job {job.id} auto-disabled after {job.state.schedule_error_count} schedule errors")
+                    logger.error(
+                        f"Job {job.id} auto-disabled after {job.state.schedule_error_count} schedule errors"
+                    )

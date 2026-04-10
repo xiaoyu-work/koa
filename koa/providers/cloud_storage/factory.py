@@ -53,24 +53,28 @@ def _register_providers():
     """Auto-register all available cloud storage providers."""
     try:
         from .google_drive import GoogleDriveProvider
+
         CloudStorageProviderFactory.register_provider("google", GoogleDriveProvider)
     except ImportError as e:
         logger.warning(f"Google Drive provider not available: {e}")
 
     try:
         from .onedrive import OneDriveProvider
+
         CloudStorageProviderFactory.register_provider("onedrive", OneDriveProvider)
     except ImportError as e:
         logger.warning(f"OneDrive provider not available: {e}")
 
     try:
         from .dropbox_storage import DropboxProvider
+
         CloudStorageProviderFactory.register_provider("dropbox", DropboxProvider)
     except ImportError as e:
         logger.warning(f"Dropbox provider not available: {e}")
 
     try:
         from .supabase_storage import SupabaseStorageProvider
+
         CloudStorageProviderFactory.register_provider("supabase", SupabaseStorageProvider)
     except ImportError as e:
         logger.warning(f"Supabase storage provider not available: {e}")

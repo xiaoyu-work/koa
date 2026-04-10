@@ -11,8 +11,8 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Dict, Optional
 
-from koa.tool_decorator import tool
 from koa.models import AgentToolContext, ToolOutput
+from koa.tool_decorator import tool
 
 logger = logging.getLogger(__name__)
 
@@ -21,10 +21,11 @@ logger = logging.getLogger(__name__)
 # Shared Helpers
 # =============================================================================
 
+
 async def _get_provider(tenant_id: str):
     """Resolve the primary calendar account and return (provider, account) or (None, error_msg)."""
-    from koa.providers.calendar.resolver import CalendarAccountResolver
     from koa.providers.calendar.factory import CalendarProviderFactory
+    from koa.providers.calendar.resolver import CalendarAccountResolver
 
     account = await CalendarAccountResolver.resolve_account(tenant_id, "primary")
     if not account:
@@ -67,14 +68,17 @@ async def _parse_datetime_with_llm(time_str: str, llm_client) -> Optional[dateti
         f"Current time: {now.strftime('%Y-%m-%d %H:%M')}\n"
         f'Time expression: "{time_str}"\n\n'
         f"Return ONLY the datetime in ISO format (YYYY-MM-DDTHH:MM:SS), nothing else.\n"
-        f"If the expression is relative (like \"3pm\"), assume it means today or the next occurrence.\n\n"
+        f'If the expression is relative (like "3pm"), assume it means today or the next occurrence.\n\n'
         f"Output:"
     )
 
     try:
         result = await llm_client.chat_completion(
             messages=[
-                {"role": "system", "content": "You parse time expressions into ISO datetime format. Return ONLY the datetime string, nothing else."},
+                {
+                    "role": "system",
+                    "content": "You parse time expressions into ISO datetime format. Return ONLY the datetime string, nothing else.",
+                },
                 {"role": "user", "content": prompt},
             ],
             enable_thinking=False,
@@ -101,9 +105,13 @@ def _parse_time_to_datetime(time_str: str) -> datetime:
 # query_events
 # =============================================================================
 
+
 @tool
 async def query_events(
-    time_range: Annotated[str, "Time range to search (e.g., 'today', 'tomorrow', 'this week', 'next week', 'this month', 'next 3 days')"],
+    time_range: Annotated[
+        str,
+        "Time range to search (e.g., 'today', 'tomorrow', 'this week', 'next week', 'this month', 'next 3 days')",
+    ],
     query: Annotated[Optional[str], "Optional keywords to search in event titles"] = None,
     max_results: Annotated[int, "Maximum number of events to return (default 10)"] = 10,
     *,
@@ -177,12 +185,14 @@ async def query_events(
 
         media = []
         if event_cards:
-            media.append({
-                "type": "inline_cards",
-                "data": json.dumps(event_cards),
-                "media_type": "application/json",
-                "metadata": {"for_storage": False},
-            })
+            media.append(
+                {
+                    "type": "inline_cards",
+                    "data": json.dumps(event_cards),
+                    "media_type": "application/json",
+                    "metadata": {"for_storage": False},
+                }
+            )
 
         return ToolOutput(text=text_result, media=media)
 
@@ -195,6 +205,7 @@ async def query_events(
 # create_event
 # =============================================================================
 
+
 async def _preview_create_event(args: dict, context: AgentToolContext) -> str:
     """Generate a preview of the event to be created.
     Returns JSON with inline_cards for rich frontend rendering.
@@ -204,9 +215,9 @@ async def _preview_create_event(args: dict, context: AgentToolContext) -> str:
     summary = args.get("summary", "")
     start_str = args.get("start", "")
     end_str = args.get("end", "")
-    description = args.get("description", "")
+    args.get("description", "")
     location = args.get("location", "")
-    attendees = args.get("attendees", "")
+    args.get("attendees", "")
 
     if not end_str and start_str:
         try:
@@ -247,7 +258,12 @@ async def _preview_create_event(args: dict, context: AgentToolContext) -> str:
         text_parts.append(f"📍 {location}")
 
     # Embed card data as a JSON block the frontend can parse
-    return "\n".join(text_parts) + "\n\n<!-- inline_card:" + _json.dumps(card, ensure_ascii=False) + " -->"
+    return (
+        "\n".join(text_parts)
+        + "\n\n<!-- inline_card:"
+        + _json.dumps(card, ensure_ascii=False)
+        + " -->"
+    )
 
 
 async def _schedule_event_reminders(
@@ -263,8 +279,13 @@ async def _schedule_event_reminders(
         return
 
     from koa.triggers.cron.models import (
-        CronJobCreate, AtSchedule, SessionTarget,
-        WakeMode, AgentTurnPayload, DeliveryConfig, DeliveryMode,
+        AgentTurnPayload,
+        AtSchedule,
+        CronJobCreate,
+        DeliveryConfig,
+        DeliveryMode,
+        SessionTarget,
+        WakeMode,
     )
 
     tenant_id = context.tenant_id
@@ -274,55 +295,61 @@ async def _schedule_event_reminders(
     remind_at = start_dt - timedelta(minutes=30)
     if remind_at > datetime.now(timezone.utc):
         meeting_link_hint = "Include the meeting link if available."
-        jobs.append(CronJobCreate(
-            name=f"Reminder: {summary}",
-            description=f"30-min reminder for '{summary}'",
-            user_id=tenant_id,
-            schedule=AtSchedule(at=remind_at.isoformat()),
-            session_target=SessionTarget.ISOLATED,
-            wake_mode=WakeMode.NEXT_HEARTBEAT,
-            payload=AgentTurnPayload(
-                message=f"Remind the user: '{summary}' starts in 30 minutes. {meeting_link_hint}"
-            ),
-            delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
-        ))
+        jobs.append(
+            CronJobCreate(
+                name=f"Reminder: {summary}",
+                description=f"30-min reminder for '{summary}'",
+                user_id=tenant_id,
+                schedule=AtSchedule(at=remind_at.isoformat()),
+                session_target=SessionTarget.ISOLATED,
+                wake_mode=WakeMode.NEXT_HEARTBEAT,
+                payload=AgentTurnPayload(
+                    message=f"Remind the user: '{summary}' starts in 30 minutes. {meeting_link_hint}"
+                ),
+                delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
+            )
+        )
 
     # Departure reminder (45 min before, only if location)
     if location:
         depart_at = start_dt - timedelta(minutes=45)
         if depart_at > datetime.now(timezone.utc):
-            jobs.append(CronJobCreate(
-                name=f"Depart for: {summary}",
-                description=f"Departure reminder for '{summary}' at {location}",
-                user_id=tenant_id,
-                schedule=AtSchedule(at=depart_at.isoformat()),
-                session_target=SessionTarget.ISOLATED,
-                wake_mode=WakeMode.NEXT_HEARTBEAT,
-                payload=AgentTurnPayload(
-                    message=f"The user has '{summary}' at '{location}' starting soon. "
-                            f"Get their current location, calculate travel time, and tell them when to leave."
-                ),
-                delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
-            ))
+            jobs.append(
+                CronJobCreate(
+                    name=f"Depart for: {summary}",
+                    description=f"Departure reminder for '{summary}' at {location}",
+                    user_id=tenant_id,
+                    schedule=AtSchedule(at=depart_at.isoformat()),
+                    session_target=SessionTarget.ISOLATED,
+                    wake_mode=WakeMode.NEXT_HEARTBEAT,
+                    payload=AgentTurnPayload(
+                        message=f"The user has '{summary}' at '{location}' starting soon. "
+                        f"Get their current location, calculate travel time, and tell them when to leave."
+                    ),
+                    delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
+                )
+            )
 
     # Meeting prep (10 min before, only if attendees)
     if attendees:
         prep_at = start_dt - timedelta(minutes=10)
         if prep_at > datetime.now(timezone.utc):
             attendee_str = ", ".join(attendees[:5])
-            jobs.append(CronJobCreate(
-                name=f"Prep: {summary}",
-                description=f"Meeting prep for '{summary}'",
-                user_id=tenant_id,
-                schedule=AtSchedule(at=prep_at.isoformat()),
-                session_target=SessionTarget.ISOLATED,
-                wake_mode=WakeMode.NEXT_HEARTBEAT,
-                payload=AgentTurnPayload(
-                    message=f"'{summary}' starts in 10 minutes with: {attendee_str}. "
-                            f"Search recent emails from these people and give the user a brief context summary."
-                ),
-                delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
-            ))
+            jobs.append(
+                CronJobCreate(
+                    name=f"Prep: {summary}",
+                    description=f"Meeting prep for '{summary}'",
+                    user_id=tenant_id,
+                    schedule=AtSchedule(at=prep_at.isoformat()),
+                    session_target=SessionTarget.ISOLATED,
+                    wake_mode=WakeMode.NEXT_HEARTBEAT,
+                    payload=AgentTurnPayload(
+                        message=f"'{summary}' starts in 10 minutes with: {attendee_str}. "
+                        f"Search recent emails from these people and give the user a brief context summary."
+                    ),
+                    delivery=DeliveryConfig(mode=DeliveryMode.ANNOUNCE, channel="callback"),
+                )
+            )
 
     for job in jobs:
         try:
@@ -336,10 +363,14 @@ async def _schedule_event_reminders(
 async def create_event(
     summary: Annotated[str, "Event title/summary"],
     start: Annotated[str, "Event start time (e.g., 'tomorrow at 2pm', '2025-03-15 14:00')"],
-    end: Annotated[Optional[str], "Event end time (optional, defaults to 1 hour after start)"] = None,
+    end: Annotated[
+        Optional[str], "Event end time (optional, defaults to 1 hour after start)"
+    ] = None,
     description: Annotated[Optional[str], "Event description/details (optional)"] = None,
     location: Annotated[Optional[str], "Event location (optional)"] = None,
-    attendees: Annotated[Optional[str], "Comma-separated list of attendee email addresses (optional)"] = None,
+    attendees: Annotated[
+        Optional[str], "Comma-separated list of attendee email addresses (optional)"
+    ] = None,
     *,
     context: AgentToolContext,
 ) -> str:
@@ -375,7 +406,9 @@ async def create_event(
             # Auto-schedule proactive reminders
             try:
                 await _schedule_event_reminders(
-                    context, summary, start_dt,
+                    context,
+                    summary,
+                    start_dt,
                     location=location,
                     attendees=attendee_list or None,
                 )
@@ -398,6 +431,7 @@ async def create_event(
 # =============================================================================
 # update_event
 # =============================================================================
+
 
 async def _preview_update_event(args: dict, context: AgentToolContext) -> str:
     """Generate a preview of the changes to be applied."""
@@ -424,8 +458,14 @@ async def _preview_update_event(args: dict, context: AgentToolContext) -> str:
 
 @tool(needs_approval=True, get_preview=_preview_update_event)
 async def update_event(
-    target: Annotated[str, "Keywords to identify the event (title, person's name, time reference like 'my 2pm meeting')"],
-    changes: Annotated[Dict, "What to change: object with optional keys new_time, new_title, new_location, new_duration"],
+    target: Annotated[
+        str,
+        "Keywords to identify the event (title, person's name, time reference like 'my 2pm meeting')",
+    ],
+    changes: Annotated[
+        Dict,
+        "What to change: object with optional keys new_time, new_title, new_location, new_duration",
+    ],
     *,
     context: AgentToolContext,
 ) -> str:
@@ -443,6 +483,7 @@ async def update_event(
         # Search for the target event
         user_tz_str = context.metadata.get("timezone") if context.metadata else None
         from .search_helper import _resolve_tz
+
         user_tz_obj = _resolve_tz(user_tz_str)
         now = datetime.now(user_tz_obj)
         time_min = now
@@ -504,8 +545,12 @@ async def update_event(
                 old_end = target_event.get("end", {})
                 if old_start.get("dateTime") and old_end.get("dateTime"):
                     try:
-                        old_start_dt = datetime.fromisoformat(old_start["dateTime"].replace("Z", "+00:00"))
-                        old_end_dt = datetime.fromisoformat(old_end["dateTime"].replace("Z", "+00:00"))
+                        old_start_dt = datetime.fromisoformat(
+                            old_start["dateTime"].replace("Z", "+00:00")
+                        )
+                        old_end_dt = datetime.fromisoformat(
+                            old_end["dateTime"].replace("Z", "+00:00")
+                        )
                         duration = old_end_dt - old_start_dt
                         parsed_changes["end"] = parsed_time + duration
                     except Exception:
@@ -543,12 +588,22 @@ async def update_event(
             # Auto-schedule reminders if the event time was changed
             if "start" in parsed_changes and isinstance(parsed_changes["start"], datetime):
                 try:
-                    event_title = parsed_changes.get("summary") or target_event.get("summary", "event")
-                    updated_location = parsed_changes.get("location") or target_event.get("location")
+                    event_title = parsed_changes.get("summary") or target_event.get(
+                        "summary", "event"
+                    )
+                    updated_location = parsed_changes.get("location") or target_event.get(
+                        "location"
+                    )
                     raw_attendees = target_event.get("attendees") or []
-                    attendee_emails = [a.get("email") for a in raw_attendees if a.get("email")] if raw_attendees else None
+                    attendee_emails = (
+                        [a.get("email") for a in raw_attendees if a.get("email")]
+                        if raw_attendees
+                        else None
+                    )
                     await _schedule_event_reminders(
-                        context, event_title, parsed_changes["start"],
+                        context,
+                        event_title,
+                        parsed_changes["start"],
                         location=updated_location,
                         attendees=attendee_emails or None,
                     )
@@ -557,7 +612,11 @@ async def update_event(
 
             event_title = parsed_changes.get("summary") or target_event.get("summary", "event")
             if "start" in parsed_changes:
-                new_time = parsed_changes["start"].strftime("%Y-%m-%d %H:%M") if isinstance(parsed_changes["start"], datetime) else str(parsed_changes["start"])
+                new_time = (
+                    parsed_changes["start"].strftime("%Y-%m-%d %H:%M")
+                    if isinstance(parsed_changes["start"], datetime)
+                    else str(parsed_changes["start"])
+                )
                 return f'Done! I\'ve moved "{event_title}" to {new_time}.'
             elif "summary" in parsed_changes:
                 return f'Done! I\'ve renamed the event to "{event_title}".'
@@ -574,6 +633,7 @@ async def update_event(
 # =============================================================================
 # delete_event
 # =============================================================================
+
 
 async def _preview_delete_event(args: dict, context: AgentToolContext) -> str:
     """Search for events matching criteria and show what would be deleted."""
@@ -627,13 +687,17 @@ async def _preview_delete_event(args: dict, context: AgentToolContext) -> str:
 @tool(needs_approval=True, get_preview=_preview_delete_event)
 async def delete_event(
     search_query: Annotated[str, "Keywords to search for events to delete (event title, keywords)"],
-    time_range: Annotated[str, "Time range to search (e.g., 'today', 'tomorrow', 'this week'). Defaults to 'next 7 days'."] = "next 7 days",
+    time_range: Annotated[
+        str,
+        "Time range to search (e.g., 'today', 'tomorrow', 'this week'). Defaults to 'next 7 days'.",
+    ] = "next 7 days",
     *,
     context: AgentToolContext,
 ) -> str:
     """Delete calendar events matching the search criteria."""
-    from .search_helper import search_calendar_events
     from koa.providers.calendar.factory import CalendarProviderFactory
+
+    from .search_helper import search_calendar_events
 
     user_tz = context.metadata.get("timezone") if context.metadata else None
     result = await search_calendar_events(
@@ -688,9 +752,12 @@ async def delete_event(
 # check_upcoming_events
 # =============================================================================
 
+
 @tool
 async def check_upcoming_events(
-    minutes_ahead: Annotated[int, "Check for events starting within this many minutes. Default 30."] = 30,
+    minutes_ahead: Annotated[
+        int, "Check for events starting within this many minutes. Default 30."
+    ] = 30,
     *,
     context: AgentToolContext,
 ) -> str:

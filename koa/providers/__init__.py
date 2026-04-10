@@ -6,10 +6,10 @@ The calling code (agent or orchestrator) is responsible for fetching credentials
 from CredentialStore and passing them to the provider.
 """
 
-from .email.factory import EmailProviderFactory
 from .calendar.factory import CalendarProviderFactory
-from .sms.factory import SMSProviderFactory
+from .email.factory import EmailProviderFactory
 from .email.resolver import AccountResolver
+from .sms.factory import SMSProviderFactory
 
 __all__ = [
     "EmailProviderFactory",

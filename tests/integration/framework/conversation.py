@@ -70,7 +70,9 @@ class Conversation:
         self._tool_offsets.append(len(self.recorder.tool_calls))
         metadata = {"conversation_history": list(self._history)} if self._history else None
         result = await self.handler.handle_message(
-            self.user_id, message, metadata=metadata,
+            self.user_id,
+            message,
+            metadata=metadata,
         )
         self.turns.append(result)
 
@@ -108,8 +110,7 @@ class Conversation:
             return result
 
         raise ConversationError(
-            f"No tool was called after {max_turns} turns. "
-            f"Tools recorded: {self.tools_called}"
+            f"No tool was called after {max_turns} turns. Tools recorded: {self.tools_called}"
         )
 
     async def send_until_status(
@@ -188,10 +189,7 @@ class Conversation:
 
     def get_tool_calls(self, tool_name: str) -> List[Dict[str, Any]]:
         """Return all recorded calls to *tool_name*."""
-        return [
-            c for c in self.recorder.tool_calls
-            if c["tool_name"] == tool_name
-        ]
+        return [c for c in self.recorder.tool_calls if c["tool_name"] == tool_name]
 
     def get_tool_args(self, tool_name: str) -> List[Dict[str, Any]]:
         """Return the ``arguments`` dict for each call to *tool_name*."""
@@ -200,9 +198,7 @@ class Conversation:
     def tools_in_turn(self, turn: int) -> List[str]:
         """Tool names called during a specific turn (0-indexed)."""
         if turn < 0 or turn >= len(self.turns):
-            raise IndexError(
-                f"Turn {turn} out of range (have {len(self.turns)} turns)"
-            )
+            raise IndexError(f"Turn {turn} out of range (have {len(self.turns)} turns)")
         start = self._tool_offsets[turn]
         end = (
             self._tool_offsets[turn + 1]

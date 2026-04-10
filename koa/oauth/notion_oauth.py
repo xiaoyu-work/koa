@@ -23,6 +23,7 @@ class NotionOAuth:
             "state": state,
         }
         from urllib.parse import urlencode
+
         return f"{NotionOAuth.AUTHORIZE_URL}?{urlencode(params)}"
 
     @staticmethod

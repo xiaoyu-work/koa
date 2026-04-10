@@ -28,9 +28,9 @@ import importlib
 import inspect
 import logging
 import pkgutil
-from typing import Dict, List, Optional, Type
+from typing import Dict, List, Optional
 
-from .decorator import AgentMetadata, AGENT_REGISTRY, get_agent_metadata
+from .decorator import AGENT_REGISTRY, AgentMetadata, get_agent_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -82,9 +82,7 @@ class AgentDiscovery:
                     if metadata.name not in self._discovered_agents:
                         self._discovered_agents[metadata.name] = metadata
                         count += 1
-                        logger.debug(
-                            f"Discovered agent: {metadata.name} from {module_path}"
-                        )
+                        logger.debug(f"Discovered agent: {metadata.name} from {module_path}")
 
         return count
 

@@ -5,14 +5,14 @@ from fastapi import FastAPI
 from .chat import router as chat_router
 from .config import router as config_router
 from .credentials import router as credentials_router
-from .events import router as events_router
-from .oauth import router as oauth_router
-from .tasks import router as tasks_router
 from .cron import router as cron_router
+from .events import router as events_router
+from .expenses import router as expenses_router
+from .oauth import router as oauth_router
 from .profile import router as profile_router
 from .shipments import router as shipments_router
-from .expenses import router as expenses_router
 from .subscriptions import router as subscriptions_router
+from .tasks import router as tasks_router
 
 
 def register_routes(app: FastAPI):

@@ -1,13 +1,10 @@
 """Tests for koa.agents.discovery"""
 
-import pytest
-
 from koa.agents.decorator import AGENT_REGISTRY, AgentMetadata, valet
 from koa.agents.discovery import AgentDiscovery
 
 
 class TestAgentDiscovery:
-
     def setup_method(self):
         self._original_registry = dict(AGENT_REGISTRY)
         self.discovery = AgentDiscovery()
@@ -82,7 +79,9 @@ class TestAgentDiscovery:
         assert len(self.discovery.get_discovered_agents()) == 0
 
     def test_scan_paths(self):
-        count = self.discovery.scan_paths([
-            "koa.builtin_agents.composio",
-        ])
+        count = self.discovery.scan_paths(
+            [
+                "koa.builtin_agents.composio",
+            ]
+        )
         assert count >= 2

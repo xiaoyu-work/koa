@@ -4,13 +4,14 @@ Email tools for EmailAgent.
 Extracted from legacy email agents (SendEmailAgent, ReadEmailAgent,
 ReplyEmailAgent, DeleteEmailAgent, ArchiveEmailAgent, MarkReadEmailAgent).
 """
+
+import html
 import json
 import logging
-import html
 from typing import Annotated, Any, Dict, List, Optional
 
-from koa.tool_decorator import tool
 from koa.models import AgentToolContext, ToolOutput
+from koa.tool_decorator import tool
 
 logger = logging.getLogger(__name__)
 
@@ -19,14 +20,15 @@ logger = logging.getLogger(__name__)
 # Shared helpers
 # ============================================================
 
+
 async def _resolve_provider(tenant_id: str, account_spec: str = "primary"):
     """Resolve a single email account and create its provider.
 
     Returns (account, provider, error_message).
     On success error_message is None; on failure provider is None.
     """
-    from koa.providers.email.resolver import AccountResolver
     from koa.providers.email.factory import EmailProviderFactory
+    from koa.providers.email.resolver import AccountResolver
 
     account = await AccountResolver.resolve_account(tenant_id, account_spec)
     if not account:
@@ -46,8 +48,8 @@ async def _resolve_provider(tenant_id: str, account_spec: str = "primary"):
 
 async def _resolve_all_providers(tenant_id: str, account_specs=None):
     """Resolve multiple email accounts and create providers."""
-    from koa.providers.email.resolver import AccountResolver
     from koa.providers.email.factory import EmailProviderFactory
+    from koa.providers.email.resolver import AccountResolver
 
     if not account_specs:
         account_specs = ["all"]
@@ -64,7 +66,9 @@ async def _resolve_all_providers(tenant_id: str, account_specs=None):
             errors.append(f"{account.get('account_name', 'unknown')}: unsupported provider")
             continue
         if not await provider.ensure_valid_token():
-            errors.append(f"{account.get('account_identifier', 'unknown')}: token expired, reconnect in settings")
+            errors.append(
+                f"{account.get('account_identifier', 'unknown')}: token expired, reconnect in settings"
+            )
             continue
         providers.append((account, provider))
 
@@ -83,16 +87,24 @@ def _format_sender(sender_raw: str) -> str:
 # search_emails
 # ============================================================
 
+
 @tool
 async def search_emails(
     query: Annotated[Optional[str], "Search keywords (subject, content)"] = None,
     sender: Annotated[Optional[str], "Filter by sender name or email"] = None,
     unread_only: Annotated[bool, "Only show unread emails (default: true)"] = True,
     days_back: Annotated[int, "Days to search back (default: 7)"] = 7,
-    date_range: Annotated[Optional[str], "Date range like 'today', 'yesterday', 'last week'"] = None,
-    accounts: Annotated[Optional[str], "Account to search: 'all', 'primary', or account name"] = None,
+    date_range: Annotated[
+        Optional[str], "Date range like 'today', 'yesterday', 'last week'"
+    ] = None,
+    accounts: Annotated[
+        Optional[str], "Account to search: 'all', 'primary', or account name"
+    ] = None,
     max_results: Annotated[int, "Max results to return (default: 10)"] = 10,
-    category: Annotated[Optional[str], "Inbox category filter: 'primary' (default), 'social', 'promotions', 'updates', or 'all'"] = "primary",
+    category: Annotated[
+        Optional[str],
+        "Inbox category filter: 'primary' (default), 'social', 'promotions', 'updates', or 'all'",
+    ] = "primary",
     *,
     context: AgentToolContext,
 ) -> str:
@@ -114,7 +126,17 @@ async def search_emails(
     for account, provider in providers:
         try:
             effective_query = query
-            meta_keywords = {"unread", "new", "recent", "latest", "all", "emails", "email", "inbox", "check"}
+            meta_keywords = {
+                "unread",
+                "new",
+                "recent",
+                "latest",
+                "all",
+                "emails",
+                "email",
+                "inbox",
+                "check",
+            }
             if effective_query and effective_query.lower().strip() in meta_keywords:
                 effective_query = None
 
@@ -183,12 +205,14 @@ async def search_emails(
 
     media = []
     if email_cards:
-        media.append({
-            "type": "inline_cards",
-            "data": json.dumps(email_cards),
-            "media_type": "application/json",
-            "metadata": {"for_storage": False},
-        })
+        media.append(
+            {
+                "type": "inline_cards",
+                "data": json.dumps(email_cards),
+                "media_type": "application/json",
+                "metadata": {"for_storage": False},
+            }
+        )
 
     return ToolOutput(text=text_result, media=media)
 
@@ -196,6 +220,7 @@ async def search_emails(
 # ============================================================
 # send_email (needs_approval)
 # ============================================================
+
 
 async def _preview_send_email(args: dict, context) -> str:
     """Preview for send_email approval."""
@@ -254,6 +279,7 @@ async def send_email(
 # reply_email (needs_approval)
 # ============================================================
 
+
 async def _preview_reply_email(args: dict, context) -> str:
     """Preview for reply_email approval."""
     body = args.get("body", "")
@@ -288,7 +314,9 @@ async def reply_email(
 
     try:
         result = await provider.reply_email(
-            original_message_id=message_id, body=body, reply_all=reply_all,
+            original_message_id=message_id,
+            body=body,
+            reply_all=reply_all,
         )
         if result.get("success"):
             replied_to = result.get("replied_to", "")
@@ -304,6 +332,7 @@ async def reply_email(
 # delete_emails (needs_approval)
 # ============================================================
 
+
 async def _preview_delete_emails(args: dict, context) -> str:
     """Preview for delete_emails approval."""
     message_ids = args.get("message_ids", [])
@@ -318,7 +347,9 @@ async def delete_emails(
     message_ids: Annotated[List[str], "List of message IDs to delete"],
     permanent: Annotated[bool, "Permanently delete instead of trash (default: false)"] = False,
     account: Annotated[str, "Account name (from search_emails results)"] = "primary",
-    description: Annotated[str, "Human-readable description for preview (e.g. '3 emails from Amazon')"] = "",
+    description: Annotated[
+        str, "Human-readable description for preview (e.g. '3 emails from Amazon')"
+    ] = "",
     *,
     context: AgentToolContext,
 ) -> str:
@@ -348,6 +379,7 @@ async def delete_emails(
 # ============================================================
 # archive_emails (needs_approval)
 # ============================================================
+
 
 async def _preview_archive_emails(args: dict, context) -> str:
     """Preview for archive_emails approval."""
@@ -389,6 +421,7 @@ async def archive_emails(
 # ============================================================
 # mark_as_read
 # ============================================================
+
 
 @tool
 async def mark_as_read(

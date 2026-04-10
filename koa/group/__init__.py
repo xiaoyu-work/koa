@@ -28,25 +28,22 @@ Example usage:
     result = await group.execute(message)
 """
 
-from .models import (
-    ExecutionPattern,
-    MergeStrategy,
-    GroupResult,
-    AgentExecutionResult,
-)
-
 from .group import (
     AgentGroup,
     GroupExecutionError,
 )
-
+from .map_reduce import (
+    MapReduceExecutor,
+)
 from .merge import (
     StateMerger,
     merge_values,
 )
-
-from .map_reduce import (
-    MapReduceExecutor,
+from .models import (
+    AgentExecutionResult,
+    ExecutionPattern,
+    GroupResult,
+    MergeStrategy,
 )
 
 __all__ = [

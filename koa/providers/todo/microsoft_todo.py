@@ -7,8 +7,8 @@ Requires OAuth scope: https://graph.microsoft.com/Tasks.ReadWrite
 
 import logging
 import os
-from typing import Any, Callable, Dict, List, Optional
 from datetime import datetime, timedelta, timezone
+from typing import Any, Callable, Dict, Optional
 
 import httpx
 
@@ -117,7 +117,9 @@ class MicrosoftTodoProvider(BaseTodoProvider):
 
                 # Handle 401 - token may be expired
                 if response.status_code == 401:
-                    logger.warning(f"401 Unauthorized - attempting to refresh token for {self.account_name}")
+                    logger.warning(
+                        f"401 Unauthorized - attempting to refresh token for {self.account_name}"
+                    )
                     if await self.ensure_valid_token(force_refresh=True):
                         response = await client.get(
                             f"{self.api_base_url}/lists/{list_id}/tasks",
@@ -167,7 +169,9 @@ class MicrosoftTodoProvider(BaseTodoProvider):
                 )
 
                 if response.status_code == 401:
-                    logger.warning(f"401 Unauthorized - attempting to refresh token for {self.account_name}")
+                    logger.warning(
+                        f"401 Unauthorized - attempting to refresh token for {self.account_name}"
+                    )
                     if await self.ensure_valid_token(force_refresh=True):
                         response = await client.get(
                             f"{self.api_base_url}/lists/{list_id}/tasks",
@@ -244,12 +248,16 @@ class MicrosoftTodoProvider(BaseTodoProvider):
 
                 if response.status_code == 201:
                     task = response.json()
-                    list_name = self._default_list_name if list_id == self._default_list_id else list_id
+                    list_name = (
+                        self._default_list_name if list_id == self._default_list_id else list_id
+                    )
                     formatted = self._format_task(task, list_id, list_name)
                     logger.info(f"Microsoft To Do task created: {task.get('id')}")
                     return {"success": True, "data": formatted}
                 else:
-                    logger.error(f"Microsoft To Do create failed: {response.status_code} - {response.text}")
+                    logger.error(
+                        f"Microsoft To Do create failed: {response.status_code} - {response.text}"
+                    )
                     return {"success": False, "error": f"Graph API error: {response.status_code}"}
 
         except Exception as e:
@@ -286,7 +294,9 @@ class MicrosoftTodoProvider(BaseTodoProvider):
                     logger.info(f"Microsoft To Do task completed: {task_id}")
                     return {"success": True}
                 else:
-                    logger.error(f"Microsoft To Do complete failed: {response.status_code} - {response.text}")
+                    logger.error(
+                        f"Microsoft To Do complete failed: {response.status_code} - {response.text}"
+                    )
                     return {"success": False, "error": f"Graph API error: {response.status_code}"}
 
         except Exception as e:
@@ -349,12 +359,16 @@ class MicrosoftTodoProvider(BaseTodoProvider):
 
                 if response.status_code == 200:
                     task = response.json()
-                    list_name = self._default_list_name if list_id == self._default_list_id else list_id
+                    list_name = (
+                        self._default_list_name if list_id == self._default_list_id else list_id
+                    )
                     formatted = self._format_task(task, list_id, list_name)
                     logger.info(f"Microsoft To Do task updated: {task_id}")
                     return {"success": True, "data": formatted}
                 else:
-                    logger.error(f"Microsoft To Do update failed: {response.status_code} - {response.text}")
+                    logger.error(
+                        f"Microsoft To Do update failed: {response.status_code} - {response.text}"
+                    )
                     return {"success": False, "error": f"Graph API error: {response.status_code}"}
 
         except Exception as e:
@@ -387,7 +401,9 @@ class MicrosoftTodoProvider(BaseTodoProvider):
                     logger.info(f"Microsoft To Do task deleted: {task_id}")
                     return {"success": True}
                 else:
-                    logger.error(f"Microsoft To Do delete failed: {response.status_code} - {response.text}")
+                    logger.error(
+                        f"Microsoft To Do delete failed: {response.status_code} - {response.text}"
+                    )
                     return {"success": False, "error": f"Graph API error: {response.status_code}"}
 
         except Exception as e:
@@ -408,7 +424,9 @@ class MicrosoftTodoProvider(BaseTodoProvider):
                 )
 
                 if response.status_code == 401:
-                    logger.warning(f"401 Unauthorized - attempting to refresh token for {self.account_name}")
+                    logger.warning(
+                        f"401 Unauthorized - attempting to refresh token for {self.account_name}"
+                    )
                     if await self.ensure_valid_token(force_refresh=True):
                         response = await client.get(
                             f"{self.api_base_url}/lists",
@@ -468,7 +486,10 @@ class MicrosoftTodoProvider(BaseTodoProvider):
                     }
                 else:
                     logger.error(f"Microsoft To Do token refresh failed: {response.text}")
-                    return {"success": False, "error": f"Token refresh failed: {response.status_code}"}
+                    return {
+                        "success": False,
+                        "error": f"Token refresh failed: {response.status_code}",
+                    }
 
         except Exception as e:
             logger.error(f"Microsoft To Do token refresh error: {e}", exc_info=True)

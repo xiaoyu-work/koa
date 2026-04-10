@@ -4,11 +4,10 @@ import asyncio
 import logging
 import uuid
 from datetime import datetime, timedelta
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from .models import (
     ActionConfig,
-    ActionResult,
     Task,
     TaskStatus,
     TriggerConfig,
@@ -75,7 +74,9 @@ class TriggerEngine:
         # Compute next_run_at for schedule triggers
         task.next_run_at = self._compute_next_run(task)
         self._tasks[task.id] = task
-        logger.info(f"Created trigger task {task.id} ({task.trigger.type.value}) for user {user_id}")
+        logger.info(
+            f"Created trigger task {task.id} ({task.trigger.type.value}) for user {user_id}"
+        )
         return task
 
     async def get_task(self, task_id: str) -> Optional[Task]:

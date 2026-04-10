@@ -42,6 +42,7 @@ async def test_tool_selection(orchestrator_factory, user_input, expected_tools):
 # Argument extraction
 # ---------------------------------------------------------------------------
 
+
 async def test_extracts_message_fields(orchestrator_factory):
     """send_message should receive channel_id and content from the user message."""
     orch, recorder = await orchestrator_factory()
@@ -67,12 +68,11 @@ async def test_extracts_message_fields(orchestrator_factory):
 # Response quality
 # ---------------------------------------------------------------------------
 
+
 async def test_response_quality_list_servers(orchestrator_factory, llm_judge):
     """Listing servers should produce a readable summary of Discord servers."""
     orch, recorder = await orchestrator_factory()
-    result = await orch.handle_message(
-        "test_user", "Show me all my Discord servers"
-    )
+    result = await orch.handle_message("test_user", "Show me all my Discord servers")
 
     passed = await llm_judge(
         "Show me all my Discord servers",

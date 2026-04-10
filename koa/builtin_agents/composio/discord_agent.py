@@ -5,8 +5,8 @@ Provides send messages, list channels, and list servers/guilds
 using the Composio OAuth proxy platform.
 """
 
-import os
 import logging
+import os
 from typing import Annotated, Optional
 
 from koa import valet
@@ -39,6 +39,7 @@ def _check_api_key() -> Optional[str]:
 # Approval preview functions
 # =============================================================================
 
+
 async def _send_message_preview(args: dict, context) -> str:
     channel_id = args.get("channel_id", "")
     content = args.get("content", "")
@@ -49,6 +50,7 @@ async def _send_message_preview(args: dict, context) -> str:
 # =============================================================================
 # Tool executors
 # =============================================================================
+
 
 @tool(needs_approval=True, risk_level="write", get_preview=_send_message_preview)
 async def send_message(
@@ -70,7 +72,9 @@ async def send_message(
         client = ComposioClient()
         data = await client.execute_action(
             _ACTION_CREATE_MESSAGE,
-            params={"channel_id": channel_id, "content": content}, entity_id=context.tenant_id or "default")
+            params={"channel_id": channel_id, "content": content},
+            entity_id=context.tenant_id or "default",
+        )
         result = ComposioClient.format_action_result(data)
         if data.get("successfull") or data.get("successful"):
             return f"Message sent to channel {channel_id}.\n\n{result}"
@@ -97,7 +101,9 @@ async def list_channels(
         client = ComposioClient()
         data = await client.execute_action(
             _ACTION_LIST_GUILD_CHANNELS,
-            params={"guild_id": guild_id}, entity_id=context.tenant_id or "default")
+            params={"guild_id": guild_id},
+            entity_id=context.tenant_id or "default",
+        )
         result = ComposioClient.format_action_result(data)
         if data.get("successfull") or data.get("successful"):
             return f"Channels in guild {guild_id}:\n\n{result}"
@@ -120,8 +126,8 @@ async def list_servers(
     try:
         client = ComposioClient()
         data = await client.execute_action(
-            _ACTION_LIST_MY_GUILDS,
-            params={}, entity_id=context.tenant_id or "default")
+            _ACTION_LIST_MY_GUILDS, params={}, entity_id=context.tenant_id or "default"
+        )
         result = ComposioClient.format_action_result(data)
         if data.get("successfull") or data.get("successful"):
             return f"Discord servers:\n\n{result}"
@@ -262,6 +268,7 @@ async def connect_discord(
 # =============================================================================
 # Agent
 # =============================================================================
+
 
 @valet(domain="communication")
 class DiscordComposioAgent(StandardAgent):

@@ -4,7 +4,7 @@ import logging
 import os
 from typing import Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Security
+from fastapi import FastAPI, HTTPException, Request, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.security import APIKeyHeader
@@ -159,9 +159,7 @@ def sanitize_credential(entry: dict) -> dict:
 def get_base_url(request: Request) -> str:
     """Determine base URL from request, respecting reverse proxy headers."""
     proto = request.headers.get("x-forwarded-proto", request.url.scheme)
-    host = request.headers.get(
-        "x-forwarded-host", request.headers.get("host", "localhost:8000")
-    )
+    host = request.headers.get("x-forwarded-host", request.headers.get("host", "localhost:8000"))
     return f"{proto}://{host}"
 
 
@@ -181,6 +179,7 @@ def oauth_success_html(provider: str, email: str, detail: str) -> HTMLResponse:
 def oauth_success_redirect(redirect_after: str, provider: str, email: str, tenant_id: str = ""):
     """Redirect to caller-specified URL after successful OAuth."""
     from fastapi.responses import RedirectResponse
+
     sep = "&" if "?" in redirect_after else "?"
     url = f"{redirect_after}{sep}success=true&provider={provider}&email={email}"
     if tenant_id:
@@ -201,6 +200,7 @@ def get_app_instance() -> Optional[Koa]:
 
 # --- FastAPI app creation (after all helpers are defined to avoid circular imports) ---
 
+
 def _create_api() -> FastAPI:
     """Create and configure the FastAPI app with routes."""
     _api = FastAPI(title="Koa", version="0.1.1")
@@ -219,8 +219,9 @@ def _create_api() -> FastAPI:
     )
 
     # Issue #7: Rate limiting middleware for public endpoints
-    from .rate_limit import RateLimiter
     from starlette.middleware.base import BaseHTTPMiddleware
+
+    from .rate_limit import RateLimiter
 
     _rate_limiter = RateLimiter(
         requests_per_minute=int(os.getenv("KOA_RATE_LIMIT_RPM", "30")),
@@ -235,11 +236,14 @@ def _create_api() -> FastAPI:
                 client_id = (
                     request.headers.get("x-api-key")
                     or request.headers.get("authorization", "")
-                    or request.client.host if request.client else "unknown"
+                    or request.client.host
+                    if request.client
+                    else "unknown"
                 )
                 allowed, info = _rate_limiter.check(client_id)
                 if not allowed:
                     from fastapi.responses import JSONResponse
+
                     return JSONResponse(
                         status_code=429,
                         content={"error": "Rate limit exceeded", **info},
@@ -249,12 +253,12 @@ def _create_api() -> FastAPI:
 
     _api.add_middleware(RateLimitMiddleware)
 
-
-
     from ..errors import install_error_handler
+
     install_error_handler(_api)
 
     from .routes import register_routes
+
     register_routes(_api)
     return _api
 

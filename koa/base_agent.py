@@ -8,9 +8,9 @@ Provides:
 """
 
 import logging
-from typing import Any, Callable, Optional, Dict
-from uuid import uuid4
 from collections import OrderedDict
+from typing import Any, Callable, Dict, Optional
+from uuid import uuid4
 
 from .message import Message
 
@@ -95,9 +95,7 @@ class BaseAgent:
         Returns:
             Response message
         """
-        raise NotImplementedError(
-            f"_do_reply not implemented in {self.__class__.__name__}"
-        )
+        raise NotImplementedError(f"_do_reply not implemented in {self.__class__.__name__}")
 
     async def _run_pre_hooks(self, msg: Message) -> Message:
         """Run all pre-reply hooks"""
@@ -146,12 +144,7 @@ class BaseAgent:
     # ===== Hook Management =====
 
     @classmethod
-    def register_class_hook(
-        cls,
-        hook_type: str,
-        hook_name: str,
-        hook: Callable
-    ) -> None:
+    def register_class_hook(cls, hook_type: str, hook_name: str, hook: Callable) -> None:
         """
         Register a class-level hook (applies to all instances)
 
@@ -185,12 +178,7 @@ class BaseAgent:
         if hook_type is None or hook_type == "post_reply":
             cls._class_post_reply_hooks.clear()
 
-    def register_instance_hook(
-        self,
-        hook_type: str,
-        hook_name: str,
-        hook: Callable
-    ) -> None:
+    def register_instance_hook(self, hook_type: str, hook_name: str, hook: Callable) -> None:
         """
         Register an instance-level hook (applies only to this instance)
 

@@ -15,7 +15,7 @@ import asyncio
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Dict, List, Optional, Any, Callable, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 from .models import AgentPoolEntry, SessionConfig
 
@@ -143,6 +143,7 @@ class AgentPoolManager:
             self._backend = backend
         elif database is not None:
             from .postgres_pool import PostgresPoolBackend
+
             self._backend = PostgresPoolBackend(
                 db=database,
                 session_ttl=self.config.session_ttl_seconds,
@@ -158,10 +159,7 @@ class AgentPoolManager:
         self._backup_task: Optional[asyncio.Task] = None
         self._cleanup_task: Optional[asyncio.Task] = None
 
-    async def add_agent(
-        self,
-        agent: "StandardAgent"
-    ) -> None:
+    async def add_agent(self, agent: "StandardAgent") -> None:
         """
         Add agent to the pool.
 
@@ -172,6 +170,7 @@ class AgentPoolManager:
 
         # Compute schema version from agent class
         from ..agents.decorator import get_schema_version
+
         schema_version = get_schema_version(type(agent))
 
         # Create pool entry from agent
@@ -198,11 +197,7 @@ class AgentPoolManager:
 
         logger.debug(f"Added agent {agent.agent_id} for tenant {tenant_id}")
 
-    async def get_agent(
-        self,
-        tenant_id: str,
-        agent_id: str
-    ) -> Optional["StandardAgent"]:
+    async def get_agent(self, tenant_id: str, agent_id: str) -> Optional["StandardAgent"]:
         """
         Get agent from pool by ID.
 
@@ -221,11 +216,7 @@ class AgentPoolManager:
         # This is handled by orchestrator which has the agent registry
         return None
 
-    async def get_agent_entry(
-        self,
-        tenant_id: str,
-        agent_id: str
-    ) -> Optional[AgentPoolEntry]:
+    async def get_agent_entry(self, tenant_id: str, agent_id: str) -> Optional[AgentPoolEntry]:
         """
         Get agent entry (metadata) from storage.
 
@@ -257,10 +248,7 @@ class AgentPoolManager:
         """
         return await self._backend.list_agents(tenant_id)
 
-    async def update_agent(
-        self,
-        agent: "StandardAgent"
-    ) -> None:
+    async def update_agent(self, agent: "StandardAgent") -> None:
         """
         Update agent state in the pool.
 
@@ -271,6 +259,7 @@ class AgentPoolManager:
 
         # Compute schema version from agent class
         from ..agents.decorator import get_schema_version
+
         schema_version = get_schema_version(type(agent))
 
         entry = AgentPoolEntry(
@@ -294,11 +283,7 @@ class AgentPoolManager:
                 self._agents[tenant_id] = {}
             self._agents[tenant_id][agent.agent_id] = agent
 
-    async def remove_agent(
-        self,
-        tenant_id: str,
-        agent_id: str
-    ) -> None:
+    async def remove_agent(self, tenant_id: str, agent_id: str) -> None:
         """
         Remove agent from pool.
 
@@ -429,7 +414,9 @@ class AgentPoolManager:
             ]
 
         for tenant_id, agent_id, agent in snapshot:
-            status_value = agent.status.value if hasattr(agent.status, 'value') else str(agent.status)
+            status_value = (
+                agent.status.value if hasattr(agent.status, "value") else str(agent.status)
+            )
             if status_value not in ("waiting_for_input", "waiting_for_approval"):
                 continue
 
@@ -441,6 +428,7 @@ class AgentPoolManager:
                 )
                 try:
                     from ..result import AgentStatus
+
                     agent.transition_to(AgentStatus.ERROR)
                     agent.error_message = f"Timed out after {elapsed:.0f}s in {status_value}"
                 except Exception:
@@ -474,7 +462,9 @@ class AgentPoolManager:
         async with self._lock:
             agents = self._agents.get(tenant_id, {})
             for agent in agents.values():
-                status_value = agent.status.value if hasattr(agent.status, 'value') else str(agent.status)
+                status_value = (
+                    agent.status.value if hasattr(agent.status, "value") else str(agent.status)
+                )
                 if status_value not in ("waiting_for_input", "waiting_for_approval"):
                     continue
 
@@ -483,10 +473,9 @@ class AgentPoolManager:
                     return agent
 
                 # Check agent.context and agent.metadata for session_id match
-                agent_session = (
-                    getattr(agent, 'context', {}).get('session_id')
-                    or getattr(agent, 'metadata', {}).get('session_id')
-                )
+                agent_session = getattr(agent, "context", {}).get("session_id") or getattr(
+                    agent, "metadata", {}
+                ).get("session_id")
                 if agent_session == session_id:
                     return agent
 
@@ -546,11 +535,7 @@ class AgentPoolManager:
     async def _backup_all(self) -> None:
         """Backup all in-memory agents to storage"""
         async with self._lock:
-            snapshot = [
-                agent
-                for agents in self._agents.values()
-                for agent in agents.values()
-            ]
+            snapshot = [agent for agents in self._agents.values() for agent in agents.values()]
         for agent in snapshot:
             try:
                 await self.update_agent(agent)

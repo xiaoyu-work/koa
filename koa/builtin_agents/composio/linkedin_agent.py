@@ -5,8 +5,8 @@ Provides create posts and view profile information
 using the Composio OAuth proxy platform.
 """
 
-import os
 import logging
+import os
 from typing import Annotated, Optional
 
 from koa import valet
@@ -37,6 +37,7 @@ def _check_api_key() -> Optional[str]:
 # Approval preview functions
 # =============================================================================
 
+
 async def _create_post_preview(args: dict, context) -> str:
     text = args.get("text", "")
     visibility = args.get("visibility", "PUBLIC")
@@ -47,6 +48,7 @@ async def _create_post_preview(args: dict, context) -> str:
 # =============================================================================
 # Tool executors
 # =============================================================================
+
 
 @tool(needs_approval=True, risk_level="write", get_preview=_create_post_preview)
 async def create_post(
@@ -66,7 +68,9 @@ async def create_post(
         client = ComposioClient()
         data = await client.execute_action(
             _ACTION_CREATE_POST,
-            params={"text": text, "visibility": visibility}, entity_id=context.tenant_id or "default")
+            params={"text": text, "visibility": visibility},
+            entity_id=context.tenant_id or "default",
+        )
         result = ComposioClient.format_action_result(data)
         if data.get("successfull") or data.get("successful"):
             return f"LinkedIn post created.\n\n{result}"
@@ -89,8 +93,8 @@ async def get_my_profile(
     try:
         client = ComposioClient()
         data = await client.execute_action(
-            _ACTION_GET_MY_INFO,
-            params={}, entity_id=context.tenant_id or "default")
+            _ACTION_GET_MY_INFO, params={}, entity_id=context.tenant_id or "default"
+        )
         result = ComposioClient.format_action_result(data)
         if data.get("successfull") or data.get("successful"):
             return f"LinkedIn profile info:\n\n{result}"
@@ -205,6 +209,7 @@ async def connect_linkedin(
 # =============================================================================
 # Agent
 # =============================================================================
+
 
 @valet(domain="communication")
 class LinkedInComposioAgent(StandardAgent):

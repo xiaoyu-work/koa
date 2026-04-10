@@ -10,9 +10,9 @@ Requires environment variables:
 
 import asyncio
 import base64
-import os
 import logging
-from typing import List, Dict, Any, Tuple
+import os
+from typing import Any, Dict, List, Tuple
 
 import httpx
 
@@ -24,9 +24,7 @@ _THUMBNAIL_TIMEOUT = 8.0
 _MAX_THUMBNAIL_BYTES = 300_000  # ~300 KB per thumbnail
 
 
-async def _download_thumbnail(
-    client: httpx.AsyncClient, url: str
-) -> Tuple[str, str]:
+async def _download_thumbnail(client: httpx.AsyncClient, url: str) -> Tuple[str, str]:
     """Download a single thumbnail and return (base64_data, media_type).
 
     Returns empty strings on failure so the caller can skip it.
@@ -160,11 +158,7 @@ async def google_search_executor(args: dict, context: AgentToolContext = None):
                     title = item.get("title", "No title")
                     link = item.get("link", "")
                     snippet = item.get("snippet", "").replace("\n", " ")
-                    output.append(
-                        f"{i}. {title}\n"
-                        f"   URL: {link}\n"
-                        f"   {snippet}"
-                    )
+                    output.append(f"{i}. {title}\n   URL: {link}\n   {snippet}")
 
                 total_results = data.get("searchInformation", {}).get("totalResults", "?")
                 return (
@@ -180,41 +174,43 @@ async def google_search_executor(args: dict, context: AgentToolContext = None):
                 thumb_url = img_info.get("thumbnailLink", "")
                 full_url = item.get("link", "")
                 thumb_urls.append(thumb_url)
-                image_records.append({
-                    "title": item.get("title", ""),
-                    "full_url": full_url,
-                    "thumb_url": thumb_url,
-                    "width": img_info.get("width"),
-                    "height": img_info.get("height"),
-                    "context_url": item.get("image", {}).get("contextLink", ""),
-                })
+                image_records.append(
+                    {
+                        "title": item.get("title", ""),
+                        "full_url": full_url,
+                        "thumb_url": thumb_url,
+                        "width": img_info.get("width"),
+                        "height": img_info.get("height"),
+                        "context_url": item.get("image", {}).get("contextLink", ""),
+                    }
+                )
 
             # Download thumbnails so the LLM can visually review them
             thumb_results = await _download_thumbnails(thumb_urls)
 
             text_parts = []
             media_list: List[Dict[str, Any]] = []
-            for i, (rec, (b64, mime)) in enumerate(
-                zip(image_records, thumb_results), 1
-            ):
+            for i, (rec, (b64, mime)) in enumerate(zip(image_records, thumb_results), 1):
                 text_parts.append(
                     f"[Image {i}] {rec['title']}\n"
                     f"   Full URL: {rec['full_url']}\n"
                     f"   Size: {rec['width']}x{rec['height']}"
                 )
                 if b64:
-                    media_list.append({
-                        "type": "image",
-                        "data": f"data:{mime};base64,{b64}",
-                        "media_type": mime,
-                        "metadata": {
-                            "index": i,
-                            "full_url": rec["full_url"],
-                            "title": rec["title"],
-                            "width": rec["width"],
-                            "height": rec["height"],
-                        },
-                    })
+                    media_list.append(
+                        {
+                            "type": "image",
+                            "data": f"data:{mime};base64,{b64}",
+                            "media_type": mime,
+                            "metadata": {
+                                "index": i,
+                                "full_url": rec["full_url"],
+                                "title": rec["title"],
+                                "width": rec["width"],
+                                "height": rec["height"],
+                            },
+                        }
+                    )
 
             total_results = data.get("searchInformation", {}).get("totalResults", "?")
             text = (

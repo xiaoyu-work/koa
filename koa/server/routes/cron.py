@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends
 
-from ...errors import KoaError, E
+from ...errors import E, KoaError
 from ..app import require_app, verify_api_key
 from ..models import CronJobCreateRequest, CronJobUpdateRequest
 
@@ -11,8 +11,9 @@ router = APIRouter()
 
 def _require_cron_service(app):
     if not app.cron_service:
-        raise KoaError(E.SERVICE_UNAVAILABLE, "CronService not available",
-                            details={"service": "cron"})
+        raise KoaError(
+            E.SERVICE_UNAVAILABLE, "CronService not available", details={"service": "cron"}
+        )
     return app.cron_service
 
 
@@ -39,16 +40,16 @@ async def list_cron_jobs(
 async def create_cron_job(req: CronJobCreateRequest):
     """Create a new cron job."""
     from ...triggers.cron.models import (
-        AtSchedule,
-        EverySchedule,
-        CronScheduleSpec,
-        SessionTarget,
-        WakeMode,
-        SystemEventPayload,
         AgentTurnPayload,
-        DeliveryMode,
-        DeliveryConfig,
+        AtSchedule,
         CronJobCreate,
+        CronScheduleSpec,
+        DeliveryConfig,
+        DeliveryMode,
+        EverySchedule,
+        SessionTarget,
+        SystemEventPayload,
+        WakeMode,
     )
 
     app = require_app()
@@ -61,13 +62,19 @@ async def create_cron_job(req: CronJobCreateRequest):
         try:
             schedule = EverySchedule(every_ms=int(float(req.schedule_value) * 1000))
         except ValueError:
-            raise KoaError(E.VALIDATION_ERROR, f"Invalid interval: {req.schedule_value}",
-                                details={"field": "schedule_value"})
+            raise KoaError(
+                E.VALIDATION_ERROR,
+                f"Invalid interval: {req.schedule_value}",
+                details={"field": "schedule_value"},
+            )
     elif req.schedule_type == "cron":
         schedule = CronScheduleSpec(expr=req.schedule_value, tz=req.timezone or None)
     else:
-        raise KoaError(E.VALIDATION_ERROR, f"Unknown schedule_type: {req.schedule_type}",
-                            details={"field": "schedule_type"})
+        raise KoaError(
+            E.VALIDATION_ERROR,
+            f"Unknown schedule_type: {req.schedule_type}",
+            details={"field": "schedule_type"},
+        )
 
     # Build payload
     target = SessionTarget(req.session_target)
@@ -79,7 +86,11 @@ async def create_cron_job(req: CronJobCreateRequest):
     # Build delivery
     delivery = None
     if req.delivery_mode != "none" or req.conditional:
-        mode = DeliveryMode(req.delivery_mode) if req.delivery_mode != "none" else DeliveryMode.ANNOUNCE
+        mode = (
+            DeliveryMode(req.delivery_mode)
+            if req.delivery_mode != "none"
+            else DeliveryMode.ANNOUNCE
+        )
         delivery = DeliveryConfig(
             mode=mode,
             channel=req.delivery_channel,
@@ -109,8 +120,7 @@ async def get_cron_job(job_id: str):
     service = _require_cron_service(app)
     job = service.get_job(job_id)
     if not job:
-        raise KoaError(E.NOT_FOUND, "Cron job not found",
-                            details={"resource": "cron_job"})
+        raise KoaError(E.NOT_FOUND, "Cron job not found", details={"resource": "cron_job"})
     return job.to_dict()
 
 
@@ -118,12 +128,12 @@ async def get_cron_job(job_id: str):
 async def update_cron_job(job_id: str, req: CronJobUpdateRequest):
     """Update a cron job."""
     from ...triggers.cron.models import (
-        AtSchedule,
-        EverySchedule,
-        CronScheduleSpec,
-        SystemEventPayload,
         AgentTurnPayload,
+        AtSchedule,
         CronJobPatch,
+        CronScheduleSpec,
+        EverySchedule,
+        SystemEventPayload,
     )
 
     app = require_app()
@@ -131,8 +141,7 @@ async def update_cron_job(job_id: str, req: CronJobUpdateRequest):
 
     job = service.get_job(job_id)
     if not job:
-        raise KoaError(E.NOT_FOUND, "Cron job not found",
-                            details={"resource": "cron_job"})
+        raise KoaError(E.NOT_FOUND, "Cron job not found", details={"resource": "cron_job"})
 
     patch = CronJobPatch()
 
@@ -169,8 +178,7 @@ async def delete_cron_job(job_id: str):
     service = _require_cron_service(app)
     removed = await service.remove(job_id)
     if not removed:
-        raise KoaError(E.NOT_FOUND, "Cron job not found",
-                            details={"resource": "cron_job"})
+        raise KoaError(E.NOT_FOUND, "Cron job not found", details={"resource": "cron_job"})
     return {"deleted": True}
 
 

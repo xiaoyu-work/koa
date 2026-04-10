@@ -6,11 +6,11 @@ Requires OAuth scope: https://www.googleapis.com/auth/tasks
 """
 
 import logging
-from typing import Any, Callable, Dict, List, Optional
 from datetime import datetime
+from typing import Any, Callable, Dict, Optional
 
-from .base import BaseTodoProvider
 from ..http_mixin import OAuthHTTPMixin
+from .base import BaseTodoProvider
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,9 @@ class GoogleTasksProvider(BaseTodoProvider, OAuthHTTPMixin):
         due = None
         if task.get("due"):
             try:
-                due = datetime.fromisoformat(task["due"].replace("Z", "+00:00")).strftime("%Y-%m-%d")
+                due = datetime.fromisoformat(task["due"].replace("Z", "+00:00")).strftime(
+                    "%Y-%m-%d"
+                )
             except (ValueError, AttributeError):
                 due = None
 
@@ -83,7 +85,10 @@ class GoogleTasksProvider(BaseTodoProvider, OAuthHTTPMixin):
             )
 
             if response.status_code != 200:
-                return {"success": False, "error": f"Google Tasks API error: {response.status_code}"}
+                return {
+                    "success": False,
+                    "error": f"Google Tasks API error: {response.status_code}",
+                }
 
             result = response.json()
             items = result.get("items", [])
@@ -111,7 +116,10 @@ class GoogleTasksProvider(BaseTodoProvider, OAuthHTTPMixin):
             )
 
             if lists_response.status_code != 200:
-                return {"success": False, "error": f"Google Tasks API error: {lists_response.status_code}"}
+                return {
+                    "success": False,
+                    "error": f"Google Tasks API error: {lists_response.status_code}",
+                }
 
             task_lists = lists_response.json().get("items", [])
             matching_tasks = []
@@ -177,8 +185,13 @@ class GoogleTasksProvider(BaseTodoProvider, OAuthHTTPMixin):
                 logger.info(f"Google Tasks created: {task.get('id')}")
                 return {"success": True, "data": self._format_task(task, "", tasklist)}
             else:
-                logger.error(f"Google Tasks create failed: {response.status_code} - {response.text}")
-                return {"success": False, "error": f"Google Tasks API error: {response.status_code}"}
+                logger.error(
+                    f"Google Tasks create failed: {response.status_code} - {response.text}"
+                )
+                return {
+                    "success": False,
+                    "error": f"Google Tasks API error: {response.status_code}",
+                }
 
         except Exception as e:
             logger.error(f"Google Tasks create error: {e}", exc_info=True)
@@ -203,8 +216,13 @@ class GoogleTasksProvider(BaseTodoProvider, OAuthHTTPMixin):
                 logger.info(f"Google Tasks completed: {task_id}")
                 return {"success": True}
             else:
-                logger.error(f"Google Tasks complete failed: {response.status_code} - {response.text}")
-                return {"success": False, "error": f"Google Tasks API error: {response.status_code}"}
+                logger.error(
+                    f"Google Tasks complete failed: {response.status_code} - {response.text}"
+                )
+                return {
+                    "success": False,
+                    "error": f"Google Tasks API error: {response.status_code}",
+                }
 
         except Exception as e:
             logger.error(f"Google Tasks complete error: {e}", exc_info=True)
@@ -252,8 +270,13 @@ class GoogleTasksProvider(BaseTodoProvider, OAuthHTTPMixin):
                 logger.info(f"Google Tasks updated: {task_id}")
                 return {"success": True, "data": self._format_task(task, "", tasklist)}
             else:
-                logger.error(f"Google Tasks update failed: {response.status_code} - {response.text}")
-                return {"success": False, "error": f"Google Tasks API error: {response.status_code}"}
+                logger.error(
+                    f"Google Tasks update failed: {response.status_code} - {response.text}"
+                )
+                return {
+                    "success": False,
+                    "error": f"Google Tasks API error: {response.status_code}",
+                }
 
         except Exception as e:
             logger.error(f"Google Tasks update error: {e}", exc_info=True)
@@ -277,8 +300,13 @@ class GoogleTasksProvider(BaseTodoProvider, OAuthHTTPMixin):
                 logger.info(f"Google Tasks deleted: {task_id}")
                 return {"success": True}
             else:
-                logger.error(f"Google Tasks delete failed: {response.status_code} - {response.text}")
-                return {"success": False, "error": f"Google Tasks API error: {response.status_code}"}
+                logger.error(
+                    f"Google Tasks delete failed: {response.status_code} - {response.text}"
+                )
+                return {
+                    "success": False,
+                    "error": f"Google Tasks API error: {response.status_code}",
+                }
 
         except Exception as e:
             logger.error(f"Google Tasks delete error: {e}", exc_info=True)
@@ -299,10 +327,14 @@ class GoogleTasksProvider(BaseTodoProvider, OAuthHTTPMixin):
                 logger.info(f"Google Tasks listed {len(lists)} task lists")
                 return {"success": True, "data": lists}
             else:
-                logger.error(f"Google Tasks list lists failed: {response.status_code} - {response.text}")
-                return {"success": False, "error": f"Google Tasks API error: {response.status_code}"}
+                logger.error(
+                    f"Google Tasks list lists failed: {response.status_code} - {response.text}"
+                )
+                return {
+                    "success": False,
+                    "error": f"Google Tasks API error: {response.status_code}",
+                }
 
         except Exception as e:
             logger.error(f"Google Tasks list lists error: {e}", exc_info=True)
             return {"success": False, "error": str(e)}
-

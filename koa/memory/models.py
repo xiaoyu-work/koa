@@ -8,14 +8,13 @@ This module defines:
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Dict, Any, List, Optional, Union
-from enum import Enum
+from typing import Any, Dict, List, Optional, Union
 
 
 @dataclass
 class MemoryConfig:
     """Configuration for mem0 memory system"""
+
     # Enable/disable
     enabled: bool = False
 
@@ -31,11 +30,13 @@ class MemoryConfig:
 
     # Vector store config (for self-hosted)
     vector_store_provider: str = "qdrant"
-    vector_store_config: Dict[str, Any] = field(default_factory=lambda: {
-        "collection_name": "koa_memory",
-        "host": "localhost",
-        "port": 6333,
-    })
+    vector_store_config: Dict[str, Any] = field(
+        default_factory=lambda: {
+            "collection_name": "koa_memory",
+            "host": "localhost",
+            "port": 6333,
+        }
+    )
 
     # Fields to remember
     remember_fields: Optional[List[str]] = None  # None = all fields
@@ -69,7 +70,7 @@ class MemoryConfig:
 
     def should_remember(self, field_name: str) -> bool:
         """Check if a field should be remembered"""
-        if field_name.startswith('_'):
+        if field_name.startswith("_"):
             return False
         if self.exclude_fields and field_name in self.exclude_fields:
             return False
@@ -84,24 +85,25 @@ class MemoryConfig:
                 "provider": self.llm_provider,
                 "config": {
                     "model": self.llm_model,
-                }
+                },
             },
             "embedder": {
                 "provider": self.embedder_provider,
                 "config": {
                     "model": self.embedder_model,
-                }
+                },
             },
             "vector_store": {
                 "provider": self.vector_store_provider,
                 "config": self.vector_store_config,
-            }
+            },
         }
 
 
 @dataclass
 class RecallResult:
     """Result from memory recall operation"""
+
     # Recalled memories as list of dicts
     memories: List[Dict[str, Any]] = field(default_factory=list)
 
@@ -120,6 +122,7 @@ class RecallResult:
 @dataclass
 class StoreResult:
     """Result from memory store operation"""
+
     stored_count: int = 0
     memory_ids: List[str] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)

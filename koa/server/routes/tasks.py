@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends
 
-from ...errors import KoaError, E
+from ...errors import E, KoaError
 from ..app import require_app, verify_api_key
 from ..models import TaskCreateRequest, TaskUpdateRequest
 
@@ -11,8 +11,9 @@ router = APIRouter()
 
 def _require_trigger_engine(app):
     if not app.trigger_engine:
-        raise KoaError(E.SERVICE_UNAVAILABLE, "TriggerEngine not available",
-                            details={"service": "triggers"})
+        raise KoaError(
+            E.SERVICE_UNAVAILABLE, "TriggerEngine not available", details={"service": "triggers"}
+        )
     return app.trigger_engine
 
 
@@ -22,15 +23,16 @@ async def list_tasks(tenant_id: str = "default"):
     app = require_app()
     tasks = await app.list_tasks(tenant_id)
     if not tasks and not app.trigger_engine:
-        raise KoaError(E.SERVICE_UNAVAILABLE, "TriggerEngine not available",
-                            details={"service": "triggers"})
+        raise KoaError(
+            E.SERVICE_UNAVAILABLE, "TriggerEngine not available", details={"service": "triggers"}
+        )
     return [t.to_dict() for t in tasks]
 
 
 @router.post("/api/tasks", dependencies=[Depends(verify_api_key)])
 async def create_task(req: TaskCreateRequest):
     """Create a new trigger task."""
-    from ...triggers import TriggerConfig, TriggerType, ActionConfig
+    from ...triggers import ActionConfig, TriggerConfig, TriggerType
 
     app = require_app()
     _require_trigger_engine(app)
@@ -80,8 +82,9 @@ async def delete_task(task_id: str):
     try:
         deleted = await app.delete_task(task_id)
     except RuntimeError:
-        raise KoaError(E.SERVICE_UNAVAILABLE, "TriggerEngine not available",
-                            details={"service": "triggers"})
+        raise KoaError(
+            E.SERVICE_UNAVAILABLE, "TriggerEngine not available", details={"service": "triggers"}
+        )
     if not deleted:
         raise KoaError(E.NOT_FOUND, "Task not found", details={"resource": "task"})
     return {"deleted": True}

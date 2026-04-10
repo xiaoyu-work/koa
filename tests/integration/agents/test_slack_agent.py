@@ -65,6 +65,7 @@ async def test_tool_selection(orchestrator_factory, user_input, expected_tools):
 # Argument extraction
 # ---------------------------------------------------------------------------
 
+
 async def test_extracts_message_fields(orchestrator_factory):
     """send_message should receive the channel and message text."""
     orch, recorder = await orchestrator_factory()
@@ -127,12 +128,11 @@ async def test_extracts_find_user_by_email_fields(orchestrator_factory):
 # Response quality
 # ---------------------------------------------------------------------------
 
+
 async def test_response_quality_fetch(orchestrator_factory, llm_judge):
     """Fetching messages should produce a readable summary of the conversation."""
     orch, recorder = await orchestrator_factory()
-    result = await orch.handle_message(
-        "test_user", "Show me recent messages in #general on Slack"
-    )
+    result = await orch.handle_message("test_user", "Show me recent messages in #general on Slack")
 
     passed = await llm_judge(
         "Show me recent messages in #general on Slack",

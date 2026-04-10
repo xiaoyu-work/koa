@@ -34,7 +34,9 @@ class SMSNotification:
         self._phone_resolver = phone_resolver  # callable: async (tenant_id) -> phone_number
         self._client = None
 
-    async def send(self, tenant_id: str, message: str, metadata: Optional[Dict[str, Any]] = None) -> bool:
+    async def send(
+        self, tenant_id: str, message: str, metadata: Optional[Dict[str, Any]] = None
+    ) -> bool:
         """Send SMS to user."""
         to_number = None
         if self._phone_resolver:
@@ -46,6 +48,7 @@ class SMSNotification:
         try:
             if self._provider == "twilio":
                 from twilio.rest import Client
+
                 if not self._client:
                     self._client = Client(self._account_sid, self._auth_token)
                 self._client.messages.create(
@@ -55,6 +58,7 @@ class SMSNotification:
                 )
             elif self._provider == "signalwire":
                 from signalwire.rest import Client as SWClient
+
                 if not self._client:
                     self._client = SWClient(
                         self._account_sid,
@@ -84,7 +88,9 @@ class PushNotification:
     def __init__(self, push_sender: Any = None):
         self._push_sender = push_sender
 
-    async def send(self, tenant_id: str, message: str, metadata: Optional[Dict[str, Any]] = None) -> bool:
+    async def send(
+        self, tenant_id: str, message: str, metadata: Optional[Dict[str, Any]] = None
+    ) -> bool:
         """Send push notification to user."""
         if not self._push_sender:
             logger.debug(f"No push_sender configured, skipping push for {tenant_id}")

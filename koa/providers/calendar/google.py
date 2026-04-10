@@ -5,13 +5,13 @@ Implements BaseCalendarProvider for Google Calendar.
 """
 
 import logging
-from typing import Any, Callable, Dict, List, Optional
 from datetime import datetime, timedelta, timezone
+from typing import Any, Callable, Dict, List, Optional
 
 import httpx
 
-from .base import BaseCalendarProvider
 from ..http_mixin import OAuthHTTPMixin
+from .base import BaseCalendarProvider
 
 logger = logging.getLogger(__name__)
 
@@ -77,23 +77,26 @@ class GoogleCalendarProvider(BaseCalendarProvider, OAuthHTTPMixin):
                 end_str = end_data.get("dateTime") or end_data.get("date")
 
                 from dateutil import parser as date_parser
+
                 start_dt = date_parser.parse(start_str) if start_str else None
                 end_dt = date_parser.parse(end_str) if end_str else None
 
                 attendees = [a.get("email", "") for a in item.get("attendees", [])]
 
-                events.append({
-                    "event_id": item.get("id"),
-                    "summary": item.get("summary", "No title"),
-                    "description": item.get("description", ""),
-                    "start": start_dt,
-                    "end": end_dt,
-                    "location": item.get("location", ""),
-                    "attendees": attendees,
-                    "organizer": item.get("organizer", {}).get("email", ""),
-                    "status": item.get("status", "confirmed"),
-                    "html_link": item.get("htmlLink", ""),
-                })
+                events.append(
+                    {
+                        "event_id": item.get("id"),
+                        "summary": item.get("summary", "No title"),
+                        "description": item.get("description", ""),
+                        "start": start_dt,
+                        "end": end_dt,
+                        "location": item.get("location", ""),
+                        "attendees": attendees,
+                        "organizer": item.get("organizer", {}).get("email", ""),
+                        "status": item.get("status", "confirmed"),
+                        "html_link": item.get("htmlLink", ""),
+                    }
+                )
 
             logger.info(f"Retrieved {len(events)} events from Google Calendar")
             return {"success": True, "data": events, "count": len(events)}
@@ -243,4 +246,3 @@ class GoogleCalendarProvider(BaseCalendarProvider, OAuthHTTPMixin):
         except Exception as e:
             logger.error(f"Failed to delete event: {e}", exc_info=True)
             return {"success": False, "error": str(e)}
-

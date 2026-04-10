@@ -9,7 +9,7 @@ Provides a structured execution pipeline for tool calls:
 import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
 from ..models import AgentTool, AgentToolContext
@@ -40,7 +40,7 @@ class BeforeHookResult:
 
 
 BeforeHook = Callable[..., Any]  # async (tool, args, context) -> BeforeHookResult
-AfterHook = Callable[..., Any]   # async (tool, result, context) -> result
+AfterHook = Callable[..., Any]  # async (tool, result, context) -> result
 
 
 class ToolPipeline:
@@ -80,7 +80,7 @@ class ToolPipeline:
                     if not hook_result.proceed:
                         return ToolExecutionResult(
                             tool_name=tool_name,
-                            result=hook_result.error_message or f"Blocked by pre-execution check",
+                            result=hook_result.error_message or "Blocked by pre-execution check",
                             duration_ms=int((time.monotonic() - start) * 1000),
                             success=False,
                             error=hook_result.error_message,
@@ -164,7 +164,5 @@ async def result_audit_hook(
     """Log tool execution result for audit trail."""
     result_str = str(result) if result is not None else ""
     result_len = len(result_str)
-    logger.debug(
-        f"[ToolPipeline] {tool.name} completed: {result_len} chars"
-    )
+    logger.debug(f"[ToolPipeline] {tool.name} completed: {result_len} chars")
     return result

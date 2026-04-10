@@ -6,7 +6,7 @@ the credentials dict's provider field (todoist, google, microsoft, etc.)
 """
 
 import logging
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from .base import BaseTodoProvider
 
@@ -63,7 +63,9 @@ class TodoProviderFactory:
 
         try:
             provider = provider_class(credentials, on_token_refreshed)
-            logger.info(f"Created {provider_name} todo provider for {credentials.get('account_name')}")
+            logger.info(
+                f"Created {provider_name} todo provider for {credentials.get('account_name')}"
+            )
             return provider
         except Exception as e:
             logger.error(f"Failed to create {provider_name} todo provider: {e}", exc_info=True)
@@ -79,18 +81,21 @@ def _register_providers():
     """Auto-register all available todo providers."""
     try:
         from .todoist import TodoistProvider
+
         TodoProviderFactory.register_provider("todoist", TodoistProvider)
     except ImportError as e:
         logger.warning(f"Todoist provider not available: {e}")
 
     try:
         from .google_tasks import GoogleTasksProvider
+
         TodoProviderFactory.register_provider("google", GoogleTasksProvider)
     except ImportError as e:
         logger.warning(f"Google Tasks provider not available: {e}")
 
     try:
         from .microsoft_todo import MicrosoftTodoProvider
+
         TodoProviderFactory.register_provider("microsoft", MicrosoftTodoProvider)
     except ImportError as e:
         logger.warning(f"Microsoft To Do provider not available: {e}")

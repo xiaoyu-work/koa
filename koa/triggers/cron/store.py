@@ -42,7 +42,9 @@ class CronJobStore:
             data = json.loads(raw)
             version = data.get("version", 1)
             if version != STORE_VERSION:
-                logger.warning(f"Cron store version mismatch: expected {STORE_VERSION}, got {version}")
+                logger.warning(
+                    f"Cron store version mismatch: expected {STORE_VERSION}, got {version}"
+                )
 
             self._jobs = {}
             for job_dict in data.get("jobs", []):
@@ -72,6 +74,7 @@ class CronJobStore:
             bak_path = self._store_path.with_suffix(".json.bak")
             try:
                 import shutil
+
                 shutil.copy2(str(self._store_path), str(bak_path))
             except Exception as e:
                 logger.debug(f"Backup creation failed (non-fatal): {e}")
@@ -79,9 +82,7 @@ class CronJobStore:
         # Atomic write: temp file in same directory, then rename
         dir_path = self._store_path.parent
         try:
-            fd, tmp_path = tempfile.mkstemp(
-                prefix=".jobs-", suffix=".tmp", dir=str(dir_path)
-            )
+            fd, tmp_path = tempfile.mkstemp(prefix=".jobs-", suffix=".tmp", dir=str(dir_path))
             try:
                 os.write(fd, content.encode("utf-8"))
             finally:

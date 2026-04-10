@@ -4,14 +4,15 @@ MCP Protocol - Abstract interface for MCP clients
 Users can implement this protocol to integrate any MCP client library.
 """
 
-from typing import Protocol, List, Dict, Any, Optional, runtime_checkable
 from enum import Enum
+from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 
-from .models import MCPTool, MCPResource, MCPCallResult, MCPPrompt
+from .models import MCPCallResult, MCPPrompt, MCPResource, MCPTool
 
 
 class MCPTransport(str, Enum):
     """MCP transport types"""
+
     STDIO = "stdio"
     SSE = "sse"
     WEBSOCKET = "websocket"
@@ -78,11 +79,7 @@ class MCPClientProtocol(Protocol):
         """
         ...
 
-    async def call_tool(
-        self,
-        name: str,
-        arguments: Dict[str, Any]
-    ) -> MCPCallResult:
+    async def call_tool(self, name: str, arguments: Dict[str, Any]) -> MCPCallResult:
         """
         Call a tool on the MCP server
 
@@ -125,11 +122,7 @@ class MCPClientProtocol(Protocol):
         """
         ...
 
-    async def get_prompt(
-        self,
-        name: str,
-        arguments: Optional[Dict[str, Any]] = None
-    ) -> str:
+    async def get_prompt(self, name: str, arguments: Optional[Dict[str, Any]] = None) -> str:
         """
         Get a rendered prompt from the MCP server
 

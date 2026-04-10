@@ -6,8 +6,8 @@ Replaces NotionCreatePageAgent + NotionUpdatePageAgent + 3 standalone tools
 that has its own mini ReAct loop.
 """
 
-import os
 import logging
+import os
 from typing import Annotated, Any, Dict, List, Optional
 
 from koa import valet
@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 # Credential helper
 # =============================================================================
+
 
 async def _get_notion_token(context: AgentToolContext) -> Optional[str]:
     """Retrieve Notion API token for the current tenant.
@@ -46,6 +47,7 @@ async def _get_notion_token(context: AgentToolContext) -> Optional[str]:
 # =============================================================================
 # Helper functions (reused from tools/notion.py)
 # =============================================================================
+
 
 def _blocks_to_text(blocks: List[Dict[str, Any]]) -> str:
     """Convert Notion blocks to readable text."""
@@ -148,6 +150,7 @@ def _extract_property_value(prop: Dict[str, Any]) -> str:
 # Tool executors
 # =============================================================================
 
+
 @tool
 async def notion_search(
     query: Annotated[str, "Short search keyword (1-2 words)"] = "",
@@ -176,13 +179,21 @@ async def notion_search(
         for i, result in enumerate(results, 1):
             obj_type = result.get("object", "page")
             page_id = result.get("id", "")
-            title = _get_page_title(result) if obj_type == "page" else "".join(
-                t.get("plain_text", "") for t in result.get("title", [])
+            title = (
+                _get_page_title(result)
+                if obj_type == "page"
+                else "".join(t.get("plain_text", "") for t in result.get("title", []))
             )
             last_edited = result.get("last_edited_time", "")[:10]
-            items.append(f'{i}. [{obj_type}] "{title or "Untitled"}" (id: {page_id}, edited: {last_edited})')
+            items.append(
+                f'{i}. [{obj_type}] "{title or "Untitled"}" (id: {page_id}, edited: {last_edited})'
+            )
 
-        header = f'Found {len(results)} results for "{query}":' if query else f"Notion pages ({len(results)}):"
+        header = (
+            f'Found {len(results)} results for "{query}":'
+            if query
+            else f"Notion pages ({len(results)}):"
+        )
         return header + "\n" + "\n".join(items)
     except Exception as e:
         logger.error(f"Notion search failed: {e}", exc_info=True)
@@ -240,7 +251,10 @@ async def notion_query_database(
     try:
         client = NotionClient(token=token)
         data = await client.query_database(
-            database_id=database_id, filter=filter_obj, sorts=sorts, page_size=page_size,
+            database_id=database_id,
+            filter=filter_obj,
+            sorts=sorts,
+            page_size=page_size,
         )
         results = data.get("results", [])
         if not results:
@@ -266,6 +280,7 @@ async def notion_query_database(
 # =============================================================================
 # Approval preview functions
 # =============================================================================
+
 
 async def _create_page_preview(args: dict, context) -> str:
     title = args.get("title", "")
@@ -319,7 +334,10 @@ async def notion_create_page(
             parent_id = results[0]["id"]
 
         page = await client.create_page(
-            parent_id=parent_id, title=title, content=content, parent_type="page_id",
+            parent_id=parent_id,
+            title=title,
+            content=content,
+            parent_type="page_id",
         )
         url = page.get("url", "")
         return f'Created Notion page "{title}".\n{url}'
@@ -366,6 +384,7 @@ async def notion_update_page(
 # =============================================================================
 # Agent
 # =============================================================================
+
 
 @valet(domain="productivity", requires_service=["notion"])
 class NotionAgent(StandardAgent):

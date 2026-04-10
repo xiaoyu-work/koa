@@ -5,8 +5,8 @@ All Notion agents use this client for API calls.
 Requires NOTION_API_KEY environment variable (Internal Integration Token).
 """
 
-import os
 import logging
+import os
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -118,9 +118,7 @@ class NotionClient:
             resp.raise_for_status()
             return resp.json()
 
-    async def update_page(
-        self, page_id: str, properties: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def update_page(self, page_id: str, properties: Dict[str, Any]) -> Dict[str, Any]:
         """Update page properties."""
         async with httpx.AsyncClient() as client:
             resp = await client.patch(
@@ -162,9 +160,7 @@ class NotionClient:
 
         return blocks
 
-    async def append_blocks(
-        self, block_id: str, children: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+    async def append_blocks(self, block_id: str, children: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Append child blocks to a page/block."""
         async with httpx.AsyncClient() as client:
             resp = await client.patch(
@@ -217,9 +213,7 @@ class NotionClient:
                 {
                     "object": "block",
                     "type": "paragraph",
-                    "paragraph": {
-                        "rich_text": [{"type": "text", "text": {"content": para}}]
-                    },
+                    "paragraph": {"rich_text": [{"type": "text", "text": {"content": para}}]},
                 }
             )
         return blocks or [

@@ -36,11 +36,11 @@ Example:
     client = registry.get("openai_fast")
 """
 
-import os
 import logging
+import os
 import threading
-from typing import Dict, Optional, Any
 from dataclasses import dataclass, field
+from typing import Any, Dict, Optional
 
 from .base import BaseLLMClient, LLMConfig
 
@@ -50,6 +50,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class LLMProviderConfig:
     """Configuration for an LLM provider"""
+
     name: str
     provider: str  # openai, anthropic, dashscope, gemini, ollama
     model: str
@@ -157,12 +158,16 @@ class LLMRegistry:
 
         if client:
             self._clients[config.name] = client
-            logger.info(f"Registered LLM client from config: {config.name} ({config.provider}/{config.model})")
+            logger.info(
+                f"Registered LLM client from config: {config.name} ({config.provider}/{config.model})"
+            )
 
             if self._default_provider is None:
                 self._default_provider = config.name
 
-    def _create_client(self, config: LLMProviderConfig, api_key: Optional[str]) -> Optional[BaseLLMClient]:
+    def _create_client(
+        self, config: LLMProviderConfig, api_key: Optional[str]
+    ) -> Optional[BaseLLMClient]:
         """Create LLM client based on provider type"""
         try:
             llm_config = LLMConfig(
@@ -176,6 +181,7 @@ class LLMRegistry:
             )
 
             from .litellm_client import LiteLLMClient
+
             return LiteLLMClient(config=llm_config, provider_name=config.provider.lower())
 
         except Exception as e:
@@ -264,23 +270,26 @@ class LLMRegistry:
     def clear(self) -> None:
         """Clear all registered clients (fire-and-forget for async clients)"""
         for name, client in self._clients.items():
-            if hasattr(client, 'close'):
+            if hasattr(client, "close"):
                 try:
                     import asyncio
+
                     if asyncio.iscoroutinefunction(client.close):
                         try:
                             loop = asyncio.get_running_loop()
                             task = loop.create_task(client.close())
                             task.add_done_callback(
-                                lambda t, n=name: logger.warning(
-                                    f"Error closing LLM client {n}: {t.exception()}"
-                                ) if t.exception() else None
+                                lambda t, n=name: (  # type: ignore[misc]
+                                    logger.warning(f"Error closing LLM client {n}: {t.exception()}")
+                                    if t.exception()
+                                    else None
+                                )
                             )
                         except RuntimeError:
                             # No running loop, skip async close
                             pass
                     else:
-                        client.close()
+                        client.close()  # type: ignore[unused-coroutine]
                 except Exception as e:
                     logger.warning(f"Error closing LLM client {name}: {e}")
 
@@ -294,13 +303,14 @@ class LLMRegistry:
         """Async close: properly await all client close() calls."""
         errors = []
         for name, client in self._clients.items():
-            if hasattr(client, 'close'):
+            if hasattr(client, "close"):
                 try:
                     import asyncio
+
                     if asyncio.iscoroutinefunction(client.close):
                         await client.close()
                     else:
-                        client.close()
+                        client.close()  # type: ignore[unused-coroutine]
                 except Exception as e:
                     errors.append((name, e))
                     logger.warning(f"Error closing LLM client {name}: {e}")

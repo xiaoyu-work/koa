@@ -14,7 +14,7 @@ methods on :class:`~.conversation.Conversation`.
 
 from __future__ import annotations
 
-from typing import Any, List, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, List
 
 if TYPE_CHECKING:
     from .conversation import Conversation
@@ -41,22 +41,18 @@ def assert_tool_args(conv: Conversation, tool_name: str, **expected: Any) -> Non
     All other types use ``==``.
     """
     calls = conv.get_tool_calls(tool_name)
-    assert calls, (
-        f"'{tool_name}' was never called. Tools called: {conv.tools_called}"
-    )
+    assert calls, f"'{tool_name}' was never called. Tools called: {conv.tools_called}"
 
     args = calls[0]["arguments"]
     for key, expected_val in expected.items():
         actual = args.get(key, "")
         if isinstance(expected_val, str) and isinstance(actual, str):
             assert expected_val.lower() in actual.lower(), (
-                f"Expected {tool_name}.{key} to contain '{expected_val}', "
-                f"got '{actual}'"
+                f"Expected {tool_name}.{key} to contain '{expected_val}', got '{actual}'"
             )
         else:
             assert actual == expected_val, (
-                f"Expected {tool_name}.{key} == {expected_val!r}, "
-                f"got {actual!r}"
+                f"Expected {tool_name}.{key} == {expected_val!r}, got {actual!r}"
             )
 
 
@@ -64,10 +60,6 @@ def assert_status(conv: Conversation, expected: Any) -> None:
     """Assert the last turn's status matches *expected*."""
     actual = conv.last_status
     if hasattr(actual, "value") and isinstance(expected, str):
-        assert actual.value == expected, (
-            f"Expected status '{expected}', got '{actual.value}'"
-        )
+        assert actual.value == expected, f"Expected status '{expected}', got '{actual.value}'"
     else:
-        assert actual == expected, (
-            f"Expected status {expected!r}, got {actual!r}"
-        )
+        assert actual == expected, f"Expected status {expected!r}, got {actual!r}"

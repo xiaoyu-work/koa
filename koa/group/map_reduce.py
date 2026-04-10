@@ -9,10 +9,7 @@ This module provides:
 import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import (
-    Dict, Any, List, Optional, Callable, Awaitable,
-    TypeVar, Generic, Union
-)
+from typing import Any, Awaitable, Callable, Dict, Generic, List, Optional, TypeVar, Union
 
 T = TypeVar("T")
 R = TypeVar("R")
@@ -21,6 +18,7 @@ R = TypeVar("R")
 @dataclass
 class MapResult:
     """Result from a single map operation"""
+
     index: int
     input_item: Any
     output: Any
@@ -39,6 +37,7 @@ class MapResult:
 @dataclass
 class MapReduceResult(Generic[R]):
     """Result from a complete map-reduce operation"""
+
     total_items: int
     successful_items: int
     failed_items: int
@@ -104,7 +103,7 @@ class MapReduceExecutor:
         self,
         max_concurrency: int = 10,
         continue_on_error: bool = True,
-        timeout_per_item: Optional[float] = None
+        timeout_per_item: Optional[float] = None,
     ):
         """
         Initialize map-reduce executor.
@@ -123,7 +122,7 @@ class MapReduceExecutor:
         items: List[T],
         map_fn: Callable[[T], Awaitable[R]],
         reduce_fn: Optional[Callable[[List[R]], Any]] = None,
-        progress_callback: Optional[Callable[[int, int], Awaitable[None]]] = None
+        progress_callback: Optional[Callable[[int, int], Awaitable[None]]] = None,
     ) -> MapReduceResult:
         """
         Execute map-reduce on a collection.
@@ -137,11 +136,8 @@ class MapReduceExecutor:
         Returns:
             MapReduceResult with individual and reduced results
         """
-        result = MapReduceResult(
-            total_items=len(items),
-            successful_items=0,
-            failed_items=0,
-            started_at=datetime.now()
+        result: MapReduceResult = MapReduceResult(
+            total_items=len(items), successful_items=0, failed_items=0, started_at=datetime.now()
         )
 
         if not items:
@@ -159,19 +155,13 @@ class MapReduceExecutor:
             nonlocal completed_count
 
             map_result = MapResult(
-                index=index,
-                input_item=item,
-                output=None,
-                started_at=datetime.now()
+                index=index, input_item=item, output=None, started_at=datetime.now()
             )
 
             async with semaphore:
                 try:
                     if self.timeout_per_item:
-                        output = await asyncio.wait_for(
-                            map_fn(item),
-                            timeout=self.timeout_per_item
-                        )
+                        output = await asyncio.wait_for(map_fn(item), timeout=self.timeout_per_item)
                     else:
                         output = await map_fn(item)
 
@@ -202,10 +192,7 @@ class MapReduceExecutor:
             return map_result
 
         # Process all items in parallel
-        tasks = [
-            process_item(i, item)
-            for i, item in enumerate(items)
-        ]
+        tasks = [process_item(i, item) for i, item in enumerate(items)]
 
         map_results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -214,13 +201,9 @@ class MapReduceExecutor:
             if isinstance(r, Exception):
                 # Task itself raised an exception
                 result.failed_items += 1
-                result.map_results.append(MapResult(
-                    index=-1,
-                    input_item=None,
-                    output=None,
-                    success=False,
-                    error=str(r)
-                ))
+                result.map_results.append(
+                    MapResult(index=-1, input_item=None, output=None, success=False, error=str(r))
+                )
             else:
                 result.map_results.append(r)
                 if r.success:
@@ -241,11 +224,7 @@ class MapReduceExecutor:
         result.completed_at = datetime.now()
         return result
 
-    async def map_only(
-        self,
-        items: List[T],
-        map_fn: Callable[[T], Awaitable[R]]
-    ) -> List[R]:
+    async def map_only(self, items: List[T], map_fn: Callable[[T], Awaitable[R]]) -> List[R]:
         """
         Execute map without reduce (convenience method).
 
@@ -304,8 +283,10 @@ def reduce_count(results: List[Any]) -> int:
 
 def reduce_filter(predicate: Callable[[Any], bool]) -> Callable[[List[Any]], List[Any]]:
     """Create filter reduce function"""
+
     def reducer(results: List[Any]) -> List[Any]:
         return [r for r in results if predicate(r)]
+
     return reducer
 
 

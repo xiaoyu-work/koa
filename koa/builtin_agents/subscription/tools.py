@@ -2,7 +2,7 @@
 
 import json
 import logging
-from typing import Annotated, Any, Dict, List
+from typing import Annotated, Any, List
 
 from koa.models import AgentToolContext, ToolOutput
 from koa.tool_decorator import tool
@@ -29,8 +29,12 @@ def _format_cycle(cycle) -> str:
 
 @tool
 async def query_subscriptions(
-    status: Annotated[str, "Filter by status: 'active', 'cancelled', 'trial', 'all'. Default 'active'."] = "active",
-    category: Annotated[str, "Filter by category (e.g. 'streaming', 'telecom'). Leave empty for all."] = "",
+    status: Annotated[
+        str, "Filter by status: 'active', 'cancelled', 'trial', 'all'. Default 'active'."
+    ] = "active",
+    category: Annotated[
+        str, "Filter by category (e.g. 'streaming', 'telecom'). Leave empty for all."
+    ] = "",
     *,
     context: AgentToolContext,
 ) -> str:
@@ -99,7 +103,9 @@ async def query_subscriptions(
                 monthly_total += amount * 4.33
 
     if monthly_total > 0:
-        lines.append(f"\nEstimated monthly total: {_format_amount(monthly_total, rows[0].get('currency', 'USD'))}")
+        lines.append(
+            f"\nEstimated monthly total: {_format_amount(monthly_total, rows[0].get('currency', 'USD'))}"
+        )
 
     text_result = "\n".join(lines)
 
@@ -113,7 +119,9 @@ async def query_subscriptions(
             "card_type": "subscription",
             "service_name": row["service_name"],
             "category": row.get("category", "other"),
-            "amount": f"{_format_amount(amount, currency)}/{_format_cycle(cycle)}" if amount else None,
+            "amount": f"{_format_amount(amount, currency)}/{_format_cycle(cycle)}"
+            if amount
+            else None,
             "status": row.get("status", "active"),
             "billing_cycle": cycle,
         }
@@ -121,12 +129,14 @@ async def query_subscriptions(
 
     media = []
     if cards:
-        media.append({
-            "type": "inline_cards",
-            "data": json.dumps(cards),
-            "media_type": "application/json",
-            "metadata": {"for_storage": False},
-        })
+        media.append(
+            {
+                "type": "inline_cards",
+                "data": json.dumps(cards),
+                "media_type": "application/json",
+                "metadata": {"for_storage": False},
+            }
+        )
 
     return ToolOutput(text=text_result, media=media)
 
@@ -135,9 +145,12 @@ async def query_subscriptions(
 # check_expiring_subscriptions
 # =============================================================================
 
+
 @tool
 async def check_expiring_subscriptions(
-    days_ahead: Annotated[int, "Check for subscriptions renewing within this many days. Default 3."] = 3,
+    days_ahead: Annotated[
+        int, "Check for subscriptions renewing within this many days. Default 3."
+    ] = 3,
     *,
     context: AgentToolContext,
 ) -> str:

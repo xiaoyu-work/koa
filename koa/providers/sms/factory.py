@@ -52,6 +52,7 @@ class SMSProviderFactory:
 
         if provider_type == "signalwire":
             from .signalwire import SignalWireProvider
+
             return SignalWireProvider(
                 project_id=config.get("project_id", ""),
                 api_token=config.get("api_token", ""),
@@ -61,6 +62,7 @@ class SMSProviderFactory:
 
         elif provider_type == "twilio":
             from .twilio import TwilioProvider
+
             return TwilioProvider(
                 account_sid=config.get("account_sid", ""),
                 auth_token=config.get("auth_token", ""),

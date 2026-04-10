@@ -8,4 +8,3 @@ calendar scheduling, and trip task preparation.
 from .agent import TripPlannerAgent
 
 __all__ = ["TripPlannerAgent"]
-

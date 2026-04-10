@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends
 
-from ...errors import KoaError, E
+from ...errors import E, KoaError
 from ..app import require_app, verify_api_key
 from ..models import EmailEventRequest
 
@@ -14,8 +14,9 @@ async def ingest_email_event(req: EmailEventRequest):
     """Ingest an email event and evaluate importance."""
     app = require_app()
     if app.email_handler is None:
-        raise KoaError(E.SERVICE_UNAVAILABLE, "Email handler not available",
-                            details={"service": "events"})
+        raise KoaError(
+            E.SERVICE_UNAVAILABLE, "Email handler not available", details={"service": "events"}
+        )
 
     await app.email_handler.handle_email(req.tenant_id, req.model_dump())
     return {"status": "ok"}

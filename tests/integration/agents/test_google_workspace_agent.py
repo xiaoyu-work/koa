@@ -43,6 +43,7 @@ async def test_tool_selection(orchestrator_factory, user_input, expected_tools):
 # Argument extraction
 # ---------------------------------------------------------------------------
 
+
 async def test_drive_search_extracts_query(orchestrator_factory):
     """google_drive_search should receive a search keyword."""
     orch, recorder = await orchestrator_factory()
@@ -105,6 +106,7 @@ async def test_sheets_write_extracts_spreadsheet_name(orchestrator_factory):
 # Multi-step tool chains
 # ---------------------------------------------------------------------------
 
+
 async def test_read_doc_triggers_search_then_read(orchestrator_factory):
     """Reading a doc by name should first search, then read by ID."""
     orch, recorder = await orchestrator_factory()
@@ -126,12 +128,11 @@ async def test_read_doc_triggers_search_then_read(orchestrator_factory):
 # Response quality
 # ---------------------------------------------------------------------------
 
+
 async def test_response_quality_drive_search(orchestrator_factory, llm_judge):
     """Searching Google Drive should present file results."""
     orch, recorder = await orchestrator_factory()
-    result = await orch.handle_message(
-        "test_user", "Find my Q4 Report in Google Drive"
-    )
+    result = await orch.handle_message("test_user", "Find my Q4 Report in Google Drive")
     response = result.raw_message if hasattr(result, "raw_message") else str(result)
 
     passed = await llm_judge(
@@ -149,9 +150,7 @@ async def test_response_quality_drive_search(orchestrator_factory, llm_judge):
 async def test_response_quality_create_doc(orchestrator_factory, llm_judge):
     """Creating a Google Doc should confirm what was created."""
     orch, recorder = await orchestrator_factory()
-    result = await orch.handle_message(
-        "test_user", "Create a Google Doc called Sprint Notes"
-    )
+    result = await orch.handle_message("test_user", "Create a Google Doc called Sprint Notes")
     response = result.raw_message if hasattr(result, "raw_message") else str(result)
 
     passed = await llm_judge(

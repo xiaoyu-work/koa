@@ -33,7 +33,7 @@ Usage:
 import hashlib
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Type, Callable, Union
+from typing import Any, Callable, Dict, List, Optional, Type, Union
 
 from ..fields import InputField, OutputField
 
@@ -43,6 +43,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class InputSpec:
     """Specification for an input field (extracted from InputField)"""
+
     name: str
     prompt: str
     description: str
@@ -55,6 +56,7 @@ class InputSpec:
 @dataclass
 class OutputSpec:
     """Specification for an output field (extracted from OutputField)"""
+
     name: str
     type: type = str
     description: str = ""
@@ -71,6 +73,7 @@ class AgentMetadata:
     - OutputField class variables -> outputs
     - @valet parameters -> llm, capabilities, enable_memory, extra
     """
+
     name: str
     agent_class: Type
     description: str = ""
@@ -126,23 +129,27 @@ def _extract_fields(cls: Type) -> tuple[List[InputSpec], List[OutputSpec]]:
 
         if isinstance(value, InputField):
             value.name = name
-            inputs.append(InputSpec(
-                name=name,
-                prompt=value.prompt,
-                description=value.description,
-                required=value.required,
-                default=value.default,
-                validator=value.validator,
-                validator_description=getattr(value, 'validator_description', None),
-            ))
+            inputs.append(
+                InputSpec(
+                    name=name,
+                    prompt=value.prompt,
+                    description=value.description,
+                    required=value.required,
+                    default=value.default,
+                    validator=value.validator,
+                    validator_description=getattr(value, "validator_description", None),
+                )
+            )
 
         elif isinstance(value, OutputField):
             value.name = name
-            outputs.append(OutputSpec(
-                name=name,
-                type=value.type,
-                description=value.description,
-            ))
+            outputs.append(
+                OutputSpec(
+                    name=name,
+                    type=value.type,
+                    description=value.description,
+                )
+            )
 
     return inputs, outputs
 
@@ -226,7 +233,9 @@ def valet(
 
         # Register globally
         AGENT_REGISTRY[cls.__name__] = metadata
-        logger.debug(f"Registered agent: {cls.__name__} (inputs={[i.name for i in inputs]}, outputs={[o.name for o in outputs]})")
+        logger.debug(
+            f"Registered agent: {cls.__name__} (inputs={[i.name for i in inputs]}, outputs={[o.name for o in outputs]})"
+        )
 
         return cls
 

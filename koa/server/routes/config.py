@@ -7,13 +7,12 @@ import yaml
 from fastapi import APIRouter, Depends
 
 from ...app import Koa
-from ...errors import KoaError, E
+from ...errors import E, KoaError
 from ..app import (
-    _config_path,
     _SUPPORTED_PROVIDERS,
+    _config_path,
     get_app_instance,
     mask_config,
-    require_app,
     set_app,
     verify_api_key,
 )

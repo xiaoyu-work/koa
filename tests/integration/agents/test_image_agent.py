@@ -35,7 +35,7 @@ ROUTING_CASES = [
 async def test_routes_to_image_agent(orchestrator_factory, user_input):
     """The orchestrator should route image generation requests to ImageAgent."""
     orch, recorder = await orchestrator_factory()
-    result = await orch.handle_message("test_user", user_input)
+    await orch.handle_message("test_user", user_input)
 
     agent_types = [c["agent_type"] for c in recorder.agent_calls]
     assert any("image" in t.lower() for t in agent_types), (
@@ -46,6 +46,7 @@ async def test_routes_to_image_agent(orchestrator_factory, user_input):
 # ---------------------------------------------------------------------------
 # Field extraction — ImageAgent should extract the prompt
 # ---------------------------------------------------------------------------
+
 
 async def test_extracts_prompt_field(orchestrator_factory):
     """ImageAgent should extract the image description as the prompt field."""
@@ -58,14 +59,15 @@ async def test_extracts_prompt_field(orchestrator_factory):
     # ImageAgent uses InputField flow; the result should contain the prompt
     # in collected_fields or the approval message should reference it
     response_text = result.raw_message.lower()
-    assert "golden retriever" in response_text or "snow" in response_text or "dog" in response_text, (
-        f"Expected the response to reference the prompt content, got: {result.raw_message}"
-    )
+    assert (
+        "golden retriever" in response_text or "snow" in response_text or "dog" in response_text
+    ), f"Expected the response to reference the prompt content, got: {result.raw_message}"
 
 
 # ---------------------------------------------------------------------------
 # Response quality
 # ---------------------------------------------------------------------------
+
 
 async def test_response_quality_generation(orchestrator_factory, llm_judge):
     """Image generation request should produce an appropriate response."""

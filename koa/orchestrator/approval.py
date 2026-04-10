@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ApprovalRequest:
     """Structured approval request per design doc section 13.2."""
+
     agent_name: str
     action_summary: str
     risk_level: str = "write"  # "read", "write", "destructive"

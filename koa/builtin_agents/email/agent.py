@@ -5,19 +5,18 @@ Replaces SendEmailAgent, ReadEmailAgent, ReplyEmailAgent, DeleteEmailAgent,
 ArchiveEmailAgent, MarkReadEmailAgent with a single agent that has its own
 mini ReAct loop.
 """
-from datetime import datetime
 
 from koa import valet
 from koa.constants import EMAIL_SERVICES
 from koa.standard_agent import StandardAgent
 
 from .tools import (
+    archive_emails,
+    delete_emails,
+    mark_as_read,
+    reply_email,
     search_emails,
     send_email,
-    reply_email,
-    delete_emails,
-    archive_emails,
-    mark_as_read,
 )
 
 
@@ -53,8 +52,8 @@ Guidelines:
     def get_system_prompt(self) -> str:
         now, _ = self._user_now()
         return self._SYSTEM_PROMPT_TEMPLATE.format(
-            today=now.strftime('%Y-%m-%d'),
-            weekday=now.strftime('%A'),
+            today=now.strftime("%Y-%m-%d"),
+            weekday=now.strftime("%A"),
         )
 
     tools = (search_emails, send_email, reply_email, delete_emails, archive_emails, mark_as_read)

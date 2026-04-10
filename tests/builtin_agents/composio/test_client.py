@@ -1,9 +1,6 @@
 """Tests for koa.builtin_agents.composio.client — pure logic only"""
 
-import pytest
-
 from koa.builtin_agents.composio.client import ComposioClient
-
 
 # =========================================================================
 # format_action_result
@@ -11,7 +8,6 @@ from koa.builtin_agents.composio.client import ComposioClient
 
 
 class TestFormatActionResult:
-
     def test_successful_with_dict_data(self):
         data = {
             "successful": True,
@@ -89,7 +85,6 @@ class TestFormatActionResult:
 
 
 class TestComposioClientInit:
-
     def test_explicit_api_key(self):
         client = ComposioClient(api_key="my-key")
         assert client.api_key == "my-key"

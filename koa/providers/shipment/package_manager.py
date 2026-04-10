@@ -55,9 +55,7 @@ If it is NOT a package email: {{"is_package_email": false}}
             logger.error("No LLM instance provided for package extraction")
             return None
 
-        response = await llm.chat_completion(
-            messages=[{"role": "user", "content": prompt}]
-        )
+        response = await llm.chat_completion(messages=[{"role": "user", "content": prompt}])
 
         content = response.content.strip() if response.content else ""
         logger.info(f"LLM package extraction response: {content[:200]}")
@@ -77,7 +75,9 @@ If it is NOT a package email: {{"is_package_email": false}}
                 "email_sender": sender,
                 "email_subject": subject[:100],
             }
-            logger.info(f"LLM extracted package: {package_info['tracking_number']} ({package_info['carrier']})")
+            logger.info(
+                f"LLM extracted package: {package_info['tracking_number']} ({package_info['carrier']})"
+            )
             return package_info
 
     except Exception as e:

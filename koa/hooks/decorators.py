@@ -20,20 +20,14 @@ With options:
         ...
 """
 
-import logging
 import functools
+import logging
 from datetime import datetime
-from typing import (
-    Dict, Any, List, Optional, Callable, TypeVar, Type, Union
-)
-
-from .models import HookType, HookConfig, HookContext, HookPhase, HookResult
-from .handlers import LoggingHook, MetricsHook, TracingHook
-
+from typing import Any, Callable, Dict, Optional, TypeVar, Union
 
 # Type variables for decorators
-T = TypeVar('T')
-AgentClass = TypeVar('AgentClass', bound=type)
+T = TypeVar("T")
+AgentClass = TypeVar("AgentClass", bound=type)
 
 
 def logged(
@@ -81,7 +75,7 @@ def logged(
         _log_level = getattr(logging, level.upper(), logging.INFO)
 
         # Store original __init__
-        original_init = cls.__init__
+        original_init = cls.__init__  # type: ignore[misc]
 
         @functools.wraps(original_init)
         def new_init(self, *args, **kwargs):
@@ -90,7 +84,7 @@ def logged(
             # Log initialization
             _logger.log(
                 _log_level,
-                f"[{cls.__name__}] Initialized agent_id={self.agent_id} user_id={self.user_id}"
+                f"[{cls.__name__}] Initialized agent_id={self.agent_id} user_id={self.user_id}",
             )
 
             # Store logging config on instance
@@ -103,10 +97,10 @@ def logged(
                 "logger": _logger,
             }
 
-        cls.__init__ = new_init
+        cls.__init__ = new_init  # type: ignore[misc]
 
         # Wrap transition_to for state change logging
-        if log_state_changes and hasattr(cls, 'transition_to'):
+        if log_state_changes and hasattr(cls, "transition_to"):
             original_transition = cls.transition_to
 
             @functools.wraps(original_transition)
@@ -114,12 +108,12 @@ def logged(
                 old_status = self.status
                 result = original_transition(self, new_status)
 
-                if result and hasattr(self, '_logging_config'):
+                if result and hasattr(self, "_logging_config"):
                     cfg = self._logging_config
                     cfg["logger"].log(
                         cfg["level"],
                         f"[{cls.__name__}] State: {old_status.value} -> {new_status.value} "
-                        f"(agent_id={self.agent_id})"
+                        f"(agent_id={self.agent_id})",
                     )
 
                 return result
@@ -127,23 +121,22 @@ def logged(
             cls.transition_to = new_transition
 
         # Wrap reply for method call logging
-        if hasattr(cls, 'reply'):
+        if hasattr(cls, "reply"):
             original_reply = cls.reply
 
             @functools.wraps(original_reply)
             async def new_reply(self, msg=None):
-                cfg = getattr(self, '_logging_config', {})
+                cfg = getattr(self, "_logging_config", {})
                 logger_inst = cfg.get("logger", _logger)
                 log_lvl = cfg.get("level", _log_level)
 
                 # Log input
                 if cfg.get("include_inputs") and msg:
-                    input_text = msg.get_text() if hasattr(msg, 'get_text') else str(msg)
+                    input_text = msg.get_text() if hasattr(msg, "get_text") else str(msg)
                     if len(input_text) > 200:
                         input_text = input_text[:200] + "..."
                     logger_inst.log(
-                        log_lvl,
-                        f"[{cls.__name__}] Input: {input_text} (agent_id={self.agent_id})"
+                        log_lvl, f"[{cls.__name__}] Input: {input_text} (agent_id={self.agent_id})"
                     )
 
                 start_time = datetime.now()
@@ -155,19 +148,21 @@ def logged(
 
                     # Log output
                     if cfg.get("include_outputs") and result:
-                        output_text = result.raw_message if hasattr(result, 'raw_message') else str(result)
+                        output_text = (
+                            result.raw_message if hasattr(result, "raw_message") else str(result)
+                        )
                         if len(output_text) > 200:
                             output_text = output_text[:200] + "..."
                         logger_inst.log(
                             log_lvl,
                             f"[{cls.__name__}] Output: {output_text} "
-                            f"(agent_id={self.agent_id}, duration={duration_ms:.1f}ms)"
+                            f"(agent_id={self.agent_id}, duration={duration_ms:.1f}ms)",
                         )
                     else:
                         logger_inst.log(
                             log_lvl,
                             f"[{cls.__name__}] Completed status={result.status.value if hasattr(result, 'status') else 'unknown'} "
-                            f"(agent_id={self.agent_id}, duration={duration_ms:.1f}ms)"
+                            f"(agent_id={self.agent_id}, duration={duration_ms:.1f}ms)",
                         )
 
                     return result
@@ -177,14 +172,14 @@ def logged(
                     logger_inst.error(
                         f"[{cls.__name__}] Error: {type(e).__name__}: {e} "
                         f"(agent_id={self.agent_id}, duration={duration_ms:.1f}ms)",
-                        exc_info=True
+                        exc_info=True,
                     )
                     raise
 
             cls.reply = new_reply
 
         # Wrap _extract_and_collect_fields for field collection logging
-        if log_field_collection and hasattr(cls, '_extract_and_collect_fields'):
+        if log_field_collection and hasattr(cls, "_extract_and_collect_fields"):
             original_extract = cls._extract_and_collect_fields
 
             @functools.wraps(original_extract)
@@ -196,7 +191,7 @@ def logged(
                 fields_after = set(self.collected_fields.keys())
                 new_fields = fields_after - fields_before
 
-                if new_fields and hasattr(self, '_logging_config'):
+                if new_fields and hasattr(self, "_logging_config"):
                     cfg = self._logging_config
                     for field_name in new_fields:
                         value = self.collected_fields[field_name]
@@ -207,7 +202,7 @@ def logged(
                         cfg["logger"].log(
                             cfg["level"],
                             f"[{cls.__name__}] Field collected: {field_name}={value_str} "
-                            f"(agent_id={self.agent_id})"
+                            f"(agent_id={self.agent_id})",
                         )
 
             cls._extract_and_collect_fields = new_extract
@@ -347,7 +342,7 @@ def metered(
     def decorator(cls: AgentClass) -> AgentClass:
 
         # Initialize metrics storage on class
-        if not hasattr(cls, '_metrics'):
+        if not hasattr(cls, "_metrics"):
             cls._metrics = {
                 "invocations": 0,
                 "successes": 0,
@@ -374,7 +369,7 @@ def metered(
 
                 return result
 
-            except Exception as e:
+            except Exception:
                 if track_errors:
                     cls._metrics["errors"] += 1
 
@@ -387,7 +382,7 @@ def metered(
         cls.reply = new_reply
 
         # Add metrics getter
-        @classmethod
+        @classmethod  # type: ignore[misc]
         def get_metrics(cls_self) -> Dict[str, Any]:
             """Get collected metrics for this agent class."""
             m = cls_self._metrics
@@ -437,7 +432,7 @@ def observable(
 
     def decorator(cls: AgentClass) -> AgentClass:
         # Apply decorators in order
-        result_cls = logged(
+        result_cls: AgentClass = logged(
             level=log_level,
             include_inputs=include_inputs,
             include_outputs=include_outputs,

@@ -93,6 +93,7 @@ GET_USER_PROFILE_SCHEMA = {
 # update_user_profile — write tool
 # ---------------------------------------------------------------------------
 
+
 async def update_user_profile_executor(args: dict, context: AgentToolContext = None) -> str:
     """Save or update the user's profile information via koi-backend API."""
     import httpx
@@ -107,8 +108,16 @@ async def update_user_profile_executor(args: dict, context: AgentToolContext = N
         return "Error: 'category' and 'data' are required."
 
     VALID = {
-        "identity", "addresses", "work", "finance", "travel",
-        "lifestyle", "relationships", "services", "memories", "ai_preferences",
+        "identity",
+        "addresses",
+        "work",
+        "finance",
+        "travel",
+        "lifestyle",
+        "relationships",
+        "services",
+        "memories",
+        "ai_preferences",
     }
     if category not in VALID:
         return f"Error: Invalid category '{category}'. Must be one of: {', '.join(sorted(VALID))}"
@@ -148,17 +157,25 @@ UPDATE_USER_PROFILE_SCHEMA = {
             "type": "string",
             "description": "Profile category to update. One of: identity, addresses, work, finance, travel, lifestyle, relationships, services, memories, ai_preferences",
             "enum": [
-                "identity", "addresses", "work", "finance", "travel",
-                "lifestyle", "relationships", "services", "memories", "ai_preferences",
+                "identity",
+                "addresses",
+                "work",
+                "finance",
+                "travel",
+                "lifestyle",
+                "relationships",
+                "services",
+                "memories",
+                "ai_preferences",
             ],
         },
         "data": {
             "type": "object",
             "description": "Data to save. Structure depends on category. Examples:\n"
-                "- addresses: [{\"label\": \"home\", \"address\": \"123 Main St\", \"city\": \"Seattle\", \"state\": \"WA\"}]\n"
-                "- work: {\"company\": \"Microsoft\", \"title\": \"Engineer\", \"office\": \"Building 16\"}\n"
-                "- identity: {\"first_name\": \"John\", \"last_name\": \"Doe\"}\n"
-                "- ai_preferences: {\"language\": \"zh\", \"verbosity\": \"brief\"}",
+            '- addresses: [{"label": "home", "address": "123 Main St", "city": "Seattle", "state": "WA"}]\n'
+            '- work: {"company": "Microsoft", "title": "Engineer", "office": "Building 16"}\n'
+            '- identity: {"first_name": "John", "last_name": "Doe"}\n'
+            '- ai_preferences: {"language": "zh", "verbosity": "brief"}',
         },
     },
     "required": ["category", "data"],

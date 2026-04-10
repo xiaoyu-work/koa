@@ -69,11 +69,13 @@ class AzureImageProvider(BaseImageProvider):
 
             images = []
             for item in response.data:
-                images.append({
-                    "base64": item.b64_json,
-                    "url": None,
-                    "revised_prompt": getattr(item, "revised_prompt", None),
-                })
+                images.append(
+                    {
+                        "base64": item.b64_json,
+                        "url": None,
+                        "revised_prompt": getattr(item, "revised_prompt", None),
+                    }
+                )
 
             logger.info(f"Azure image generate succeeded: {len(images)} image(s)")
             return {"success": True, "data": {"images": images}}
@@ -106,11 +108,13 @@ class AzureImageProvider(BaseImageProvider):
 
             images = []
             for item in response.data:
-                images.append({
-                    "base64": item.b64_json,
-                    "url": None,
-                    "revised_prompt": getattr(item, "revised_prompt", None),
-                })
+                images.append(
+                    {
+                        "base64": item.b64_json,
+                        "url": None,
+                        "revised_prompt": getattr(item, "revised_prompt", None),
+                    }
+                )
 
             logger.info(f"Azure image edit succeeded: {len(images)} image(s)")
             return {"success": True, "data": {"images": images}}

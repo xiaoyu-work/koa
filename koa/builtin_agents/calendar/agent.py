@@ -9,18 +9,16 @@ The internal LLM decides which tools to call (query_events, create_event,
 update_event, delete_event) based on the user's request.
 """
 
-from datetime import datetime, timezone
-
 from koa import valet
 from koa.constants import CALENDAR_SERVICES
 from koa.standard_agent import StandardAgent
 
 from .tools import (
-    query_events,
-    create_event,
-    update_event,
-    delete_event,
     check_upcoming_events,
+    create_event,
+    delete_event,
+    query_events,
+    update_event,
 )
 
 

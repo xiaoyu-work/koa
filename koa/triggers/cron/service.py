@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-import time
 from typing import Callable, List, Optional
 
 from .executor import CronExecutor
@@ -109,10 +108,13 @@ class CronService:
         await self._store.save()
         self._reschedule()
 
-        self._emit(CronEvent(
-            job_id=job.id, action="added",
-            next_run_at_ms=job.state.next_run_at_ms,
-        ))
+        self._emit(
+            CronEvent(
+                job_id=job.id,
+                action="added",
+                next_run_at_ms=job.state.next_run_at_ms,
+            )
+        )
 
         logger.info(f"Added cron job {job.id} ({job.name})")
         return job
@@ -140,10 +142,13 @@ class CronService:
         await self._store.save()
         self._reschedule()
 
-        self._emit(CronEvent(
-            job_id=job.id, action="updated",
-            next_run_at_ms=job.state.next_run_at_ms,
-        ))
+        self._emit(
+            CronEvent(
+                job_id=job.id,
+                action="updated",
+                next_run_at_ms=job.state.next_run_at_ms,
+            )
+        )
 
         logger.info(f"Updated cron job {job.id}")
         return job
@@ -179,8 +184,11 @@ class CronService:
             nra = job.state.next_run_at_ms
             if nra is not None and nra > now_ms():
                 return CronRunEntry(
-                    ts=now_ms(), job_id=job_id, action="finished",
-                    status="skipped", summary="Not yet due",
+                    ts=now_ms(),
+                    job_id=job_id,
+                    action="finished",
+                    status="skipped",
+                    summary="Not yet due",
                 )
 
         return await self._executor.execute(job)
@@ -212,9 +220,7 @@ class CronService:
             "enabled_jobs": len(enabled),
             "running_jobs": len(running),
             "next_due_at_ms": next_due,
-            "next_due_in_seconds": (
-                max(0, (next_due - now_ms()) / 1000) if next_due else None
-            ),
+            "next_due_in_seconds": (max(0, (next_due - now_ms()) / 1000) if next_due else None),
         }
 
     async def get_runs(self, job_id: str, limit: int = 20) -> List[CronRunEntry]:
@@ -294,9 +300,12 @@ class CronService:
                 try:
                     missed_text = job.description or job.name
                     await self._executor._delivery.deliver(
-                        job, missed_text,
+                        job,
+                        missed_text,
                         CronRunEntry(
-                            ts=now, job_id=job.id, status="missed",
+                            ts=now,
+                            job_id=job.id,
+                            status="missed",
                             summary=missed_text,
                         ),
                     )

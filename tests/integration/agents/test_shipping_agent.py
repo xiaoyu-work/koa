@@ -41,6 +41,7 @@ async def test_tool_selection(orchestrator_factory, user_input, expected_tools):
 # Argument extraction
 # ---------------------------------------------------------------------------
 
+
 async def test_query_one_extracts_tracking_number(orchestrator_factory):
     """track_shipment with a specific tracking number should use action=query_one."""
     orch, recorder = await orchestrator_factory()
@@ -87,12 +88,11 @@ async def test_history_action(orchestrator_factory):
 # Response quality
 # ---------------------------------------------------------------------------
 
+
 async def test_response_quality_track_package(orchestrator_factory, llm_judge):
     """Tracking a package should present status and estimated delivery."""
     orch, recorder = await orchestrator_factory()
-    result = await orch.handle_message(
-        "test_user", "Where is my package 1Z999AA10123456784?"
-    )
+    result = await orch.handle_message("test_user", "Where is my package 1Z999AA10123456784?")
     response = result.raw_message if hasattr(result, "raw_message") else str(result)
 
     passed = await llm_judge(

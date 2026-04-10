@@ -64,30 +64,36 @@ class OAuthHTTPMixin:
 
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.request(
-                method, url, headers=req_headers,
-                json=json, data=data, content=content, params=params,
+                method,
+                url,
+                headers=req_headers,
+                json=json,
+                data=data,
+                content=content,
+                params=params,
             )
 
             if response.status_code == 401:
-                logger.info(
-                    f"[{self.__class__.__name__}] 401 received, refreshing token"
-                )
+                logger.info(f"[{self.__class__.__name__}] 401 received, refreshing token")
                 if await self.ensure_valid_token(force_refresh=True):
                     req_headers = self._get_headers()
                     if headers:
                         req_headers.update(headers)
                     response = await client.request(
-                        method, url, headers=req_headers,
-                        json=json, data=data, content=content, params=params,
+                        method,
+                        url,
+                        headers=req_headers,
+                        json=json,
+                        data=data,
+                        content=content,
+                        params=params,
                     )
 
             return response
 
     def _get_headers(self) -> Dict[str, str]:
         """Return authorization headers. Override in subclass."""
-        raise NotImplementedError(
-            f"{self.__class__.__name__} must implement _get_headers()"
-        )
+        raise NotImplementedError(f"{self.__class__.__name__} must implement _get_headers()")
 
     async def refresh_access_token(self) -> Dict[str, Any]:
         """Refresh Google OAuth access token using refresh token."""
@@ -114,7 +120,9 @@ class OAuthHTTPMixin:
                     data = response.json()
                     expires_in = data.get("expires_in", 3600)
                     token_expiry = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
-                    logger.info(f"{self.__class__.__name__} token refreshed for {self.account_name}")
+                    logger.info(
+                        f"{self.__class__.__name__} token refreshed for {self.account_name}"
+                    )
                     return {
                         "success": True,
                         "access_token": data["access_token"],
@@ -123,7 +131,10 @@ class OAuthHTTPMixin:
                     }
                 else:
                     logger.error(f"{self.__class__.__name__} token refresh failed: {response.text}")
-                    return {"success": False, "error": f"Token refresh failed: {response.status_code}"}
+                    return {
+                        "success": False,
+                        "error": f"Token refresh failed: {response.status_code}",
+                    }
 
         except Exception as e:
             logger.error(f"{self.__class__.__name__} token refresh error: {e}", exc_info=True)

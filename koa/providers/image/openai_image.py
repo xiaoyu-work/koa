@@ -41,11 +41,9 @@ class OpenAIImageProvider(BaseImageProvider):
             size = size or DEFAULT_SIZE
             quality = quality or DEFAULT_QUALITY
 
-            logger.info(
-                f"OpenAI generating image: size={size}, quality={quality}, n={n}"
-            )
+            logger.info(f"OpenAI generating image: size={size}, quality={quality}, n={n}")
 
-            response = await self.client.images.generate(
+            response = await self.client.images.generate(  # type: ignore[call-overload]
                 model=self.model,
                 prompt=prompt,
                 size=size,
@@ -56,11 +54,13 @@ class OpenAIImageProvider(BaseImageProvider):
 
             images = []
             for item in response.data:
-                images.append({
-                    "base64": item.b64_json,
-                    "url": None,
-                    "revised_prompt": getattr(item, "revised_prompt", None),
-                })
+                images.append(
+                    {
+                        "base64": item.b64_json,
+                        "url": None,
+                        "revised_prompt": getattr(item, "revised_prompt", None),
+                    }
+                )
 
             logger.info(f"OpenAI generated {len(images)} image(s)")
             return {"success": True, "data": {"images": images}}
@@ -92,11 +92,13 @@ class OpenAIImageProvider(BaseImageProvider):
 
             images = []
             for item in response.data:
-                images.append({
-                    "base64": getattr(item, "b64_json", None),
-                    "url": getattr(item, "url", None),
-                    "revised_prompt": getattr(item, "revised_prompt", None),
-                })
+                images.append(
+                    {
+                        "base64": getattr(item, "b64_json", None),
+                        "url": getattr(item, "url", None),
+                        "revised_prompt": getattr(item, "revised_prompt", None),
+                    }
+                )
 
             logger.info(f"OpenAI edited image, returned {len(images)} result(s)")
             return {"success": True, "data": {"images": images}}

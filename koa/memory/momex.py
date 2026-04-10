@@ -8,7 +8,7 @@ Conversation history is managed by the app layer.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,7 @@ class MomexMemory:
             return self._config
 
         from momex import MomexConfig
-        from momex.config import LLMConfig, EmbeddingConfig, StorageConfig
+        from momex.config import EmbeddingConfig, LLMConfig, StorageConfig
 
         llm = LLMConfig(
             provider=self._llm_provider,
@@ -76,7 +76,9 @@ class MomexMemory:
         # Embedding config (independent provider/endpoint support)
         embedding = None
         if self._embedding_api_key:
-            provider = self._embedding_provider or ("azure" if self._embedding_api_base else "openai")
+            provider = self._embedding_provider or (
+                "azure" if self._embedding_api_base else "openai"
+            )
             embedding_kwargs = {
                 "provider": provider,
                 "api_key": self._embedding_api_key,
@@ -106,6 +108,7 @@ class MomexMemory:
         """Get or create a Memory instance for a tenant."""
         if tenant_id not in self._memories:
             from momex import Memory
+
             collection = f"tenant:{tenant_id}"
             self._memories[tenant_id] = Memory(
                 collection=collection,
@@ -128,14 +131,19 @@ class MomexMemory:
             memory = self._get_memory(tenant_id)
             results = await memory.search(query_text=query, limit=limit)
             return [
-                {"text": item.text, "type": item.type, "score": item.score, "timestamp": item.timestamp}
+                {
+                    "text": item.text,
+                    "type": item.type,
+                    "score": item.score,
+                    "timestamp": item.timestamp,
+                }
                 for item in results
             ]
         except Exception as e:
             import traceback
+
             logger.warning(
-                f"Failed to search memories for {tenant_id}: {e}\n"
-                f"{traceback.format_exc()}"
+                f"Failed to search memories for {tenant_id}: {e}\n{traceback.format_exc()}"
             )
             return []
 
@@ -155,7 +163,5 @@ class MomexMemory:
             await memory.add(messages=messages, infer=infer)
         except Exception as e:
             import traceback
-            logger.warning(
-                f"Failed to add memories for {tenant_id}: {e}\n"
-                f"{traceback.format_exc()}"
-            )
+
+            logger.warning(f"Failed to add memories for {tenant_id}: {e}\n{traceback.format_exc()}")

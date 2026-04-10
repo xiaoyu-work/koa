@@ -43,10 +43,10 @@ def chat_loop(
             print(f"\033[90mConnected to Koa v{version} at {url}")
             if auth and not api_key:
                 print("\033[33m⚠ Server has auth enabled but no --api-key provided\033[0m")
-            print(f"\033[90mType your message and press Enter. Ctrl+C to quit.\033[0m")
+            print("\033[90mType your message and press Enter. Ctrl+C to quit.\033[0m")
     except Exception as e:
         print(f"\033[31m✗ Cannot connect to {url}: {e}\033[0m")
-        print(f"\033[90mMake sure the server is running: koa serve\033[0m")
+        print("\033[90mMake sure the server is running: koa serve\033[0m")
         sys.exit(1)
 
     print()
@@ -61,10 +61,12 @@ def chat_loop(
         if not user_input.strip():
             continue
 
-        payload = json.dumps({
-            "message": user_input,
-            "tenant_id": tenant_id,
-        })
+        payload = json.dumps(
+            {
+                "message": user_input,
+                "tenant_id": tenant_id,
+            }
+        )
 
         sys.stdout.write("\033[1;32mKoa:\033[0m ")
         sys.stdout.flush()
@@ -169,6 +171,7 @@ def _stream_response(url: str, headers: dict, payload: str) -> None:
 def _format_tool_name(name: str) -> str:
     """Format agent/tool name for display: 'EmailAgent' -> 'Email'."""
     import re
+
     name = re.sub(r"Agent$", "", name)
     name = re.sub(r"([a-z])([A-Z])", r"\1 \2", name)
     return name.replace("_", " ").strip() or name

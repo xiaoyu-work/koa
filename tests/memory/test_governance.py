@@ -5,7 +5,6 @@ from koa.memory.session_memory import SessionMemoryManager
 
 
 class TestMemoryGovernance:
-
     def test_select_recalled_memories_deduplicates_and_caps(self):
         governance = MemoryGovernance(max_prompt_memories=2, max_prompt_chars=500)
         recalled = [
@@ -46,7 +45,11 @@ class TestMemoryGovernance:
             {"text": "User works at Google", "type": "profile", "score": 0.85},
         ]
         true_memory = [
-            {"namespace": "identity", "fact_key": "home_location", "summary": "User lives in Seattle."},
+            {
+                "namespace": "identity",
+                "fact_key": "home_location",
+                "summary": "User lives in Seattle.",
+            },
         ]
         selected = governance.select_recalled_memories(recalled, true_memory=true_memory)
         texts = [s["text"] for s in selected]
@@ -61,11 +64,20 @@ class TestMemoryGovernance:
     def test_select_recalled_memories_exact_metadata_conflict(self):
         governance = MemoryGovernance(max_prompt_memories=5, max_prompt_chars=2000)
         recalled = [
-            {"text": "User lives in New York", "namespace": "identity", "fact_key": "home_location", "score": 0.95},
+            {
+                "text": "User lives in New York",
+                "namespace": "identity",
+                "fact_key": "home_location",
+                "score": 0.95,
+            },
             {"text": "User prefers tea", "score": 0.9},
         ]
         true_memory = [
-            {"namespace": "identity", "fact_key": "home_location", "summary": "User lives in Seattle."},
+            {
+                "namespace": "identity",
+                "fact_key": "home_location",
+                "summary": "User lives in Seattle.",
+            },
         ]
         selected = governance.select_recalled_memories(recalled, true_memory=true_memory)
         texts = [s["text"] for s in selected]
@@ -83,7 +95,6 @@ class TestMemoryGovernance:
 
 
 class TestSessionMemoryManager:
-
     def test_prepare_session_sets_objective_and_constraint(self):
         manager = SessionMemoryManager()
         state = manager.prepare_session(

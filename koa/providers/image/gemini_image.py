@@ -66,11 +66,13 @@ class GeminiImageProvider(BaseImageProvider):
                     b64_data = image_bytes
                 else:
                     b64_data = base64.b64encode(image_bytes).decode("utf-8")
-                images.append({
-                    "base64": b64_data,
-                    "url": None,
-                    "revised_prompt": None,
-                })
+                images.append(
+                    {
+                        "base64": b64_data,
+                        "url": None,
+                        "revised_prompt": None,
+                    }
+                )
 
         if revised_prompt and images:
             images[0]["revised_prompt"] = revised_prompt
@@ -90,9 +92,7 @@ class GeminiImageProvider(BaseImageProvider):
     ) -> Dict[str, Any]:
         """Generate image(s) from text prompt using Gemini."""
         try:
-            logger.info(
-                f"Gemini generating image: model={self.model}, n={n}"
-            )
+            logger.info(f"Gemini generating image: model={self.model}, n={n}")
 
             response = self.client.models.generate_content(
                 model=self.model,
@@ -144,7 +144,9 @@ class GeminiImageProvider(BaseImageProvider):
 
             result = self._parse_response(response)
             if result["success"]:
-                logger.info(f"Gemini edited image, returned {len(result['data']['images'])} result(s)")
+                logger.info(
+                    f"Gemini edited image, returned {len(result['data']['images'])} result(s)"
+                )
             else:
                 logger.warning(f"Gemini edit returned no images: {result.get('error')}")
 

@@ -12,7 +12,7 @@ Requires:
 """
 
 import logging
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, Optional
 
 from .base import BaseCloudStorageProvider
 
@@ -52,6 +52,7 @@ class SupabaseStorageProvider(BaseCloudStorageProvider):
     def for_tenant(self, tenant_id: str) -> "SupabaseStorageProvider":
         """Return a lightweight copy scoped to a specific tenant."""
         import copy
+
         clone = copy.copy(self)
         clone._tenant_id = tenant_id
         return clone
@@ -60,6 +61,7 @@ class SupabaseStorageProvider(BaseCloudStorageProvider):
         """Lazy-initialize the Supabase client."""
         if self._client is None:
             from supabase import create_client
+
             self._client = create_client(self._supabase_url, self._supabase_key)
         return self._client
 
@@ -98,9 +100,7 @@ class SupabaseStorageProvider(BaseCloudStorageProvider):
             )
 
             # Generate a signed URL (private buckets don't support public URLs)
-            signed = self._storage.create_signed_url(
-                full_path, DEFAULT_SIGNED_URL_EXPIRY
-            )
+            signed = self._storage.create_signed_url(full_path, DEFAULT_SIGNED_URL_EXPIRY)
             url = signed.get("signedURL", "") if isinstance(signed, dict) else str(signed)
 
             return {
@@ -117,9 +117,7 @@ class SupabaseStorageProvider(BaseCloudStorageProvider):
 
     async def get_download_link(self, file_id: str) -> Dict[str, Any]:
         try:
-            result = self._storage.create_signed_url(
-                file_id, DEFAULT_SIGNED_URL_EXPIRY
-            )
+            result = self._storage.create_signed_url(file_id, DEFAULT_SIGNED_URL_EXPIRY)
             url = result.get("signedURL", "") if isinstance(result, dict) else str(result)
             return {
                 "success": True,
@@ -226,9 +224,7 @@ class SupabaseStorageProvider(BaseCloudStorageProvider):
         try:
             # Supabase doesn't support email-based sharing.
             # Return a signed URL instead.
-            result = self._storage.create_signed_url(
-                file_id, DEFAULT_SIGNED_URL_EXPIRY
-            )
+            result = self._storage.create_signed_url(file_id, DEFAULT_SIGNED_URL_EXPIRY)
             url = result.get("signedURL", "") if isinstance(result, dict) else str(result)
             return {
                 "success": True,

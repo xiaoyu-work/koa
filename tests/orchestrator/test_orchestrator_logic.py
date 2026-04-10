@@ -11,16 +11,14 @@ Tests cover:
 """
 
 import json
-import pytest
+import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
-from unittest.mock import MagicMock
 
 from koa.orchestrator.react_config import (
     COMPLETE_TASK_TOOL_NAME,
     CompleteTaskResult,
 )
-
 
 # ── Standalone helper re-implementations for isolated testing ──
 # These replicate the pure logic from Orchestrator without needing
@@ -37,7 +35,9 @@ def _tool_name_from_schema(schema: Dict[str, Any]) -> Optional[str]:
     return name if isinstance(name, str) else None
 
 
-def _build_tool_result_message(tool_call_id: str, content: str, is_error: bool = False) -> Dict[str, Any]:
+def _build_tool_result_message(
+    tool_call_id: str, content: str, is_error: bool = False
+) -> Dict[str, Any]:
     if is_error:
         content = f"[ERROR] {content}"
     return {"role": "tool", "tool_call_id": tool_call_id, "content": content}
@@ -56,7 +56,9 @@ def _assistant_message_from_response(response) -> Dict[str, Any]:
                 "type": "function",
                 "function": {
                     "name": tc.name,
-                    "arguments": json.dumps(tc.arguments) if isinstance(tc.arguments, dict) else tc.arguments,
+                    "arguments": json.dumps(tc.arguments)
+                    if isinstance(tc.arguments, dict)
+                    else tc.arguments,
                 },
             }
             for tc in tool_calls
@@ -93,7 +95,6 @@ class MockLLMResponse:
 
 
 class TestToolNameFromSchema:
-
     def test_valid_schema(self):
         schema = _make_schema("get_weather")
         assert _tool_name_from_schema(schema) == "get_weather"
@@ -123,7 +124,6 @@ class TestToolNameFromSchema:
 
 
 class TestBuildToolResultMessage:
-
     def test_normal_result(self):
         msg = _build_tool_result_message("tc1", "weather is sunny")
         assert msg == {
@@ -144,7 +144,6 @@ class TestBuildToolResultMessage:
 
 
 class TestAssistantMessageFromResponse:
-
     def test_text_only_response(self):
         resp = MockLLMResponse(content="Hello!", tool_calls=None)
         msg = _assistant_message_from_response(resp)
@@ -190,7 +189,9 @@ class TestCompleteTaskInterception:
         for tc in tool_calls:
             if tc.name == COMPLETE_TASK_TOOL_NAME:
                 try:
-                    args = tc.arguments if isinstance(tc.arguments, dict) else json.loads(tc.arguments)
+                    args = (
+                        tc.arguments if isinstance(tc.arguments, dict) else json.loads(tc.arguments)
+                    )
                 except (json.JSONDecodeError, TypeError):
                     args = {}
                 text = args.get("result", "")
@@ -262,9 +263,6 @@ class TestCompleteTaskInterception:
 # =========================================================================
 
 
-import re
-
-
 def _score_tool_relevance(user_message, schema, is_agent_tool_fn=None):
     name = (_tool_name_from_schema(schema) or "").lower()
     description = str(schema.get("function", {}).get("description", "") or "").lower()
@@ -283,7 +281,6 @@ def _score_tool_relevance(user_message, schema, is_agent_tool_fn=None):
 
 
 class TestScoreToolRelevance:
-
     def test_keyword_overlap(self):
         schema = _make_schema("get_weather", "Get weather forecast for a city")
         score = _score_tool_relevance("What's the weather in Tokyo?", schema)
@@ -298,7 +295,10 @@ class TestScoreToolRelevance:
 
     def test_agent_tool_bonus(self):
         schema = _make_schema("EmailAgent", "send email")
-        is_agent = lambda name: name == "emailagent"
+
+        def is_agent(name):
+            return name == "emailagent"
+
         score_with = _score_tool_relevance("send email", schema, is_agent_tool_fn=is_agent)
         score_without = _score_tool_relevance("send email", schema)
         assert score_with == score_without + 0.5
@@ -319,7 +319,6 @@ class TestScoreToolRelevance:
 
 
 class TestFilterToolSchemas:
-
     def test_filter_by_names(self):
         schemas = [_make_schema("a"), _make_schema("b"), _make_schema("c")]
         filtered = [s for s in schemas if _tool_name_from_schema(s) in {"a", "c"}]

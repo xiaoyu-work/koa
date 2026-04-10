@@ -1,2 +1,2 @@
-from .main import main
-from .app import api
+from .app import api as api
+from .main import main as main

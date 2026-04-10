@@ -46,48 +46,45 @@ Example YAML:
           max_requests_per_minute: 60
 """
 
-from .models import (
-    # Enums
-    HookType,
-    HookPhase,
-    # Config
-    HookConfig,
-    # Context and Result
-    HookContext,
-    HookResult,
-    # Data models
-    MetricsData,
-    TracingSpan,
-    RateLimitConfig,
-    RateLimitState,
+from .decorators import (
+    # One-click decorators
+    logged,
+    metered,
+    observable,
+    traced,
 )
-
 from .handlers import (
+    CustomHook,
     # Base
     HookHandler,
     # Built-in hooks
     LoggingHook,
     MetricsHook,
-    TracingHook,
     RateLimitingHook,
-    CustomHook,
+    TracingHook,
 )
-
 from .manager import (
-    HookManager,
-    HookExecutionError,
     HookableAgent,
-    with_hooks,
-    get_global_hook_manager,
+    HookExecutionError,
+    HookManager,
     configure_hooks,
+    get_global_hook_manager,
+    with_hooks,
 )
-
-from .decorators import (
-    # One-click decorators
-    logged,
-    traced,
-    metered,
-    observable,
+from .models import (
+    # Config
+    HookConfig,
+    # Context and Result
+    HookContext,
+    HookPhase,
+    HookResult,
+    # Enums
+    HookType,
+    # Data models
+    MetricsData,
+    RateLimitConfig,
+    RateLimitState,
+    TracingSpan,
 )
 
 __all__ = [

@@ -1,6 +1,5 @@
 """Tests for config schema validation."""
 
-import pytest
 from koa.config.schema import validate_config
 
 

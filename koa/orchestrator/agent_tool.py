@@ -157,7 +157,8 @@ async def execute_agent_tool(
                         accounts = await credential_store.list(tenant_id)
                         tenant_services = {a["service"] for a in accounts}
                         if not (set(required_services) & tenant_services):
-                            from ..errors import KoaError, E
+                            from ..errors import E, KoaError
+
                             err = KoaError(
                                 E.SERVICE_NOT_CONNECTED,
                                 f"{agent_type} requires a connected service",
@@ -180,15 +181,19 @@ async def execute_agent_tool(
         context_hints=enriched_hints,
     )
     if agent is None:
-        logger.error(
-            f"[AgentTool] create_agent returned None for {agent_type}, tenant={tenant_id}"
-        )
+        logger.error(f"[AgentTool] create_agent returned None for {agent_type}, tenant={tenant_id}")
         from ..errors import E
+
         return AgentToolResult(
             completed=True,
             result_text=f"[{E.AGENT_FAILED}] Failed to create agent {agent_type}",
-            metadata={"error": {"code": E.AGENT_FAILED, "message": f"Failed to create agent {agent_type}",
-                                "details": {"agent_type": agent_type}}},
+            metadata={
+                "error": {
+                    "code": E.AGENT_FAILED,
+                    "message": f"Failed to create agent {agent_type}",
+                    "details": {"agent_type": agent_type},
+                }
+            },
         )
 
     # Build message for the agent — only pass the task instruction.

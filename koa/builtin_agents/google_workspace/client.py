@@ -150,9 +150,7 @@ class GoogleWorkspaceClient:
             resp.raise_for_status()
             return resp.json()
 
-    async def sheets_get_values(
-        self, spreadsheet_id: str, range_: str
-    ) -> Dict[str, Any]:
+    async def sheets_get_values(self, spreadsheet_id: str, range_: str) -> Dict[str, Any]:
         """Get cell values from a spreadsheet range."""
         async with httpx.AsyncClient() as client:
             resp = await client.get(

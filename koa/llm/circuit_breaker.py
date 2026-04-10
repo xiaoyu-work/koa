@@ -30,10 +30,7 @@ class CircuitBreakerOpenError(Exception):
     def __init__(self, provider: str = "", retry_after: float = 0):
         self.provider = provider
         self.retry_after = retry_after
-        super().__init__(
-            f"Circuit breaker open for '{provider}'. "
-            f"Retry after {retry_after:.0f}s."
-        )
+        super().__init__(f"Circuit breaker open for '{provider}'. Retry after {retry_after:.0f}s.")
 
 
 class CircuitBreaker:
@@ -81,8 +78,7 @@ class CircuitBreaker:
         """Record a successful call."""
         if self._state != CircuitState.CLOSED:
             logger.info(
-                f"[CircuitBreaker] {self.provider_name}: "
-                f"{self.state.value} → closed (success)"
+                f"[CircuitBreaker] {self.provider_name}: {self.state.value} → closed (success)"
             )
         self._state = CircuitState.CLOSED
         self.failure_count = 0

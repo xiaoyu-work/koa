@@ -86,8 +86,7 @@ class ExecutionPolicyEngine:
                 return ExecutionPolicyDecision(
                     allowed=False,
                     reason=(
-                        f"tool '{tool.name}' requires feature flag "
-                        f"'{tool.requires_feature_flag}'"
+                        f"tool '{tool.name}' requires feature flag '{tool.requires_feature_flag}'"
                     ),
                     tags=["feature-flag"],
                 )

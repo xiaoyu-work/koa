@@ -4,15 +4,13 @@ import pytest
 
 from koa.llm.base import (
     BaseLLMClient,
-    LLMConfig,
     LLMResponse,
-    StreamChunk,
     StopReason,
+    StreamChunk,
     ToolCall,
     Usage,
 )
 from koa.models import AgentTool
-
 
 # ── Concrete subclass for testing (abstract methods stubbed) ──
 
@@ -48,7 +46,6 @@ def o1_client():
 
 
 class TestIsRestrictedModel:
-
     def test_o1(self, client):
         assert client._is_restricted_model("o1") is True
 
@@ -90,7 +87,6 @@ class TestIsRestrictedModel:
 
 
 class TestModelParams:
-
     def test_restricted_model_params(self, client):
         params = client._model_params("o1")
         assert "max_completion_tokens" in params
@@ -121,7 +117,6 @@ class TestModelParams:
 
 
 class TestCalculateCost:
-
     def test_known_model(self, client):
         usage = Usage(prompt_tokens=1000, completion_tokens=500)
         cost = client._calculate_cost(usage, "gpt-4o")
@@ -151,7 +146,6 @@ class TestCalculateCost:
 
 
 class TestFormatTool:
-
     def test_formats_agent_tool(self, client):
         tool = AgentTool(
             name="search_web",
@@ -176,7 +170,6 @@ class TestFormatTool:
 
 
 class TestAddMediaToMessages:
-
     def test_no_media_returns_original(self, client):
         msgs = [{"role": "user", "content": "hello"}]
         result = client._add_media_to_messages_openai(msgs, [])
@@ -208,7 +201,7 @@ class TestAddMediaToMessages:
         media = [{"type": "image", "data": "https://example.com/img.jpg"}]
         result = client._add_media_to_messages_openai(msgs, media)
         assert isinstance(result[2]["content"], list)  # last user msg
-        assert isinstance(result[0]["content"], str)    # first user msg unchanged
+        assert isinstance(result[0]["content"], str)  # first user msg unchanged
 
     def test_no_user_message_unchanged(self, client):
         msgs = [{"role": "system", "content": "sys"}]
@@ -229,7 +222,6 @@ class TestAddMediaToMessages:
 
 
 class TestLLMResponse:
-
     def test_has_tool_calls_true(self):
         tc = ToolCall(id="1", name="x", arguments={})
         resp = LLMResponse(content="", tool_calls=[tc])

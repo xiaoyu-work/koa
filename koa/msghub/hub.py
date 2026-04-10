@@ -8,25 +8,25 @@ This module provides:
 
 import asyncio
 import uuid
-from datetime import datetime
-from typing import Dict, Any, List, Optional, Callable, Protocol, AsyncIterator, Union
 from contextlib import asynccontextmanager
+from datetime import datetime
+from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Protocol
 
 from .models import (
+    HubExecutionResult,
     Message,
     MessageRole,
     MessageType,
-    ParticipantInfo,
     MsgHubConfig,
     MsgHubState,
+    ParticipantInfo,
     SharedContext,
-    VisibilityMode,
-    HubExecutionResult,
 )
 
 
 class AgentProtocol(Protocol):
     """Protocol for agents that can participate in MsgHub"""
+
     agent_id: str
     agent_type: str
 
@@ -35,6 +35,7 @@ class AgentProtocol(Protocol):
 
 class MsgHubError(Exception):
     """Raised when MsgHub operation fails"""
+
     pass
 
 
@@ -85,10 +86,7 @@ class MsgHub:
         self.config = config or MsgHubConfig()
         self.config.hub_id = hub_id or self.config.hub_id or f"hub_{uuid.uuid4().hex[:8]}"
 
-        self.state = MsgHubState(
-            hub_id=self.config.hub_id,
-            context=SharedContext()
-        )
+        self.state = MsgHubState(hub_id=self.config.hub_id, context=SharedContext())
 
         # Message callbacks
         self._message_callbacks: List[Callable[[Message], Any]] = []
@@ -111,7 +109,7 @@ class MsgHub:
         self,
         agent: AgentProtocol,
         can_see_all: bool = True,
-        visible_roles: Optional[List[MessageRole]] = None
+        visible_roles: Optional[List[MessageRole]] = None,
     ) -> ParticipantInfo:
         """
         Add an agent as a participant.
@@ -127,15 +125,15 @@ class MsgHub:
         if not self.state.is_active:
             raise MsgHubError("Cannot add participant to closed hub")
 
-        agent_id = getattr(agent, 'agent_id', str(id(agent)))
-        agent_type = getattr(agent, 'agent_type', type(agent).__name__)
+        agent_id = getattr(agent, "agent_id", str(id(agent)))
+        agent_type = getattr(agent, "agent_type", type(agent).__name__)
 
         participant = ParticipantInfo(
             agent_id=agent_id,
             agent_type=agent_type,
             joined_at_message_count=len(self.state.messages),
             can_see_all=can_see_all,
-            visible_roles=visible_roles or list(MessageRole)
+            visible_roles=visible_roles or list(MessageRole),
         )
 
         self.state.participants[agent_id] = participant
@@ -165,7 +163,7 @@ class MsgHub:
         message_type: MessageType = MessageType.TEXT,
         data: Optional[Dict[str, Any]] = None,
         reply_to: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Message:
         """
         Broadcast a message to all participants.
@@ -221,10 +219,7 @@ class MsgHub:
         return message
 
     async def broadcast_user_message(
-        self,
-        content: str,
-        user_id: str = "user",
-        data: Optional[Dict[str, Any]] = None
+        self, content: str, user_id: str = "user", data: Optional[Dict[str, Any]] = None
     ) -> Message:
         """Convenience method to broadcast a user message"""
         return await self.broadcast(
@@ -232,13 +227,11 @@ class MsgHub:
             sender_id=user_id,
             role=MessageRole.USER,
             message_type=MessageType.TEXT,
-            data=data
+            data=data,
         )
 
     async def broadcast_system_message(
-        self,
-        content: str,
-        data: Optional[Dict[str, Any]] = None
+        self, content: str, data: Optional[Dict[str, Any]] = None
     ) -> Message:
         """Convenience method to broadcast a system message"""
         return await self.broadcast(
@@ -246,7 +239,7 @@ class MsgHub:
             sender_id="system",
             role=MessageRole.SYSTEM,
             message_type=MessageType.TEXT,
-            data=data
+            data=data,
         )
 
     def get_messages(
@@ -254,7 +247,7 @@ class MsgHub:
         participant_id: Optional[str] = None,
         limit: Optional[int] = None,
         since: Optional[datetime] = None,
-        role: Optional[MessageRole] = None
+        role: Optional[MessageRole] = None,
     ) -> List[Message]:
         """
         Get messages from the hub.
@@ -269,9 +262,7 @@ class MsgHub:
             List of messages
         """
         if participant_id:
-            messages = self.state.get_messages_for_participant(
-                participant_id, self.config
-            )
+            messages = self.state.get_messages_for_participant(participant_id, self.config)
         else:
             messages = list(self.state.messages)
 
@@ -303,12 +294,7 @@ class MsgHub:
             return self.state.context.get(key)
         return dict(self.state.context.data)
 
-    def set_context(
-        self,
-        key: str,
-        value: Any,
-        updater_id: Optional[str] = None
-    ) -> None:
+    def set_context(self, key: str, value: Any, updater_id: Optional[str] = None) -> None:
         """
         Set a shared context value.
 
@@ -319,11 +305,7 @@ class MsgHub:
         """
         self.state.context.set(key, value, updater_id)
 
-    def update_context(
-        self,
-        updates: Dict[str, Any],
-        updater_id: Optional[str] = None
-    ) -> None:
+    def update_context(self, updates: Dict[str, Any], updater_id: Optional[str] = None) -> None:
         """
         Update multiple context values.
 
@@ -339,7 +321,7 @@ class MsgHub:
         message: Any,
         broadcast_input: bool = True,
         broadcast_output: bool = True,
-        update_context_keys: Optional[List[str]] = None
+        update_context_keys: Optional[List[str]] = None,
     ) -> Any:
         """
         Execute an agent with shared context.
@@ -354,8 +336,8 @@ class MsgHub:
         Returns:
             Agent's reply
         """
-        agent_id = getattr(agent, 'agent_id', str(id(agent)))
-        agent_type = getattr(agent, 'agent_type', type(agent).__name__)
+        agent_id = getattr(agent, "agent_id", str(id(agent)))
+        agent_type = getattr(agent, "agent_type", type(agent).__name__)
 
         # Ensure agent is a participant
         if agent_id not in self.state.participants:
@@ -366,25 +348,25 @@ class MsgHub:
             await self.broadcast_user_message(message)
 
         # Inject shared context into agent if it has collected_fields
-        if hasattr(agent, 'collected_fields') and isinstance(agent.collected_fields, dict):
+        if hasattr(agent, "collected_fields") and isinstance(agent.collected_fields, dict):
             # Add visible messages as context
             visible_messages = self.get_messages(participant_id=agent_id)
-            agent.collected_fields['_hub_messages'] = [m.to_dict() for m in visible_messages]
-            agent.collected_fields['_hub_context'] = dict(self.state.context.data)
+            agent.collected_fields["_hub_messages"] = [m.to_dict() for m in visible_messages]
+            agent.collected_fields["_hub_context"] = dict(self.state.context.data)
 
         # Execute agent
         reply = await agent.reply(message)
 
         # Extract and update context
-        if update_context_keys and hasattr(agent, 'collected_fields'):
+        if update_context_keys and hasattr(agent, "collected_fields"):
             for key in update_context_keys:
                 if key in agent.collected_fields:
                     self.set_context(key, agent.collected_fields[key], agent_id)
 
         # Broadcast output if requested
         if broadcast_output:
-            reply_content = getattr(reply, 'raw_message', str(reply)) if reply else ""
-            reply_data = getattr(reply, 'data', None)
+            reply_content = getattr(reply, "raw_message", str(reply)) if reply else ""
+            reply_data = getattr(reply, "data", None)
             if isinstance(reply_data, dict):
                 data = reply_data
             else:
@@ -396,7 +378,7 @@ class MsgHub:
                 sender_type=agent_type,
                 role=MessageRole.AGENT,
                 message_type=MessageType.RESULT,
-                data=data
+                data=data,
             )
 
         # Update last seen message
@@ -406,10 +388,7 @@ class MsgHub:
         return reply
 
     async def execute_sequential(
-        self,
-        agents: List[AgentProtocol],
-        initial_message: Any,
-        broadcast_all: bool = True
+        self, agents: List[AgentProtocol], initial_message: Any, broadcast_all: bool = True
     ) -> HubExecutionResult:
         """
         Execute agents sequentially, each seeing previous agents' messages.
@@ -423,15 +402,13 @@ class MsgHub:
             HubExecutionResult with all agent results
         """
         result = HubExecutionResult(
-            hub_id=self.state.hub_id,
-            status="completed",
-            started_at=datetime.now()
+            hub_id=self.state.hub_id, status="completed", started_at=datetime.now()
         )
 
         current_message = initial_message
 
         for agent in agents:
-            agent_id = getattr(agent, 'agent_id', str(id(agent)))
+            agent_id = getattr(agent, "agent_id", str(id(agent)))
             result.total_agents += 1
 
             try:
@@ -439,28 +416,28 @@ class MsgHub:
                     agent,
                     current_message,
                     broadcast_input=(agent == agents[0]),  # Only broadcast first input
-                    broadcast_output=broadcast_all
+                    broadcast_output=broadcast_all,
                 )
 
-                result.agent_results.append({
-                    "agent_id": agent_id,
-                    "status": "completed",
-                    "output": getattr(reply, 'data', reply)
-                })
+                result.agent_results.append(
+                    {
+                        "agent_id": agent_id,
+                        "status": "completed",
+                        "output": getattr(reply, "data", reply),
+                    }
+                )
                 result.completed_agents += 1
 
                 # Use reply as next message
-                if hasattr(reply, 'raw_message'):
+                if hasattr(reply, "raw_message"):
                     current_message = reply.raw_message
                 elif isinstance(reply, str):
                     current_message = reply
 
             except Exception as e:
-                result.agent_results.append({
-                    "agent_id": agent_id,
-                    "status": "failed",
-                    "error": str(e)
-                })
+                result.agent_results.append(
+                    {"agent_id": agent_id, "status": "failed", "error": str(e)}
+                )
                 result.failed_agents += 1
                 result.errors.append(f"{agent_id}: {str(e)}")
 
@@ -478,10 +455,7 @@ class MsgHub:
         return result
 
     async def execute_parallel(
-        self,
-        agents: List[AgentProtocol],
-        message: Any,
-        broadcast_all: bool = True
+        self, agents: List[AgentProtocol], message: Any, broadcast_all: bool = True
     ) -> HubExecutionResult:
         """
         Execute agents in parallel, all receiving the same message.
@@ -498,7 +472,7 @@ class MsgHub:
             hub_id=self.state.hub_id,
             status="completed",
             started_at=datetime.now(),
-            total_agents=len(agents)
+            total_agents=len(agents),
         )
 
         # Broadcast initial message once
@@ -506,25 +480,21 @@ class MsgHub:
             await self.broadcast_user_message(message)
 
         async def execute_one(agent: AgentProtocol) -> Dict[str, Any]:
-            agent_id = getattr(agent, 'agent_id', str(id(agent)))
+            agent_id = getattr(agent, "agent_id", str(id(agent)))
             try:
                 reply = await self.execute(
                     agent,
                     message,
                     broadcast_input=False,  # Already broadcast
-                    broadcast_output=broadcast_all
+                    broadcast_output=broadcast_all,
                 )
                 return {
                     "agent_id": agent_id,
                     "status": "completed",
-                    "output": getattr(reply, 'data', reply)
+                    "output": getattr(reply, "data", reply),
                 }
             except Exception as e:
-                return {
-                    "agent_id": agent_id,
-                    "status": "failed",
-                    "error": str(e)
-                }
+                return {"agent_id": agent_id, "status": "failed", "error": str(e)}
 
         # Execute all in parallel
         tasks = [execute_one(agent) for agent in agents]
@@ -566,7 +536,7 @@ class MsgHub:
         agent_id: str,
         include_messages: bool = True,
         include_context: bool = True,
-        max_messages: int = 10
+        max_messages: int = 10,
     ) -> str:
         """
         Format shared context as a string for agent consumption.
@@ -640,7 +610,7 @@ class MsgHub:
 async def msghub(
     participants: Optional[List[AgentProtocol]] = None,
     config: Optional[MsgHubConfig] = None,
-    hub_id: Optional[str] = None
+    hub_id: Optional[str] = None,
 ) -> AsyncIterator[MsgHub]:
     """
     Context manager for creating a MsgHub.

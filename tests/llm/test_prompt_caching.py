@@ -4,7 +4,6 @@ import copy
 import importlib
 import importlib.util
 import os
-import pytest
 
 
 # Direct import to avoid koa/__init__.py which requires Python 3.9+
@@ -111,10 +110,13 @@ class TestApplyAnthropicCacheControl:
     def test_list_content_format(self):
         """Content already in list format gets marker on last block."""
         messages = [
-            {"role": "user", "content": [
-                {"type": "text", "text": "Look at this:"},
-                {"type": "image_url", "image_url": {"url": "https://example.com/img.png"}},
-            ]},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Look at this:"},
+                    {"type": "image_url", "image_url": {"url": "https://example.com/img.png"}},
+                ],
+            },
         ]
         result = apply_anthropic_cache_control(messages)
 

@@ -6,8 +6,8 @@ Requires COMPOSIO_API_KEY environment variable.
 """
 
 import json
-import os
 import logging
+import os
 from typing import Any, Dict, Optional
 
 import httpx
@@ -26,7 +26,7 @@ class ComposioClient:
     @property
     def _headers(self) -> Dict[str, str]:
         return {
-            "x-api-key": self.api_key,
+            "x-api-key": self.api_key or "",
             "Content-Type": "application/json",
         }
 
@@ -120,8 +120,10 @@ class ComposioClient:
             if item.get("appName", "").lower() == app_name.lower():
                 return item["id"]
 
-        raise ValueError(f"No Composio integration found for '{app_name}'. "
-                         f"Create one at https://app.composio.dev")
+        raise ValueError(
+            f"No Composio integration found for '{app_name}'. "
+            f"Create one at https://app.composio.dev"
+        )
 
     async def initiate_connection(
         self,
@@ -146,8 +148,14 @@ class ComposioClient:
                 conn_app = (conn.get("appName") or conn.get("appUniqueId") or "").lower()
                 conn_status = (conn.get("status") or "").upper()
                 if conn_app == app_name.lower() and conn_status == "ACTIVE":
-                    logger.info(f"[Composio] Reusing existing {app_name} connection {conn.get('id')} for entity {entity_id}")
-                    return {"status": "ACTIVE", "connectedAccountId": conn.get("id", ""), "id": conn.get("id", "")}
+                    logger.info(
+                        f"[Composio] Reusing existing {app_name} connection {conn.get('id')} for entity {entity_id}"
+                    )
+                    return {
+                        "status": "ACTIVE",
+                        "connectedAccountId": conn.get("id", ""),
+                        "id": conn.get("id", ""),
+                    }
         except Exception as e:
             logger.warning(f"[Composio] Failed to check existing connections: {e}")
 
@@ -221,7 +229,7 @@ class ComposioClient:
                 for key, value in response_data.items():
                     display = str(value)
                     if len(display) > max_field_len:
-                        display = display[:max_field_len - 3] + "..."
+                        display = display[: max_field_len - 3] + "..."
                     parts.append(f"  {key}: {display}")
                 return "\n".join(parts) if parts else json.dumps(response_data)
             return str(response_data)

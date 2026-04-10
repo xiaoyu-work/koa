@@ -4,31 +4,31 @@ Tests _check_api_key, input validation, action constant wiring, and
 success/failure formatting for every tool without making real API calls.
 """
 
-import pytest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from koa.builtin_agents.composio.youtube_agent import (
     YouTubeComposioAgent,
     _check_api_key,
-    search_videos,
-    get_video_details,
-    list_playlists,
-    list_subscriptions,
-    list_channel_videos,
-    get_channel_stats,
+    download_captions,
     get_channel_activities,
     get_channel_by_handle,
-    subscribe_channel,
+    get_channel_stats,
+    get_video_details,
     list_captions,
-    download_captions,
-    connect_youtube,
+    list_channel_videos,
+    list_playlists,
+    list_subscriptions,
+    search_videos,
+    subscribe_channel,
 )
-
 
 # =========================================================================
 # Helpers
 # =========================================================================
+
 
 def _make_context(tenant_id: str = "test-tenant") -> SimpleNamespace:
     """Create a minimal AgentToolContext-like object for tool tests."""
@@ -47,8 +47,8 @@ def _failure_response(error: str = "Something went wrong") -> dict:
 # _check_api_key
 # =========================================================================
 
-class TestCheckApiKey:
 
+class TestCheckApiKey:
     def test_returns_none_when_set(self, monkeypatch):
         monkeypatch.setenv("COMPOSIO_API_KEY", "key-123")
         assert _check_api_key() is None
@@ -64,8 +64,8 @@ class TestCheckApiKey:
 # Agent class wiring
 # =========================================================================
 
-class TestAgentWiring:
 
+class TestAgentWiring:
     def test_all_tools_registered(self):
         tool_names = {t.__name__ for t in YouTubeComposioAgent.tools}
         expected = {
@@ -105,7 +105,6 @@ _MODULE = "koa.builtin_agents.composio.youtube_agent"
 
 
 class TestSearchVideos:
-
     @pytest.mark.asyncio
     async def test_empty_query(self, monkeypatch):
         monkeypatch.setenv("COMPOSIO_API_KEY", "key")
@@ -137,9 +136,7 @@ class TestSearchVideos:
     async def test_failure(self, monkeypatch):
         monkeypatch.setenv("COMPOSIO_API_KEY", "key")
         with patch(f"{_MODULE}.ComposioClient") as MockClient:
-            MockClient.return_value.execute_action = AsyncMock(
-                return_value=_failure_response()
-            )
+            MockClient.return_value.execute_action = AsyncMock(return_value=_failure_response())
             MockClient.format_action_result = lambda d: "Error: fail"
             result = await search_videos("test", context=_make_context())
         assert "Failed" in result
@@ -148,16 +145,13 @@ class TestSearchVideos:
     async def test_exception(self, monkeypatch):
         monkeypatch.setenv("COMPOSIO_API_KEY", "key")
         with patch(f"{_MODULE}.ComposioClient") as MockClient:
-            MockClient.return_value.execute_action = AsyncMock(
-                side_effect=RuntimeError("timeout")
-            )
+            MockClient.return_value.execute_action = AsyncMock(side_effect=RuntimeError("timeout"))
             result = await search_videos("test", context=_make_context())
         assert "Error" in result
         assert "timeout" in result
 
 
 class TestGetVideoDetails:
-
     @pytest.mark.asyncio
     async def test_empty_video_id(self, monkeypatch):
         monkeypatch.setenv("COMPOSIO_API_KEY", "key")
@@ -176,7 +170,6 @@ class TestGetVideoDetails:
 
 
 class TestListPlaylists:
-
     @pytest.mark.asyncio
     async def test_success(self, monkeypatch):
         monkeypatch.setenv("COMPOSIO_API_KEY", "key")
@@ -190,7 +183,6 @@ class TestListPlaylists:
 
 
 class TestListSubscriptions:
-
     @pytest.mark.asyncio
     async def test_success(self, monkeypatch):
         monkeypatch.setenv("COMPOSIO_API_KEY", "key")
@@ -205,7 +197,6 @@ class TestListSubscriptions:
 
 
 class TestListChannelVideos:
-
     @pytest.mark.asyncio
     async def test_empty_channel_id(self, monkeypatch):
         monkeypatch.setenv("COMPOSIO_API_KEY", "key")
@@ -226,7 +217,6 @@ class TestListChannelVideos:
 
 
 class TestGetChannelStats:
-
     @pytest.mark.asyncio
     async def test_empty_channel_id(self, monkeypatch):
         monkeypatch.setenv("COMPOSIO_API_KEY", "key")
@@ -246,7 +236,6 @@ class TestGetChannelStats:
 
 
 class TestGetChannelActivities:
-
     @pytest.mark.asyncio
     async def test_empty_channel_id(self, monkeypatch):
         monkeypatch.setenv("COMPOSIO_API_KEY", "key")
@@ -266,7 +255,6 @@ class TestGetChannelActivities:
 
 
 class TestGetChannelByHandle:
-
     @pytest.mark.asyncio
     async def test_empty_handle(self, monkeypatch):
         monkeypatch.setenv("COMPOSIO_API_KEY", "key")
@@ -287,7 +275,6 @@ class TestGetChannelByHandle:
 
 
 class TestSubscribeChannel:
-
     @pytest.mark.asyncio
     async def test_empty_channel_id(self, monkeypatch):
         monkeypatch.setenv("COMPOSIO_API_KEY", "key")
@@ -307,7 +294,6 @@ class TestSubscribeChannel:
 
 
 class TestListCaptions:
-
     @pytest.mark.asyncio
     async def test_empty_video_id(self, monkeypatch):
         monkeypatch.setenv("COMPOSIO_API_KEY", "key")
@@ -328,7 +314,6 @@ class TestListCaptions:
 
 
 class TestDownloadCaptions:
-
     @pytest.mark.asyncio
     async def test_empty_caption_id(self, monkeypatch):
         monkeypatch.setenv("COMPOSIO_API_KEY", "key")

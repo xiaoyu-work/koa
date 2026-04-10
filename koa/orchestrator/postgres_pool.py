@@ -111,9 +111,7 @@ class PostgresPoolBackend(PoolBackend):
     async def cleanup_expired(self) -> int:
         """Delete expired sessions. Returns number of rows removed."""
         await self._ensure_initialized()
-        result = await self._db.execute(
-            "DELETE FROM agent_sessions WHERE expires_at <= NOW()"
-        )
+        result = await self._db.execute("DELETE FROM agent_sessions WHERE expires_at <= NOW()")
         try:
             count = int(result.split()[-1])
         except (ValueError, IndexError):

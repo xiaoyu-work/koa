@@ -11,50 +11,42 @@ The @tool decorator wraps functions into AgentTool objects whose ``executor``
 has the signature ``async def executor(args: dict, context) -> str``.
 """
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
 
 from koa.builtin_agents.composio.twitter_agent import (
-    # existing tools
-    post_tweet,
-    get_timeline,
-    search_tweets,
-    lookup_user,
-    connect_twitter,
-    # new tools
-    delete_post,
-    like_post,
-    unlike_post,
-    retweet,
-    get_followers,
-    get_following,
-    follow_user,
-    get_bookmarks,
-    add_bookmark,
-    send_dm,
-    get_recent_dms,
-    get_user_tweets,
-    # helpers / constants
-    _check_api_key,
-    _ACTION_DELETE_POST,
-    _ACTION_LIKE_POST,
-    _ACTION_UNLIKE_POST,
-    _ACTION_RETWEET,
-    _ACTION_FOLLOWERS,
-    _ACTION_FOLLOWING,
-    _ACTION_FOLLOW,
-    _ACTION_BOOKMARKS,
     _ACTION_ADD_BOOKMARK,
-    _ACTION_SEND_DM,
+    _ACTION_DELETE_POST,
+    _ACTION_FOLLOW,
+    _ACTION_FOLLOWING,
     _ACTION_GET_DM_EVENTS,
+    _ACTION_LIKE_POST,
+    _ACTION_RETWEET,
+    _ACTION_SEND_DM,
+    _ACTION_UNLIKE_POST,
     _ACTION_USER_TWEETS,
     TwitterComposioAgent,
+    # helpers / constants
+    _check_api_key,
+    add_bookmark,
+    delete_post,
+    follow_user,
+    get_bookmarks,
+    get_followers,
+    get_following,
+    get_recent_dms,
+    get_user_tweets,
+    like_post,
+    retweet,
+    send_dm,
+    unlike_post,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures & helpers
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def ctx():
@@ -87,8 +79,8 @@ def _mock_client():
 # _check_api_key
 # ---------------------------------------------------------------------------
 
-class TestCheckApiKey:
 
+class TestCheckApiKey:
     def test_returns_none_when_set(self, monkeypatch):
         monkeypatch.setenv("COMPOSIO_API_KEY", "key")
         assert _check_api_key() is None
@@ -104,25 +96,35 @@ class TestCheckApiKey:
 # Agent class wiring
 # ---------------------------------------------------------------------------
 
-class TestAgentWiring:
 
+class TestAgentWiring:
     def test_all_tools_registered(self):
         tool_names = {t.name for t in TwitterComposioAgent.tools}
         expected = {
-            "post_tweet", "delete_post", "get_timeline", "search_tweets",
-            "lookup_user", "like_post", "unlike_post", "retweet",
-            "get_followers", "get_following", "follow_user",
-            "get_bookmarks", "add_bookmark", "send_dm", "get_recent_dms",
-            "get_user_tweets", "connect_twitter",
+            "post_tweet",
+            "delete_post",
+            "get_timeline",
+            "search_tweets",
+            "lookup_user",
+            "like_post",
+            "unlike_post",
+            "retweet",
+            "get_followers",
+            "get_following",
+            "follow_user",
+            "get_bookmarks",
+            "add_bookmark",
+            "send_dm",
+            "get_recent_dms",
+            "get_user_tweets",
+            "connect_twitter",
         }
         assert tool_names == expected
 
     def test_system_prompt_mentions_all_tools(self):
         prompt = TwitterComposioAgent.domain_system_prompt
         for t in TwitterComposioAgent.tools:
-            assert t.name in prompt, (
-                f"Tool {t.name} not found in domain_system_prompt"
-            )
+            assert t.name in prompt, f"Tool {t.name} not found in domain_system_prompt"
 
     def test_tool_count(self):
         assert len(TwitterComposioAgent.tools) == 17
@@ -132,8 +134,8 @@ class TestAgentWiring:
 # delete_post
 # ---------------------------------------------------------------------------
 
-class TestDeletePost:
 
+class TestDeletePost:
     @pytest.mark.asyncio
     async def test_missing_tweet_id(self, ctx):
         result = await delete_post.executor({"tweet_id": ""}, ctx)
@@ -185,8 +187,8 @@ class TestDeletePost:
 # like_post
 # ---------------------------------------------------------------------------
 
-class TestLikePost:
 
+class TestLikePost:
     @pytest.mark.asyncio
     async def test_missing_user_id(self, ctx):
         result = await like_post.executor({"user_id": "", "tweet_id": "t1"}, ctx)
@@ -217,8 +219,8 @@ class TestLikePost:
 # unlike_post
 # ---------------------------------------------------------------------------
 
-class TestUnlikePost:
 
+class TestUnlikePost:
     @pytest.mark.asyncio
     async def test_missing_user_id(self, ctx):
         result = await unlike_post.executor({"user_id": "", "tweet_id": "t1"}, ctx)
@@ -249,8 +251,8 @@ class TestUnlikePost:
 # retweet
 # ---------------------------------------------------------------------------
 
-class TestRetweet:
 
+class TestRetweet:
     @pytest.mark.asyncio
     async def test_missing_user_id(self, ctx):
         result = await retweet.executor({"user_id": "", "tweet_id": "t1"}, ctx)
@@ -281,8 +283,8 @@ class TestRetweet:
 # get_followers
 # ---------------------------------------------------------------------------
 
-class TestGetFollowers:
 
+class TestGetFollowers:
     @pytest.mark.asyncio
     async def test_missing_user_id(self, ctx):
         result = await get_followers.executor({"user_id": ""}, ctx)
@@ -316,8 +318,8 @@ class TestGetFollowers:
 # get_following
 # ---------------------------------------------------------------------------
 
-class TestGetFollowing:
 
+class TestGetFollowing:
     @pytest.mark.asyncio
     async def test_missing_user_id(self, ctx):
         result = await get_following.executor({"user_id": ""}, ctx)
@@ -343,19 +345,21 @@ class TestGetFollowing:
 # follow_user
 # ---------------------------------------------------------------------------
 
-class TestFollowUser:
 
+class TestFollowUser:
     @pytest.mark.asyncio
     async def test_missing_source(self, ctx):
         result = await follow_user.executor(
-            {"source_user_id": "", "target_user_id": "t1"}, ctx,
+            {"source_user_id": "", "target_user_id": "t1"},
+            ctx,
         )
         assert "source_user_id is required" in result
 
     @pytest.mark.asyncio
     async def test_missing_target(self, ctx):
         result = await follow_user.executor(
-            {"source_user_id": "s1", "target_user_id": ""}, ctx,
+            {"source_user_id": "s1", "target_user_id": ""},
+            ctx,
         )
         assert "target_user_id is required" in result
 
@@ -367,7 +371,8 @@ class TestFollowUser:
             MockClient.format_action_result = lambda d: "followed"
 
             result = await follow_user.executor(
-                {"source_user_id": "s1", "target_user_id": "t1"}, ctx,
+                {"source_user_id": "s1", "target_user_id": "t1"},
+                ctx,
             )
             assert "Followed user successfully" in result
             inst.execute_action.assert_awaited_once_with(
@@ -381,8 +386,8 @@ class TestFollowUser:
 # get_bookmarks
 # ---------------------------------------------------------------------------
 
-class TestGetBookmarks:
 
+class TestGetBookmarks:
     @pytest.mark.asyncio
     async def test_missing_user_id(self, ctx):
         result = await get_bookmarks.executor({"user_id": ""}, ctx)
@@ -403,8 +408,8 @@ class TestGetBookmarks:
 # add_bookmark
 # ---------------------------------------------------------------------------
 
-class TestAddBookmark:
 
+class TestAddBookmark:
     @pytest.mark.asyncio
     async def test_missing_user_id(self, ctx):
         result = await add_bookmark.executor({"user_id": "", "tweet_id": "t1"}, ctx)
@@ -435,8 +440,8 @@ class TestAddBookmark:
 # send_dm
 # ---------------------------------------------------------------------------
 
-class TestSendDm:
 
+class TestSendDm:
     @pytest.mark.asyncio
     async def test_missing_participants(self, ctx):
         result = await send_dm.executor({"participant_ids": [], "text": "hi"}, ctx)
@@ -455,7 +460,8 @@ class TestSendDm:
             MockClient.format_action_result = lambda d: "sent"
 
             result = await send_dm.executor(
-                {"participant_ids": ["u1", "u2"], "text": "hello"}, ctx,
+                {"participant_ids": ["u1", "u2"], "text": "hello"},
+                ctx,
             )
             assert "DM sent successfully" in result
             inst.execute_action.assert_awaited_once_with(
@@ -469,8 +475,8 @@ class TestSendDm:
 # get_recent_dms
 # ---------------------------------------------------------------------------
 
-class TestGetRecentDms:
 
+class TestGetRecentDms:
     @pytest.mark.asyncio
     async def test_missing_api_key(self, ctx, monkeypatch):
         monkeypatch.delenv("COMPOSIO_API_KEY", raising=False)
@@ -507,8 +513,8 @@ class TestGetRecentDms:
 # get_user_tweets
 # ---------------------------------------------------------------------------
 
-class TestGetUserTweets:
 
+class TestGetUserTweets:
     @pytest.mark.asyncio
     async def test_missing_user_id(self, ctx):
         result = await get_user_tweets.executor({"user_id": ""}, ctx)

@@ -60,7 +60,8 @@ def repair_tool_call_inputs(
                 tc_name = func.get("name", "unknown")
                 logger.warning(
                     "transcript_repair: dropped tool_call %s (%s) - missing arguments",
-                    tc_id, tc_name,
+                    tc_id,
+                    tc_name,
                 )
                 changed = True
             else:
@@ -69,9 +70,7 @@ def repair_tool_call_inputs(
         if not valid_tool_calls:
             # All tool_calls were invalid - drop the entire assistant message
             dropped_assistant_messages += 1
-            logger.warning(
-                "transcript_repair: dropped assistant message - all tool_calls invalid"
-            )
+            logger.warning("transcript_repair: dropped assistant message - all tool_calls invalid")
             changed = True
         elif len(valid_tool_calls) < len(tool_calls):
             # Some tool_calls were dropped - rebuild message
@@ -194,7 +193,8 @@ def repair_tool_use_result_pairing(
                         changed = True
                         logger.info(
                             "transcript_repair: moved tool result for %s from index %d",
-                            tc_id, first_idx,
+                            tc_id,
+                            first_idx,
                         )
 
                     # Drop duplicates
@@ -204,7 +204,8 @@ def repair_tool_use_result_pairing(
                         changed = True
                         logger.warning(
                             "transcript_repair: dropped duplicate result for tool_call %s at index %d",
-                            tc_id, dup_idx,
+                            tc_id,
+                            dup_idx,
                         )
         elif msg.get("role") == "tool":
             tc_id = msg.get("tool_call_id", "")
@@ -218,7 +219,8 @@ def repair_tool_use_result_pairing(
                 changed = True
                 logger.warning(
                     "transcript_repair: dropped orphaned tool result for tool_call_id %s at index %d",
-                    tc_id, i,
+                    tc_id,
+                    i,
                 )
                 i += 1
                 continue
@@ -256,14 +258,18 @@ def repair_transcript(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     if dropped_tc or dropped_asst:
         logger.info(
             "transcript_repair: tool_call_inputs phase - dropped %d tool_calls, %d assistant messages",
-            dropped_tc, dropped_asst,
+            dropped_tc,
+            dropped_asst,
         )
 
     messages, synthetic, duplicates, orphans, moved_count = repair_tool_use_result_pairing(messages)
     if synthetic or duplicates or orphans or moved_count:
         logger.info(
             "transcript_repair: result_pairing phase - %d synthetic, %d duplicates dropped, %d orphans dropped, %d moved",
-            synthetic, duplicates, orphans, moved_count,
+            synthetic,
+            duplicates,
+            orphans,
+            moved_count,
         )
 
     return messages

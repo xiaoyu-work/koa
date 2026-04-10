@@ -11,20 +11,19 @@ This module provides:
 import logging
 import uuid
 from abc import ABC, abstractmethod
-from datetime import datetime
-from typing import Dict, Any, List, Optional, Callable, Awaitable
 from collections import defaultdict
+from datetime import datetime
+from typing import Awaitable, Callable, Dict, List, Optional
 
 from .models import (
-    HookType,
-    HookPhase,
     HookConfig,
     HookContext,
     HookResult,
+    HookType,
     MetricsData,
-    TracingSpan,
     RateLimitConfig,
     RateLimitState,
+    TracingSpan,
 )
 
 
@@ -206,17 +205,13 @@ class MetricsHook(HookHandler):
         # Update per-user metrics
         key = (context.agent_type, context.user_id)
         if key not in self._metrics:
-            self._metrics[key] = MetricsData(
-                agent_type=context.agent_type,
-                user_id=context.user_id
-            )
+            self._metrics[key] = MetricsData(agent_type=context.agent_type, user_id=context.user_id)
         self._metrics[key].record_invocation(duration, success, tokens, cost)
 
         # Update global metrics
         if context.agent_type not in self._global_metrics:
             self._global_metrics[context.agent_type] = MetricsData(
-                agent_type=context.agent_type,
-                user_id="global"
+                agent_type=context.agent_type, user_id="global"
             )
         self._global_metrics[context.agent_type].record_invocation(duration, success, tokens, cost)
 
@@ -226,7 +221,7 @@ class MetricsHook(HookHandler):
                 "duration_ms": duration,
                 "success": success,
                 "invocation_count": self._metrics[key].invocation_count,
-            }
+            },
         )
 
     async def on_error(self, context: HookContext) -> HookResult:
@@ -239,25 +234,19 @@ class MetricsHook(HookHandler):
         # Update metrics with error
         key = (context.agent_type, context.user_id)
         if key not in self._metrics:
-            self._metrics[key] = MetricsData(
-                agent_type=context.agent_type,
-                user_id=context.user_id
-            )
+            self._metrics[key] = MetricsData(agent_type=context.agent_type, user_id=context.user_id)
         self._metrics[key].record_invocation(duration, success=False)
 
         if context.agent_type not in self._global_metrics:
             self._global_metrics[context.agent_type] = MetricsData(
-                agent_type=context.agent_type,
-                user_id="global"
+                agent_type=context.agent_type, user_id="global"
             )
         self._global_metrics[context.agent_type].record_invocation(duration, success=False)
 
         return HookResult(hook_type=self.hook_type)
 
     def get_metrics(
-        self,
-        agent_type: Optional[str] = None,
-        user_id: Optional[str] = None
+        self, agent_type: Optional[str] = None, user_id: Optional[str] = None
     ) -> Dict[str, MetricsData]:
         """Get collected metrics"""
         if agent_type and user_id:
@@ -267,7 +256,11 @@ class MetricsHook(HookHandler):
             return {}
 
         if agent_type:
-            return {agent_type: self._global_metrics.get(agent_type, MetricsData(agent_type=agent_type, user_id="global"))}
+            return {
+                agent_type: self._global_metrics.get(
+                    agent_type, MetricsData(agent_type=agent_type, user_id="global")
+                )
+            }
 
         # Return all
         result = {}
@@ -333,8 +326,7 @@ class TracingHook(HookHandler):
         self._active_spans[context.agent_id] = span
 
         return HookResult(
-            hook_type=self.hook_type,
-            data={"span_id": span.span_id, "trace_id": span.trace_id}
+            hook_type=self.hook_type, data={"span_id": span.span_id, "trace_id": span.trace_id}
         )
 
     async def on_post_execute(self, context: HookContext) -> HookResult:
@@ -356,19 +348,19 @@ class TracingHook(HookHandler):
             span.set_attribute("duration_ms", context.duration_ms)
 
         # Add event for completion
-        span.add_event("execution.completed", {
-            "status": context.status,
-            "duration_ms": context.duration_ms,
-        })
+        span.add_event(
+            "execution.completed",
+            {
+                "status": context.status,
+                "duration_ms": context.duration_ms,
+            },
+        )
 
         # Store and export
         self._completed_spans.append(span)
         await self._export_span(span)
 
-        return HookResult(
-            hook_type=self.hook_type,
-            data={"span": span.to_dict()}
-        )
+        return HookResult(hook_type=self.hook_type, data={"span": span.to_dict()})
 
     async def on_error(self, context: HookContext) -> HookResult:
         """End span with error"""
@@ -388,19 +380,19 @@ class TracingHook(HookHandler):
         span.set_attribute("error.message", str(context.error))
 
         # Add error event
-        span.add_event("exception", {
-            "exception.type": context.error_type,
-            "exception.message": str(context.error),
-        })
+        span.add_event(
+            "exception",
+            {
+                "exception.type": context.error_type,
+                "exception.message": str(context.error),
+            },
+        )
 
         # Store and export
         self._completed_spans.append(span)
         await self._export_span(span)
 
-        return HookResult(
-            hook_type=self.hook_type,
-            data={"span": span.to_dict()}
-        )
+        return HookResult(hook_type=self.hook_type, data={"span": span.to_dict()})
 
     async def _export_span(self, span: TracingSpan) -> None:
         """Export span to configured exporters"""
@@ -462,7 +454,9 @@ class RateLimitingHook(HookHandler):
         config = self._rate_config
         if context.agent_type in config.agent_limits:
             # Override with agent-specific limits
-            agent_config = RateLimitConfig(**{**vars(config), **config.agent_limits[context.agent_type]})
+            agent_config = RateLimitConfig(
+                **{**vars(config), **config.agent_limits[context.agent_type]}
+            )
             config = agent_config
 
         # Check limits

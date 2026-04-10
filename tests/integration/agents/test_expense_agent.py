@@ -53,6 +53,7 @@ async def test_tool_selection(conversation, user_input, expected_tools):
 # Argument extraction
 # ---------------------------------------------------------------------------
 
+
 async def test_extracts_amount_and_category(conversation):
     """log_expense should receive the correct amount and an appropriate category."""
     conv = await conversation()
@@ -83,7 +84,8 @@ async def test_extracts_query_period(conversation):
     conv.assert_any_tool_called(["query_expenses", "spending_summary"])
 
     relevant = [
-        c for c in conv.recorder.tool_calls
+        c
+        for c in conv.recorder.tool_calls
         if c["tool_name"] in ("query_expenses", "spending_summary")
     ]
     args = relevant[0]["arguments"]
@@ -107,6 +109,7 @@ async def test_budget_amount_extraction(conversation):
 # ---------------------------------------------------------------------------
 # Response quality
 # ---------------------------------------------------------------------------
+
 
 async def test_response_quality_log(conversation, llm_judge):
     """After logging an expense the response should confirm the amount and category."""
@@ -141,6 +144,7 @@ async def test_response_quality_query(conversation, llm_judge):
 # ---------------------------------------------------------------------------
 # Approval flow
 # ---------------------------------------------------------------------------
+
 
 async def test_delete_expense_triggers_approval(conversation):
     """delete_expense should pause for user approval before executing."""

@@ -43,6 +43,7 @@ async def test_tool_selection(orchestrator_factory, user_input, expected_tools):
 # Argument extraction
 # ---------------------------------------------------------------------------
 
+
 async def test_search_extracts_query(orchestrator_factory):
     """notion_search should receive a short keyword from the user's request."""
     orch, recorder = await orchestrator_factory()
@@ -101,12 +102,11 @@ async def test_update_page_extracts_title_and_content(orchestrator_factory):
 # Response quality
 # ---------------------------------------------------------------------------
 
+
 async def test_response_quality_search(orchestrator_factory, llm_judge):
     """Searching Notion should present results clearly."""
     orch, recorder = await orchestrator_factory()
-    result = await orch.handle_message(
-        "test_user", "Search for meeting notes in Notion"
-    )
+    result = await orch.handle_message("test_user", "Search for meeting notes in Notion")
     response = result.raw_message if hasattr(result, "raw_message") else str(result)
 
     passed = await llm_judge(

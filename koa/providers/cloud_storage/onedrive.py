@@ -8,8 +8,8 @@ Shares OAuth tokens with outlook/outlook_calendar (service: "onedrive").
 
 import logging
 import os
-from typing import Any, Callable, Dict, Optional
 from datetime import datetime, timedelta, timezone
+from typing import Any, Callable, Dict, Optional
 
 import httpx
 
@@ -117,7 +117,8 @@ class OneDriveProvider(BaseCloudStorageProvider):
                 if file_type:
                     ft_lower = file_type.lower()
                     files = [
-                        f for f in files
+                        f
+                        for f in files
                         if ft_lower in f["type"].lower() or ft_lower in f["name"].lower()
                     ]
 
@@ -256,7 +257,10 @@ class OneDriveProvider(BaseCloudStorageProvider):
                     )
 
                     if response.status_code != 200:
-                        return {"success": False, "error": f"Graph API error: {response.status_code}"}
+                        return {
+                            "success": False,
+                            "error": f"Graph API error: {response.status_code}",
+                        }
 
                     data = response.json()
                     permissions = data.get("value", [])
@@ -284,7 +288,10 @@ class OneDriveProvider(BaseCloudStorageProvider):
                     )
 
                     if response.status_code not in (200, 201):
-                        return {"success": False, "error": f"Graph API error: {response.status_code}"}
+                        return {
+                            "success": False,
+                            "error": f"Graph API error: {response.status_code}",
+                        }
 
                     data = response.json()
                     link_url = data.get("link", {}).get("webUrl", "")
@@ -322,7 +329,9 @@ class OneDriveProvider(BaseCloudStorageProvider):
                 total = quota.get("total", 0)
                 percent = (used / total * 100) if total > 0 else 0.0
 
-                logger.info(f"OneDrive storage: {self.format_size(used)} / {self.format_size(total)}")
+                logger.info(
+                    f"OneDrive storage: {self.format_size(used)} / {self.format_size(total)}"
+                )
                 return {
                     "success": True,
                     "data": {
@@ -382,7 +391,10 @@ class OneDriveProvider(BaseCloudStorageProvider):
                     }
                 else:
                     logger.error(f"OneDrive token refresh failed: {response.text}")
-                    return {"success": False, "error": f"Token refresh failed: {response.status_code}"}
+                    return {
+                        "success": False,
+                        "error": f"Token refresh failed: {response.status_code}",
+                    }
 
         except Exception as e:
             logger.error(f"OneDrive token refresh error: {e}", exc_info=True)

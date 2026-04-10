@@ -7,15 +7,13 @@ This agent orchestrates multiple domains to produce executable itineraries:
 - optional execution (calendar events, task creation) after user approval
 """
 
-from datetime import datetime
-
 from koa import InputField, valet
+from koa.builtin_agents.calendar.tools import create_event, query_events
+from koa.builtin_agents.maps.tools import get_directions, search_places
+from koa.builtin_agents.todo.tools import create_task
 from koa.standard_agent import StandardAgent
 
-from .travel_tools import search_flights, search_hotels, get_weather
-from koa.builtin_agents.maps.tools import search_places, get_directions
-from koa.builtin_agents.calendar.tools import query_events, create_event
-from koa.builtin_agents.todo.tools import create_task
+from .travel_tools import get_weather, search_flights, search_hotels
 
 
 @valet(domain="travel")
@@ -95,6 +93,7 @@ Only execute write actions (calendar/todo) after explicit user consent.
     def get_system_prompt(self) -> str:
         now, _ = self._user_now()
         from datetime import timedelta
+
         tomorrow = (now + timedelta(days=1)).strftime("%Y-%m-%d")
 
         prompt = self._SYSTEM_PROMPT_TEMPLATE.format(
@@ -139,5 +138,3 @@ Only execute write actions (calendar/todo) after explicit user consent.
         create_event,
         create_task,
     )
-
-

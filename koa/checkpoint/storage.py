@@ -8,11 +8,8 @@ This module provides storage backends for checkpoints:
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional, Protocol
 from collections import defaultdict
-import json
+from typing import Dict, List, Optional
 
 from .models import Checkpoint, CheckpointMetadata, CheckpointTree
 
@@ -65,10 +62,7 @@ class CheckpointStorage(ABC):
 
     @abstractmethod
     async def list_by_agent(
-        self,
-        agent_id: str,
-        limit: int = 100,
-        offset: int = 0
+        self, agent_id: str, limit: int = 100, offset: int = 0
     ) -> List[CheckpointMetadata]:
         """
         List checkpoints for an agent.
@@ -85,10 +79,7 @@ class CheckpointStorage(ABC):
 
     @abstractmethod
     async def list_by_user(
-        self,
-        user_id: str,
-        limit: int = 100,
-        offset: int = 0
+        self, user_id: str, limit: int = 100, offset: int = 0
     ) -> List[CheckpointMetadata]:
         """
         List checkpoints for a user.
@@ -201,44 +192,30 @@ class MemoryStorage(CheckpointStorage):
         return True
 
     async def list_by_agent(
-        self,
-        agent_id: str,
-        limit: int = 100,
-        offset: int = 0
+        self, agent_id: str, limit: int = 100, offset: int = 0
     ) -> List[CheckpointMetadata]:
         """List checkpoints for agent"""
         checkpoint_ids = self._by_agent.get(agent_id, [])
 
         # Sort by timestamp (newest first)
-        checkpoints = [
-            self._checkpoints[cid]
-            for cid in checkpoint_ids
-            if cid in self._checkpoints
-        ]
+        checkpoints = [self._checkpoints[cid] for cid in checkpoint_ids if cid in self._checkpoints]
         checkpoints.sort(key=lambda c: c.timestamp, reverse=True)
 
         # Apply pagination
-        paginated = checkpoints[offset:offset + limit]
+        paginated = checkpoints[offset : offset + limit]
 
         return [CheckpointMetadata.from_checkpoint(c) for c in paginated]
 
     async def list_by_user(
-        self,
-        user_id: str,
-        limit: int = 100,
-        offset: int = 0
+        self, user_id: str, limit: int = 100, offset: int = 0
     ) -> List[CheckpointMetadata]:
         """List checkpoints for user"""
         checkpoint_ids = self._by_user.get(user_id, [])
 
-        checkpoints = [
-            self._checkpoints[cid]
-            for cid in checkpoint_ids
-            if cid in self._checkpoints
-        ]
+        checkpoints = [self._checkpoints[cid] for cid in checkpoint_ids if cid in self._checkpoints]
         checkpoints.sort(key=lambda c: c.timestamp, reverse=True)
 
-        paginated = checkpoints[offset:offset + limit]
+        paginated = checkpoints[offset : offset + limit]
 
         return [CheckpointMetadata.from_checkpoint(c) for c in paginated]
 
@@ -248,11 +225,7 @@ class MemoryStorage(CheckpointStorage):
         if not checkpoint_ids:
             return None
 
-        checkpoints = [
-            self._checkpoints[cid]
-            for cid in checkpoint_ids
-            if cid in self._checkpoints
-        ]
+        checkpoints = [self._checkpoints[cid] for cid in checkpoint_ids if cid in self._checkpoints]
 
         # Find root (oldest checkpoint)
         checkpoints.sort(key=lambda c: c.timestamp)
@@ -270,11 +243,7 @@ class MemoryStorage(CheckpointStorage):
         if not checkpoint_ids:
             return None
 
-        checkpoints = [
-            self._checkpoints[cid]
-            for cid in checkpoint_ids
-            if cid in self._checkpoints
-        ]
+        checkpoints = [self._checkpoints[cid] for cid in checkpoint_ids if cid in self._checkpoints]
 
         if not checkpoints:
             return None
@@ -331,8 +300,7 @@ class SQLiteStorage(CheckpointStorage):
             import aiosqlite
         except ImportError:
             raise ImportError(
-                "aiosqlite is required for SQLite storage. "
-                "Install it with: pip install aiosqlite"
+                "aiosqlite is required for SQLite storage. Install it with: pip install aiosqlite"
             )
 
         async with aiosqlite.connect(self.db_path) as db:
@@ -349,15 +317,9 @@ class SQLiteStorage(CheckpointStorage):
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP
                 )
             """)
-            await db.execute(
-                "CREATE INDEX IF NOT EXISTS idx_agent_id ON checkpoints(agent_id)"
-            )
-            await db.execute(
-                "CREATE INDEX IF NOT EXISTS idx_user_id ON checkpoints(user_id)"
-            )
-            await db.execute(
-                "CREATE INDEX IF NOT EXISTS idx_timestamp ON checkpoints(timestamp)"
-            )
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_agent_id ON checkpoints(agent_id)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_user_id ON checkpoints(user_id)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON checkpoints(timestamp)")
             await db.commit()
 
         self._initialized = True
@@ -384,7 +346,7 @@ class SQLiteStorage(CheckpointStorage):
                     checkpoint.to_json(),
                     checkpoint.parent_checkpoint_id,
                     checkpoint.timestamp.isoformat(),
-                )
+                ),
             )
             await db.commit()
 
@@ -398,8 +360,7 @@ class SQLiteStorage(CheckpointStorage):
 
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute(
-                "SELECT data FROM checkpoints WHERE id = ?",
-                (checkpoint_id,)
+                "SELECT data FROM checkpoints WHERE id = ?", (checkpoint_id,)
             ) as cursor:
                 row = await cursor.fetchone()
                 if row:
@@ -413,18 +374,12 @@ class SQLiteStorage(CheckpointStorage):
         await self._ensure_initialized()
 
         async with aiosqlite.connect(self.db_path) as db:
-            cursor = await db.execute(
-                "DELETE FROM checkpoints WHERE id = ?",
-                (checkpoint_id,)
-            )
+            cursor = await db.execute("DELETE FROM checkpoints WHERE id = ?", (checkpoint_id,))
             await db.commit()
             return cursor.rowcount > 0
 
     async def list_by_agent(
-        self,
-        agent_id: str,
-        limit: int = 100,
-        offset: int = 0
+        self, agent_id: str, limit: int = 100, offset: int = 0
     ) -> List[CheckpointMetadata]:
         """List checkpoints for agent from SQLite"""
         import aiosqlite
@@ -439,17 +394,14 @@ class SQLiteStorage(CheckpointStorage):
                 ORDER BY timestamp DESC
                 LIMIT ? OFFSET ?
                 """,
-                (agent_id, limit, offset)
+                (agent_id, limit, offset),
             ) as cursor:
                 rows = await cursor.fetchall()
                 checkpoints = [Checkpoint.from_json(row[0]) for row in rows]
                 return [CheckpointMetadata.from_checkpoint(c) for c in checkpoints]
 
     async def list_by_user(
-        self,
-        user_id: str,
-        limit: int = 100,
-        offset: int = 0
+        self, user_id: str, limit: int = 100, offset: int = 0
     ) -> List[CheckpointMetadata]:
         """List checkpoints for user from SQLite"""
         import aiosqlite
@@ -464,7 +416,7 @@ class SQLiteStorage(CheckpointStorage):
                 ORDER BY timestamp DESC
                 LIMIT ? OFFSET ?
                 """,
-                (user_id, limit, offset)
+                (user_id, limit, offset),
             ) as cursor:
                 rows = await cursor.fetchall()
                 checkpoints = [Checkpoint.from_json(row[0]) for row in rows]
@@ -483,7 +435,7 @@ class SQLiteStorage(CheckpointStorage):
                 WHERE agent_id = ?
                 ORDER BY timestamp ASC
                 """,
-                (agent_id,)
+                (agent_id,),
             ) as cursor:
                 rows = await cursor.fetchall()
                 if not rows:
@@ -509,7 +461,7 @@ class SQLiteStorage(CheckpointStorage):
                 ORDER BY timestamp DESC
                 LIMIT 1
                 """,
-                (agent_id,)
+                (agent_id,),
             ) as cursor:
                 row = await cursor.fetchone()
                 if row:
@@ -523,10 +475,7 @@ class SQLiteStorage(CheckpointStorage):
         await self._ensure_initialized()
 
         async with aiosqlite.connect(self.db_path) as db:
-            cursor = await db.execute(
-                "DELETE FROM checkpoints WHERE agent_id = ?",
-                (agent_id,)
-            )
+            cursor = await db.execute("DELETE FROM checkpoints WHERE agent_id = ?", (agent_id,))
             await db.commit()
             return cursor.rowcount
 
@@ -537,9 +486,6 @@ class SQLiteStorage(CheckpointStorage):
         await self._ensure_initialized()
 
         async with aiosqlite.connect(self.db_path) as db:
-            cursor = await db.execute(
-                "DELETE FROM checkpoints WHERE user_id = ?",
-                (user_id,)
-            )
+            cursor = await db.execute("DELETE FROM checkpoints WHERE user_id = ?", (user_id,))
             await db.commit()
             return cursor.rowcount

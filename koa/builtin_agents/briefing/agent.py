@@ -4,12 +4,10 @@ Generates on-demand briefings from calendar, tasks, important dates,
 and email, and can schedule recurring daily briefings via CronService.
 """
 
-from datetime import datetime
-
 from koa import valet
 from koa.standard_agent import StandardAgent
 
-from .tools import get_briefing, setup_daily_briefing, manage_briefing
+from .tools import get_briefing, manage_briefing, setup_daily_briefing
 
 
 @valet(domain="productivity")

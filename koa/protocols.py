@@ -5,7 +5,7 @@ These protocols define the contracts that external implementations must fulfill.
 This allows Koa to be framework-agnostic and work with any LLM provider.
 """
 
-from typing import Protocol, List, Dict, Any, Optional, runtime_checkable
+from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 
 
 @runtime_checkable
@@ -36,7 +36,7 @@ class LLMClientProtocol(Protocol):
         self,
         messages: List[Dict[str, Any]],
         tools: Optional[List[Dict]] = None,
-        config: Optional[Dict[str, Any]] = None
+        config: Optional[Dict[str, Any]] = None,
     ) -> Any:
         """
         Call LLM for chat completion
@@ -62,27 +62,15 @@ class MemoryProtocol(Protocol):
     """
 
     async def add(
-        self,
-        content: str,
-        user_id: str,
-        metadata: Optional[Dict[str, Any]] = None
+        self, content: str, user_id: str, metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """Add a memory entry"""
         ...
 
-    async def search(
-        self,
-        query: str,
-        user_id: str,
-        limit: int = 5
-    ) -> List[Dict[str, Any]]:
+    async def search(self, query: str, user_id: str, limit: int = 5) -> List[Dict[str, Any]]:
         """Search memories"""
         ...
 
-    async def get_all(
-        self,
-        user_id: str,
-        limit: int = 100
-    ) -> List[Dict[str, Any]]:
+    async def get_all(self, user_id: str, limit: int = 100) -> List[Dict[str, Any]]:
         """Get all memories for a user"""
         ...

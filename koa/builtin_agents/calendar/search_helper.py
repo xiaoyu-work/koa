@@ -6,15 +6,16 @@ This module provides shared search functionality used by:
 - DeleteEventAgent (search before delete)
 - Other calendar operations that need to find events
 """
+
 import logging
 import re
-from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Tuple
 
 try:
     from zoneinfo import ZoneInfo
 except ImportError:
-    from backports.zoneinfo import ZoneInfo
+    from backports.zoneinfo import ZoneInfo as ZoneInfo  # type: ignore[no-redef]
 
 logger = logging.getLogger(__name__)
 
@@ -123,39 +124,35 @@ async def search_calendar_events(
             - account: Dict (calendar account info)
             - error: str (if failed)
     """
-    from koa.providers.calendar.resolver import CalendarAccountResolver
     from koa.providers.calendar.factory import CalendarProviderFactory
+    from koa.providers.calendar.resolver import CalendarAccountResolver
 
     try:
         account = await CalendarAccountResolver.resolve_account(user_id, account_hint)
         if not account:
-            return {
-                "success": False,
-                "error": f"No {account_hint} calendar account found"
-            }
+            return {"success": False, "error": f"No {account_hint} calendar account found"}
 
         time_min, time_max = parse_time_range(time_range, user_tz=user_tz)
 
-        account_email = account.get("account_identifier", account.get("account_name", "your calendar"))
+        account_email = account.get(
+            "account_identifier", account.get("account_name", "your calendar")
+        )
 
         provider = CalendarProviderFactory.create_provider(account)
         if not provider:
             return {
                 "success": False,
-                "error": f"Sorry, I can't access {account_email} yet - that calendar provider isn't supported."
+                "error": f"Sorry, I can't access {account_email} yet - that calendar provider isn't supported.",
             }
 
         if not await provider.ensure_valid_token():
             return {
                 "success": False,
-                "error": f"I lost access to your {account_email} calendar. Could you reconnect it in settings?"
+                "error": f"I lost access to your {account_email} calendar. Could you reconnect it in settings?",
             }
 
         result = await provider.list_events(
-            time_min=time_min,
-            time_max=time_max,
-            query=search_query,
-            max_results=max_results
+            time_min=time_min, time_max=time_max, query=search_query, max_results=max_results
         )
 
         if result.get("success"):
@@ -166,27 +163,18 @@ async def search_calendar_events(
                 "events": events,
                 "account": account,
                 "time_min": time_min,
-                "time_max": time_max
+                "time_max": time_max,
             }
         else:
-            return {
-                "success": False,
-                "error": result.get("error", "Unknown error")
-            }
+            return {"success": False, "error": result.get("error", "Unknown error")}
 
     except Exception as e:
         logger.error(f"Calendar search failed: {e}", exc_info=True)
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        return {"success": False, "error": str(e)}
 
 
 async def find_exact_event(
-    events: List[Dict],
-    search_query: str,
-    llm_client=None,
-    user_context: str = None
+    events: List[Dict], search_query: str, llm_client=None, user_context: str = None
 ) -> Dict[str, Any]:
     """
     Find exact event match from search results
@@ -208,7 +196,7 @@ async def find_exact_event(
             "success": False,
             "matched_events": [],
             "confidence": 0.0,
-            "reason": "No events to match"
+            "reason": "No events to match",
         }
 
     if len(events) == 1:
@@ -216,25 +204,22 @@ async def find_exact_event(
             "success": True,
             "matched_events": events,
             "confidence": 1.0,
-            "reason": "Only one event found"
+            "reason": "Only one event found",
         }
 
     if search_query:
-        exact_matches = [
-            e for e in events
-            if search_query.lower() in e.get("summary", "").lower()
-        ]
+        exact_matches = [e for e in events if search_query.lower() in e.get("summary", "").lower()]
         if len(exact_matches) == 1:
             return {
                 "success": True,
                 "matched_events": exact_matches,
                 "confidence": 0.95,
-                "reason": f"Exact title match for '{search_query}'"
+                "reason": f"Exact title match for '{search_query}'",
             }
 
     return {
         "success": True,
         "matched_events": events,
         "confidence": 0.7,
-        "reason": "Multiple possible matches, showing all for user confirmation"
+        "reason": "Multiple possible matches, showing all for user confirmation",
     }

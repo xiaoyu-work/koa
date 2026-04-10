@@ -31,9 +31,7 @@ class TodoAccountResolver:
     ) -> Optional[dict]:
         """Resolve a single todo account across all todo services."""
         resolver = AccountResolver()
-        return await resolver._resolve_account_all_services(
-            tenant_id, account_spec, _TODO_SERVICES
-        )
+        return await resolver._resolve_account_all_services(tenant_id, account_spec, _TODO_SERVICES)
 
     @staticmethod
     async def resolve_accounts(

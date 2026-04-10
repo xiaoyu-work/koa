@@ -6,9 +6,9 @@ loop results.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
-from ..constants import COMPLETE_TASK_TOOL_NAME, COMPLETE_TASK_SCHEMA  # noqa: F401
+from ..constants import COMPLETE_TASK_SCHEMA, COMPLETE_TASK_TOOL_NAME  # noqa: F401
 
 
 @dataclass

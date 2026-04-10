@@ -8,22 +8,23 @@ This module provides the main CheckpointManager class for:
 - Browsing and comparing checkpoints
 """
 
-from dataclasses import dataclass
-from datetime import datetime
-from typing import Dict, Any, List, Optional, Protocol, TypeVar, Generic
 import copy
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Protocol
 
-from .models import Checkpoint, CheckpointMetadata, CheckpointTree, CheckpointDiff
+from .models import Checkpoint, CheckpointDiff, CheckpointMetadata, CheckpointTree
 from .storage import CheckpointStorage, MemoryStorage
 
 
 class CheckpointError(Exception):
     """Raised when checkpoint operations fail"""
+
     pass
 
 
 class AgentProtocol(Protocol):
     """Protocol for agent that can be checkpointed"""
+
     agent_id: str
     user_id: str
     status: Any  # AgentStatus
@@ -60,11 +61,7 @@ class CheckpointManager:
         diff = await manager.compare_checkpoints(id1, id2)
     """
 
-    def __init__(
-        self,
-        storage: Optional[CheckpointStorage] = None,
-        auto_save: bool = True
-    ):
+    def __init__(self, storage: Optional[CheckpointStorage] = None, auto_save: bool = True):
         """
         Initialize checkpoint manager.
 
@@ -81,7 +78,7 @@ class CheckpointManager:
         agent: AgentProtocol,
         message: Optional[Dict[str, Any]] = None,
         result: Optional[Dict[str, Any]] = None,
-        branch_label: Optional[str] = None
+        branch_label: Optional[str] = None,
     ) -> str:
         """
         Save a checkpoint for an agent.
@@ -100,10 +97,7 @@ class CheckpointManager:
 
         # Get message history
         try:
-            message_history = [
-                self._serialize_message(m)
-                for m in agent.get_message_history()
-            ]
+            message_history = [self._serialize_message(m) for m in agent.get_message_history()]
         except Exception:
             message_history = []
 
@@ -113,7 +107,7 @@ class CheckpointManager:
             agent_id=agent.agent_id,
             agent_type=agent.__class__.__name__,
             user_id=agent.user_id,
-            status=str(agent.status.value) if hasattr(agent.status, 'value') else str(agent.status),
+            status=str(agent.status.value) if hasattr(agent.status, "value") else str(agent.status),
             collected_fields=copy.deepcopy(agent.collected_fields),
             execution_state=copy.deepcopy(agent.execution_state),
             context=copy.deepcopy(agent.context),
@@ -172,11 +166,7 @@ class CheckpointManager:
             "message_history": checkpoint.message_history,
         }
 
-    async def restore_agent(
-        self,
-        checkpoint_id: str,
-        agent_factory: Any
-    ) -> Any:
+    async def restore_agent(self, checkpoint_id: str, agent_factory: Any) -> Any:
         """
         Restore an agent from a checkpoint.
 
@@ -195,7 +185,7 @@ class CheckpointManager:
         agent = await agent_factory.create_agent(
             agent_type=checkpoint.agent_type,
             user_id=checkpoint.user_id,
-            context_hints=checkpoint.context
+            context_hints=checkpoint.context,
         )
 
         # Restore state
@@ -203,7 +193,7 @@ class CheckpointManager:
         agent.execution_state = copy.deepcopy(checkpoint.execution_state)
 
         # Restore status
-        if hasattr(agent, 'status') and hasattr(agent.status, '__class__'):
+        if hasattr(agent, "status") and hasattr(agent.status, "__class__"):
             try:
                 agent.status = agent.status.__class__(checkpoint.status)
             except Exception:
@@ -219,7 +209,7 @@ class CheckpointManager:
         checkpoint_id: str,
         new_message: Dict[str, Any],
         agent_factory: Any,
-        branch_label: Optional[str] = None
+        branch_label: Optional[str] = None,
     ) -> Any:
         """
         Replay from a checkpoint with different input.
@@ -241,16 +231,14 @@ class CheckpointManager:
         # Process new message
         # The agent will create its own checkpoint after processing
         from ..message import Message
+
         msg = Message(**new_message) if isinstance(new_message, dict) else new_message
         result = await agent.reply(msg)
 
         return result
 
     async def list_checkpoints(
-        self,
-        agent_id: str,
-        limit: int = 100,
-        offset: int = 0
+        self, agent_id: str, limit: int = 100, offset: int = 0
     ) -> List[CheckpointMetadata]:
         """
         List checkpoints for an agent.
@@ -266,10 +254,7 @@ class CheckpointManager:
         return await self.storage.list_by_agent(agent_id, limit, offset)
 
     async def list_user_checkpoints(
-        self,
-        user_id: str,
-        limit: int = 100,
-        offset: int = 0
+        self, user_id: str, limit: int = 100, offset: int = 0
     ) -> List[CheckpointMetadata]:
         """
         List checkpoints for a user.
@@ -308,11 +293,7 @@ class CheckpointManager:
         """
         return await self.storage.get_latest(agent_id)
 
-    async def compare_checkpoints(
-        self,
-        from_id: str,
-        to_id: str
-    ) -> Optional[CheckpointDiff]:
+    async def compare_checkpoints(self, from_id: str, to_id: str) -> Optional[CheckpointDiff]:
         """
         Compare two checkpoints.
 
@@ -371,9 +352,9 @@ class CheckpointManager:
 
     def _serialize_message(self, message: Any) -> Dict[str, Any]:
         """Serialize a message to dictionary"""
-        if hasattr(message, 'to_dict'):
+        if hasattr(message, "to_dict"):
             return message.to_dict()
-        elif hasattr(message, '__dict__'):
+        elif hasattr(message, "__dict__"):
             return dict(message.__dict__)
         else:
             return {"content": str(message)}

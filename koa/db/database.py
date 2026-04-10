@@ -48,25 +48,23 @@ class Database:
     def pool(self):
         """Access the raw asyncpg pool. Raises if not initialized."""
         if self._pool is None:
-            raise RuntimeError(
-                "Database not initialized. Call await db.initialize() first."
-            )
+            raise RuntimeError("Database not initialized. Call await db.initialize() first.")
         return self._pool
 
     @staticmethod
     async def _init_connection(conn):
         """Register JSON codecs so JSONB columns return Python objects."""
         await conn.set_type_codec(
-            'jsonb',
+            "jsonb",
             encoder=json.dumps,
             decoder=json.loads,
-            schema='pg_catalog',
+            schema="pg_catalog",
         )
         await conn.set_type_codec(
-            'json',
+            "json",
             encoder=json.dumps,
             decoder=json.loads,
-            schema='pg_catalog',
+            schema="pg_catalog",
         )
 
     async def initialize(self) -> None:
@@ -76,10 +74,7 @@ class Database:
         try:
             import asyncpg
         except ImportError:
-            raise ImportError(
-                "asyncpg is required for Database. "
-                "Install with: pip install asyncpg"
-            )
+            raise ImportError("asyncpg is required for Database. Install with: pip install asyncpg")
         self._pool = await asyncpg.create_pool(
             self._dsn,
             min_size=self._min_size,

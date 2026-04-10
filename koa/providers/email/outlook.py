@@ -6,8 +6,8 @@ Requires OAuth scopes: Mail.Send, Mail.ReadWrite, Mail.Read
 """
 
 import logging
-from typing import Any, Callable, Dict, List, Optional
 from datetime import datetime, timedelta, timezone
+from typing import Any, Callable, Dict, List, Optional
 
 import httpx
 
@@ -135,14 +135,18 @@ class OutlookProvider(BaseEmailProvider):
 
                 email_list = []
                 for msg in messages:
-                    email_list.append({
-                        "message_id": msg["id"],
-                        "sender": msg.get("from", {}).get("emailAddress", {}).get("address", "Unknown"),
-                        "subject": msg.get("subject", "(No subject)"),
-                        "date": msg.get("receivedDateTime", "Unknown"),
-                        "unread": not msg.get("isRead", True),
-                        "snippet": msg.get("bodyPreview", "")[:200],
-                    })
+                    email_list.append(
+                        {
+                            "message_id": msg["id"],
+                            "sender": msg.get("from", {})
+                            .get("emailAddress", {})
+                            .get("address", "Unknown"),
+                            "subject": msg.get("subject", "(No subject)"),
+                            "date": msg.get("receivedDateTime", "Unknown"),
+                            "unread": not msg.get("isRead", True),
+                            "snippet": msg.get("bodyPreview", "")[:200],
+                        }
+                    )
 
                 logger.info(f"Outlook search found {len(email_list)} emails")
                 return {"success": True, "data": email_list, "count": len(email_list)}
@@ -217,7 +221,10 @@ class OutlookProvider(BaseEmailProvider):
                     }
                 else:
                     logger.error(f"Outlook token refresh failed: {response.text}")
-                    return {"success": False, "error": f"Token refresh failed: {response.status_code}"}
+                    return {
+                        "success": False,
+                        "error": f"Token refresh failed: {response.status_code}",
+                    }
 
         except Exception as e:
             logger.error(f"Outlook token refresh error: {e}", exc_info=True)
@@ -234,7 +241,9 @@ class OutlookProvider(BaseEmailProvider):
             if not await self.ensure_valid_token():
                 return {"success": False, "error": "Failed to refresh access token"}
 
-            expiration = (datetime.utcnow() + timedelta(minutes=expiration_minutes)).isoformat() + "Z"
+            expiration = (
+                datetime.utcnow() + timedelta(minutes=expiration_minutes)
+            ).isoformat() + "Z"
 
             payload = {
                 "changeType": "created",
@@ -265,7 +274,10 @@ class OutlookProvider(BaseEmailProvider):
                     }
                 else:
                     logger.error(f"Outlook subscription failed: {response.text}")
-                    return {"success": False, "error": f"Subscription failed: {response.status_code}"}
+                    return {
+                        "success": False,
+                        "error": f"Subscription failed: {response.status_code}",
+                    }
 
         except Exception as e:
             logger.error(f"Outlook create subscription error: {e}", exc_info=True)
@@ -281,7 +293,9 @@ class OutlookProvider(BaseEmailProvider):
             if not await self.ensure_valid_token():
                 return {"success": False, "error": "Failed to refresh access token"}
 
-            expiration = (datetime.utcnow() + timedelta(minutes=expiration_minutes)).isoformat() + "Z"
+            expiration = (
+                datetime.utcnow() + timedelta(minutes=expiration_minutes)
+            ).isoformat() + "Z"
 
             async with httpx.AsyncClient() as client:
                 response = await client.patch(
@@ -351,7 +365,9 @@ class OutlookProvider(BaseEmailProvider):
                         "success": True,
                         "data": {
                             "message_id": msg["id"],
-                            "sender": msg.get("from", {}).get("emailAddress", {}).get("address", "Unknown"),
+                            "sender": msg.get("from", {})
+                            .get("emailAddress", {})
+                            .get("address", "Unknown"),
                             "subject": msg.get("subject", "(No subject)"),
                             "date": msg.get("receivedDateTime", "Unknown"),
                             "snippet": msg.get("bodyPreview", "")[:200],
@@ -359,7 +375,10 @@ class OutlookProvider(BaseEmailProvider):
                         },
                     }
                 else:
-                    return {"success": False, "error": f"Get message failed: {response.status_code}"}
+                    return {
+                        "success": False,
+                        "error": f"Get message failed: {response.status_code}",
+                    }
 
         except Exception as e:
             logger.error(f"Outlook get message error: {e}", exc_info=True)

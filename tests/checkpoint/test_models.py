@@ -8,14 +8,13 @@ Tests cover:
 """
 
 import json
-import pytest
 from datetime import datetime
 
 from koa.checkpoint.models import (
     Checkpoint,
+    CheckpointDiff,
     CheckpointMetadata,
     CheckpointTree,
-    CheckpointDiff,
 )
 
 
@@ -62,7 +61,7 @@ class TestCheckpointGenerateId:
 
     def test_has_12_hex_chars_after_prefix(self):
         id = Checkpoint.generate_id()
-        hex_part = id[len("ckpt_"):]
+        hex_part = id[len("ckpt_") :]
         assert len(hex_part) == 12
         int(hex_part, 16)  # should not raise
 
@@ -205,8 +204,12 @@ class TestCheckpointTree:
     def _build_linear_tree(self):
         """Build a simple 3-node linear chain: root -> mid -> leaf"""
         root = _make_checkpoint(id="c1", timestamp=datetime(2025, 1, 1, 0, 0))
-        mid = _make_checkpoint(id="c2", parent_checkpoint_id="c1", timestamp=datetime(2025, 1, 1, 1, 0))
-        leaf = _make_checkpoint(id="c3", parent_checkpoint_id="c2", timestamp=datetime(2025, 1, 1, 2, 0))
+        mid = _make_checkpoint(
+            id="c2", parent_checkpoint_id="c1", timestamp=datetime(2025, 1, 1, 1, 0)
+        )
+        leaf = _make_checkpoint(
+            id="c3", parent_checkpoint_id="c2", timestamp=datetime(2025, 1, 1, 2, 0)
+        )
         tree = CheckpointTree(root_id="c1")
         tree.add_checkpoint(root)
         tree.add_checkpoint(mid)
@@ -251,7 +254,9 @@ class TestCheckpointTree:
 
     def test_get_leaf_nodes_with_branching(self):
         tree = self._build_linear_tree()
-        branch = _make_checkpoint(id="c4", parent_checkpoint_id="c1", timestamp=datetime(2025, 1, 1, 3, 0))
+        branch = _make_checkpoint(
+            id="c4", parent_checkpoint_id="c1", timestamp=datetime(2025, 1, 1, 3, 0)
+        )
         tree.add_checkpoint(branch)
         leaves = set(tree.get_leaf_nodes())
         assert leaves == {"c3", "c4"}
