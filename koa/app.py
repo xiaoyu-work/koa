@@ -20,6 +20,7 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 
 from .result import AgentResult
 from .streaming.models import AgentEvent
+from .config.schema import validate_config
 
 logger = logging.getLogger(__name__)
 
@@ -82,12 +83,14 @@ class Koa:
         self._config = _load_config(config)
         self._initialized = False
 
-        # Validate required fields
-        if "database" not in self._config:
-            raise ValueError("Missing required config field: 'database'")
-        llm_cfg = self._config.get("llm", {})
-        if not llm_cfg.get("provider") or not llm_cfg.get("model"):
-            raise ValueError("Missing required config fields: 'llm.provider' and 'llm.model'")
+        # Validate config schema
+        errors = validate_config(self._config)
+        if errors:
+            for e in errors:
+                logger.error(f"Config error: {e}")
+            raise ValueError(f"Invalid config: {'; '.join(errors)}")
+        
+        # Keep the embedding check since it's not covered by our validation
         if not self._config.get("embedding"):
             raise ValueError("Missing required config field: 'embedding'")
 
