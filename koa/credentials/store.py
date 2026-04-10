@@ -23,11 +23,13 @@ Usage (standalone — backward compatible):
 
 import json
 import logging
+import os
 import secrets
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from ..db import Database, Repository
+from .encryption import CredentialEncryptor
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +60,7 @@ class CredentialStore(Repository):
             self._standalone = True
         else:
             raise ValueError("Either db or dsn must be provided")
+        self._encryptor = CredentialEncryptor(os.getenv("KOA_CREDENTIAL_KEY"))
 
     async def initialize(self) -> None:
         """Initialize pool. For standalone mode or first-time setup."""
@@ -85,6 +88,7 @@ class CredentialStore(Repository):
         # Do NOT json.dumps() here: the codec calls json.dumps() internally,
         # and double-encoding stores a JSON string instead of a JSON object,
         # breaking SQL operators like ->>'email'.
+        credentials = self._encryptor.encrypt(credentials)
         await self.db.execute(
             """
             INSERT INTO credentials (tenant_id, service, account_name, credentials_json, updated_at)
@@ -111,7 +115,8 @@ class CredentialStore(Repository):
         )
         if row:
             val = row["credentials_json"]
-            return json.loads(val) if isinstance(val, str) else val
+            creds = json.loads(val) if isinstance(val, str) else val
+            return self._encryptor.decrypt(creds)
         return None
 
     async def list(
@@ -142,6 +147,7 @@ class CredentialStore(Repository):
         for row in rows:
             val = row["credentials_json"]
             creds = json.loads(val) if isinstance(val, str) else val
+            creds = self._encryptor.decrypt(creds)
             results.append({
                 "service": row["service"],
                 "account_name": row["account_name"],
@@ -181,6 +187,7 @@ class CredentialStore(Repository):
         for row in rows:
             val = row["credentials_json"]
             creds = json.loads(val) if isinstance(val, str) else val
+            creds = self._encryptor.decrypt(creds)
             results.append({
                 "tenant_id": row["tenant_id"],
                 "service": row["service"],
@@ -232,6 +239,7 @@ class CredentialStore(Repository):
             return None
         val = row["credentials_json"]
         creds = json.loads(val) if isinstance(val, str) else val
+        creds = self._encryptor.decrypt(creds)
         return {
             "tenant_id": row["tenant_id"],
             "service": row["service"],
