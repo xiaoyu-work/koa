@@ -149,8 +149,13 @@ async def stream(req: ChatRequest):
 
 @router.get("/health")
 async def health():
-    """Basic health check."""
-    return {"status": "ok"}
+    """Liveness probe — always returns 200 if the process is alive."""
+    from koa import __version__
+    return {
+        "status": "ok",
+        "version": __version__,
+        "auth_enabled": os.getenv("KOA_API_KEY") is not None,
+    }
 
 
 @router.get("/health/ready")
