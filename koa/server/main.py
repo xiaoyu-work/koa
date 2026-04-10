@@ -35,16 +35,6 @@ def main():
     # koa chat
     chat_parser = subparsers.add_parser("chat", help="Interactive chat with a running Koa server")
     chat_parser.add_argument(
-        "--url",
-        default=os.getenv("KOA_URL", "http://localhost:8000"),
-        help="Koa server URL (default: http://localhost:8000)",
-    )
-    chat_parser.add_argument(
-        "--api-key",
-        default=os.getenv("KOA_API_KEY"),
-        help="API key for authentication (default: $KOA_API_KEY)",
-    )
-    chat_parser.add_argument(
         "--tenant-id",
         default="default",
         help="Tenant ID for multi-tenant mode (default: 'default')",
@@ -86,4 +76,6 @@ def _run_chat(args):
     """Interactive CLI chat client."""
     from .cli_chat import chat_loop
 
-    chat_loop(url=args.url, api_key=args.api_key, tenant_id=args.tenant_id)
+    url = f"http://localhost:{args.port or int(os.getenv('KOA_PORT', '8000'))}"
+    api_key = os.getenv("KOA_API_KEY")
+    chat_loop(url=url, api_key=api_key, tenant_id=args.tenant_id)

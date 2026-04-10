@@ -42,8 +42,6 @@ uv sync --extra openai        # or: --extra anthropic, --all-extras
 uv run koa serve
 ```
 
-The API server starts at **http://localhost:8000**.
-
 ### 3. Chat
 
 In another terminal:
