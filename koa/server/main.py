@@ -23,13 +23,51 @@ class JSONFormatter(logging.Formatter):
 
 def main():
     import argparse
+
+    parser = argparse.ArgumentParser(description="Koa — AI Agent Framework")
+    subparsers = parser.add_subparsers(dest="command")
+
+    # koa serve (default when no subcommand)
+    serve_parser = subparsers.add_parser("serve", help="Start the API server")
+    serve_parser.add_argument("--host", default=os.getenv("KOA_HOST", "127.0.0.1"))
+    serve_parser.add_argument("--port", type=int, default=int(os.getenv("KOA_PORT", "8000")))
+
+    # koa chat
+    chat_parser = subparsers.add_parser("chat", help="Interactive chat with a running Koa server")
+    chat_parser.add_argument(
+        "--url",
+        default=os.getenv("KOA_URL", "http://localhost:8000"),
+        help="Koa server URL (default: http://localhost:8000)",
+    )
+    chat_parser.add_argument(
+        "--api-key",
+        default=os.getenv("KOA_API_KEY"),
+        help="API key for authentication (default: $KOA_API_KEY)",
+    )
+    chat_parser.add_argument(
+        "--tenant-id",
+        default="default",
+        help="Tenant ID for multi-tenant mode (default: 'default')",
+    )
+
+    # Backward compat: bare `koa` or `koa --host/--port` starts server
+    parser.add_argument("--host", default=None)
+    parser.add_argument("--port", type=int, default=None)
+
+    args = parser.parse_args()
+
+    if args.command == "chat":
+        _run_chat(args)
+    else:
+        _run_serve(args)
+
+
+def _run_serve(args):
+    """Start the Koa API server."""
     import uvicorn
 
-    parser = argparse.ArgumentParser(description="Koa API Server")
-    parser.add_argument("--ui", action="store_true", help="Serve demo frontend (/ and /settings)")
-    parser.add_argument("--host", default=os.getenv("KOA_HOST", "127.0.0.1"))
-    parser.add_argument("--port", type=int, default=int(os.getenv("KOA_PORT", "8000")))
-    args = parser.parse_args()
+    host = args.host or os.getenv("KOA_HOST", "127.0.0.1")
+    port = args.port or int(os.getenv("KOA_PORT", "8000"))
 
     if os.getenv("LOG_FORMAT", "json") == "json":
         handler = logging.StreamHandler(sys.stdout)
@@ -40,8 +78,12 @@ def main():
         logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(name)s - %(message)s")
 
     from .app import api
-    if args.ui:
-        from .ui import register_ui_routes
-        register_ui_routes(api)
 
-    uvicorn.run(api, host=args.host, port=args.port)
+    uvicorn.run(api, host=host, port=port)
+
+
+def _run_chat(args):
+    """Interactive CLI chat client."""
+    from .cli_chat import chat_loop
+
+    chat_loop(url=args.url, api_key=args.api_key, tenant_id=args.tenant_id)

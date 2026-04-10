@@ -2,7 +2,6 @@
 
 import logging
 import os
-import pathlib
 from typing import Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Security
@@ -15,7 +14,6 @@ from ..app import Koa
 logger = logging.getLogger(__name__)
 
 _config_path = os.getenv("KOA_CONFIG", "config.yaml")
-_STATIC_DIR = pathlib.Path(__file__).resolve().parent.parent / "static"
 
 _app: Optional[Koa] = None
 

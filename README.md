@@ -39,14 +39,22 @@ uv sync --extra openai        # or: --extra anthropic, --all-extras
 ### 2. Start
 
 ```bash
-uv run koa --ui
+uv run koa serve
 ```
 
-Open **http://localhost:8000** in your browser.
+The API server starts at **http://localhost:8000**.
 
-### 3. Configure
+### 3. Chat
 
-Go to **http://localhost:8000/settings** and set up:
+In another terminal:
+
+```bash
+uv run koa chat
+```
+
+### 4. Configure
+
+Go to **http://localhost:8000/settings** or edit `config.yaml` directly:
 
 1. **LLM Provider** - Choose your AI provider (OpenAI, Azure, Anthropic, etc.), enter API key, model name, and database URL
 2. **OAuth Apps** *(optional)* - Add Google/Microsoft OAuth app credentials to enable one-click account connection
