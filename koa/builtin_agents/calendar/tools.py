@@ -11,7 +11,13 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Dict, Optional
 
+from koa.builtin_agents.shared.routing_preferences import (
+    resolve_surface_target,
+    wrap_routing_error,
+)
 from koa.models import AgentToolContext, ToolOutput
+from koa.providers.calendar.local import LocalCalendarProvider
+from koa.providers.local_backend import LocalBackendClient
 from koa.tool_decorator import tool
 
 logger = logging.getLogger(__name__)
@@ -39,6 +45,112 @@ async def _get_provider(tenant_id: str):
         return None, None, "I lost access to your calendar. Could you reconnect it?"
 
     return provider, account, None
+
+
+async def _resolve_calendar_provider(
+    context: AgentToolContext,
+    target_provider: str | None = None,
+    target_account: str | None = None,
+):
+    from koa.providers.calendar.factory import CalendarProviderFactory
+    from koa.providers.calendar.resolver import CalendarAccountResolver
+
+    backend_client = LocalBackendClient.from_context(context)
+    try:
+        target = await resolve_surface_target(
+            tenant_id=context.tenant_id,
+            surface="calendar",
+            backend_client=backend_client,
+            explicit_provider=target_provider,
+            explicit_account=target_account,
+        )
+    except Exception as e:
+        logger.error(f"Failed to resolve calendar routing target: {e}", exc_info=True)
+        return None, None, wrap_routing_error("calendar", target_provider or "local", "write_failed")
+
+    if target.provider == "local":
+        return (
+            LocalCalendarProvider(context.tenant_id, backend_client),
+            {"provider": "local", "account_name": "local"},
+            None,
+        )
+
+    if target.provider not in CalendarProviderFactory.get_supported_providers():
+        return None, None, wrap_routing_error("calendar", target.provider, "unsupported_provider")
+
+    account = await CalendarAccountResolver.resolve_account_for_provider(
+        context.tenant_id,
+        target.provider,
+        target.account or "primary",
+    )
+    if not account:
+        return None, None, wrap_routing_error("calendar", target.provider, "not_connected")
+
+    provider = CalendarProviderFactory.create_provider(account)
+    if not provider:
+        return None, None, wrap_routing_error("calendar", target.provider, "unsupported_provider")
+
+    if not await provider.ensure_valid_token():
+        return None, None, wrap_routing_error("calendar", target.provider, "auth_expired")
+
+    return provider, account, None
+
+
+def _coerce_event_datetime(value) -> Optional[datetime]:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if isinstance(value, dict):
+        value = value.get("dateTime", value.get("date"))
+    if isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+        except ValueError:
+            return None
+    return None
+
+
+def _event_sort_key(event) -> datetime:
+    return _coerce_event_datetime(event.get("start")) or datetime.min.replace(tzinfo=timezone.utc)
+
+
+def _event_id(event) -> str:
+    return event.get("id") or event.get("event_id") or ""
+
+
+def _event_link(event) -> str:
+    return event.get("htmlLink") or event.get("html_link") or ""
+
+
+async def _search_resolved_calendar_events(
+    context: AgentToolContext,
+    provider,
+    time_range: str,
+    search_query: str | None = None,
+    max_results: int = 50,
+):
+    from .search_helper import parse_time_range
+
+    user_tz = context.metadata.get("timezone") if context.metadata else None
+    time_min, time_max = parse_time_range(time_range, user_tz=user_tz)
+    result = await provider.list_events(
+        time_min=time_min,
+        time_max=time_max,
+        query=search_query,
+        max_results=max_results,
+    )
+
+    if not result.get("success"):
+        return {"success": False, "error": result.get("error", "Unknown error")}
+
+    return {
+        "success": True,
+        "events": result.get("data", []),
+        "time_min": time_min,
+        "time_max": time_max,
+    }
 
 
 def _format_event_time(start) -> str:
@@ -114,13 +226,23 @@ async def query_events(
     ],
     query: Annotated[Optional[str], "Optional keywords to search in event titles"] = None,
     max_results: Annotated[int, "Maximum number of events to return (default 10)"] = 10,
+    target_provider: Annotated[
+        Optional[str], "Optional explicit provider like local or google"
+    ] = None,
+    target_account: Annotated[
+        Optional[str], "Optional explicit account label like primary or work"
+    ] = None,
     *,
     context: AgentToolContext,
 ) -> str:
     """Search and list calendar events. Returns events matching the time range and optional keyword query."""
     from .search_helper import parse_time_range
 
-    provider, account, error = await _get_provider(context.tenant_id)
+    provider, account, error = await _resolve_calendar_provider(
+        context,
+        target_provider,
+        target_account,
+    )
     if error:
         return error
 
@@ -136,10 +258,10 @@ async def query_events(
         )
 
         if not result.get("success"):
-            return f"Failed to search calendar: {result.get('error', 'Unknown error')}"
+            return wrap_routing_error("calendar", account.get("provider", "calendar"), "write_failed")
 
         events = result.get("data", [])
-        events.sort(key=lambda e: e.get("start") or datetime.min)
+        events.sort(key=_event_sort_key)
 
         if not events:
             return f"No events found {time_range}."
@@ -174,9 +296,8 @@ async def query_events(
             location = event.get("location", "")
             if location:
                 card["location"] = location
-            # Google Calendar event URL for deep linking
-            event_id = event.get("id", "")
-            html_link = event.get("htmlLink", "")
+            event_id = _event_id(event)
+            html_link = _event_link(event)
             if html_link:
                 card["eventUrl"] = html_link
             elif event_id:
@@ -371,6 +492,12 @@ async def create_event(
     attendees: Annotated[
         Optional[str], "Comma-separated list of attendee email addresses (optional)"
     ] = None,
+    target_provider: Annotated[
+        Optional[str], "Optional explicit provider like local or google"
+    ] = None,
+    target_account: Annotated[
+        Optional[str], "Optional explicit account label like primary or work"
+    ] = None,
     *,
     context: AgentToolContext,
 ) -> str:
@@ -378,7 +505,11 @@ async def create_event(
     if not summary or not start:
         return "Error: event title (summary) and start time are required."
 
-    provider, account, error = await _get_provider(context.tenant_id)
+    provider, account, error = await _resolve_calendar_provider(
+        context,
+        target_provider,
+        target_account,
+    )
     if error:
         return error
 
@@ -421,7 +552,7 @@ async def create_event(
                 response += f"\n{event_link}"
             return response
         else:
-            return f"I couldn't create that event. {result.get('error', '')}"
+            return wrap_routing_error("calendar", account.get("provider", "calendar"), "write_failed")
 
     except Exception as e:
         logger.error(f"Failed to create event: {e}", exc_info=True)
@@ -466,6 +597,12 @@ async def update_event(
         Dict,
         "What to change: object with optional keys new_time, new_title, new_location, new_duration",
     ],
+    target_provider: Annotated[
+        Optional[str], "Optional explicit provider like local or google"
+    ] = None,
+    target_account: Annotated[
+        Optional[str], "Optional explicit account label like primary or work"
+    ] = None,
     *,
     context: AgentToolContext,
 ) -> str:
@@ -475,7 +612,11 @@ async def update_event(
     if not changes:
         return "Error: please specify what to change (changes)."
 
-    provider, account, error = await _get_provider(context.tenant_id)
+    provider, account, error = await _resolve_calendar_provider(
+        context,
+        target_provider,
+        target_account,
+    )
     if error:
         return error
 
@@ -495,10 +636,12 @@ async def update_event(
             query=target,
             max_results=10,
         )
+        if not result.get("success"):
+            return wrap_routing_error("calendar", account.get("provider", "calendar"), "write_failed")
 
         target_event = None
 
-        if result.get("success") and result.get("data"):
+        if result.get("data"):
             events = result["data"]
             target_lower = target.lower()
             for event in events:
@@ -511,14 +654,20 @@ async def update_event(
                 if any(word in target_lower for word in ["meeting", "call", "sync", "appointment"]):
                     target_event = events[0]
 
-        if not result.get("success") or not target_event:
+        if not target_event:
             # Broader search without query filter
             result = await provider.list_events(
                 time_min=time_min,
                 time_max=time_max,
                 max_results=20,
             )
-            if result.get("success") and result.get("data"):
+            if not result.get("success"):
+                return wrap_routing_error(
+                    "calendar",
+                    account.get("provider", "calendar"),
+                    "write_failed",
+                )
+            if result.get("data"):
                 target_lower = target.lower()
                 for event in result["data"]:
                     event_title = event.get("summary", "").lower()
@@ -529,7 +678,7 @@ async def update_event(
         if not target_event:
             return f"I couldn't find an event matching '{target}'. Could you be more specific?"
 
-        event_id = target_event.get("id")
+        event_id = _event_id(target_event)
         if not event_id:
             return "I couldn't identify the event to update."
 
@@ -541,20 +690,11 @@ async def update_event(
             if parsed_time:
                 parsed_changes["start"] = parsed_time
                 # Preserve original duration
-                old_start = target_event.get("start", {})
-                old_end = target_event.get("end", {})
-                if old_start.get("dateTime") and old_end.get("dateTime"):
-                    try:
-                        old_start_dt = datetime.fromisoformat(
-                            old_start["dateTime"].replace("Z", "+00:00")
-                        )
-                        old_end_dt = datetime.fromisoformat(
-                            old_end["dateTime"].replace("Z", "+00:00")
-                        )
-                        duration = old_end_dt - old_start_dt
-                        parsed_changes["end"] = parsed_time + duration
-                    except Exception:
-                        parsed_changes["end"] = parsed_time + timedelta(hours=1)
+                old_start_dt = _coerce_event_datetime(target_event.get("start"))
+                old_end_dt = _coerce_event_datetime(target_event.get("end"))
+                if old_start_dt and old_end_dt:
+                    duration = old_end_dt - old_start_dt
+                    parsed_changes["end"] = parsed_time + duration
                 else:
                     parsed_changes["end"] = parsed_time + timedelta(hours=1)
 
@@ -623,7 +763,7 @@ async def update_event(
             else:
                 return f'Done! I\'ve updated "{event_title}".'
         else:
-            return f"I couldn't update that event. {result.get('error', '')}"
+            return wrap_routing_error("calendar", account.get("provider", "calendar"), "write_failed")
 
     except Exception as e:
         logger.error(f"Failed to update event: {e}", exc_info=True)
@@ -637,22 +777,30 @@ async def update_event(
 
 async def _preview_delete_event(args: dict, context: AgentToolContext) -> str:
     """Search for events matching criteria and show what would be deleted."""
-    from .search_helper import search_calendar_events
-
     search_query = args.get("search_query", "")
     time_range = args.get("time_range", "next 7 days")
+    target_provider = args.get("target_provider")
+    target_account = args.get("target_account")
 
-    user_tz = context.metadata.get("timezone") if context.metadata else None
-    result = await search_calendar_events(
-        user_id=context.tenant_id,
-        search_query=search_query,
-        time_range=time_range,
-        max_results=50,
-        account_hint="primary",
-        user_tz=user_tz,
+    provider, account, error = await _resolve_calendar_provider(
+        context,
+        target_provider,
+        target_account,
     )
+    if error:
+        return error
 
-    if not result.get("success") or not result.get("events"):
+    result = await _search_resolved_calendar_events(
+        context=context,
+        provider=provider,
+        time_range=time_range,
+        search_query=search_query,
+        max_results=50,
+    )
+    if not result.get("success"):
+        return wrap_routing_error("calendar", account.get("provider", "calendar"), "write_failed")
+
+    if not result.get("events"):
         return "Couldn't find any events matching that criteria."
 
     events = result["events"]
@@ -691,43 +839,42 @@ async def delete_event(
         str,
         "Time range to search (e.g., 'today', 'tomorrow', 'this week'). Defaults to 'next 7 days'.",
     ] = "next 7 days",
+    target_provider: Annotated[
+        Optional[str], "Optional explicit provider like local or google"
+    ] = None,
+    target_account: Annotated[
+        Optional[str], "Optional explicit account label like primary or work"
+    ] = None,
     *,
     context: AgentToolContext,
 ) -> str:
     """Delete calendar events matching the search criteria."""
-    from koa.providers.calendar.factory import CalendarProviderFactory
-
-    from .search_helper import search_calendar_events
-
-    user_tz = context.metadata.get("timezone") if context.metadata else None
-    result = await search_calendar_events(
-        user_id=context.tenant_id,
-        search_query=search_query,
-        time_range=time_range,
-        max_results=50,
-        account_hint="primary",
-        user_tz=user_tz,
+    provider, account, error = await _resolve_calendar_provider(
+        context,
+        target_provider,
+        target_account,
     )
+    if error:
+        return error
 
-    if not result.get("success") or not result.get("events"):
+    result = await _search_resolved_calendar_events(
+        context=context,
+        provider=provider,
+        time_range=time_range,
+        search_query=search_query,
+        max_results=50,
+    )
+    if not result.get("success"):
+        return wrap_routing_error("calendar", account.get("provider", "calendar"), "write_failed")
+
+    if not result.get("events"):
         return "I couldn't find any events matching that criteria."
 
     events = result["events"]
-    account = result.get("account")
-    event_ids = [event.get("event_id") for event in events if event.get("event_id")]
+    event_ids = [_event_id(event) for event in events if _event_id(event)]
 
     if not event_ids:
         return "I couldn't find any events to delete."
-
-    if not account:
-        return "I'm not sure which calendar to use."
-
-    provider = CalendarProviderFactory.create_provider(account)
-    if not provider:
-        return "Sorry, I can't access that calendar provider yet."
-
-    if not await provider.ensure_valid_token():
-        return "I lost access to your calendar. Could you reconnect it?"
 
     deleted_count = 0
     failed_count = 0
@@ -740,6 +887,8 @@ async def delete_event(
             failed_count += 1
             logger.warning(f"Failed to delete event {event_id}: {del_result.get('error')}")
 
+    if deleted_count == 0 and failed_count > 0:
+        return wrap_routing_error("calendar", account.get("provider", "calendar"), "write_failed")
     if deleted_count == 0:
         return "I couldn't delete those events. They might have already been removed."
     elif failed_count > 0:
@@ -762,14 +911,14 @@ async def check_upcoming_events(
     context: AgentToolContext,
 ) -> str:
     """Check for calendar events starting soon. Used by proactive reminders."""
-    provider, account, error = await _get_provider(context.tenant_id)
+    provider, account, error = await _resolve_calendar_provider(context)
     if error:
         return error
 
     try:
         now = datetime.now(timezone.utc)
-        time_min = now.isoformat()
-        time_max = (now + timedelta(minutes=minutes_ahead)).isoformat()
+        time_min = now
+        time_max = now + timedelta(minutes=minutes_ahead)
 
         result = await provider.list_events(
             time_min=time_min,
@@ -778,7 +927,7 @@ async def check_upcoming_events(
         )
 
         if not result.get("success"):
-            return f"Failed to check calendar: {result.get('error', 'Unknown error')}"
+            return wrap_routing_error("calendar", account.get("provider", "calendar"), "write_failed")
 
         events = result.get("data", [])
         if not events:
@@ -788,16 +937,7 @@ async def check_upcoming_events(
         for event in events:
             summary = html.unescape(event.get("summary", "Untitled"))
             start = event.get("start")
-            start_dt = None
-            if isinstance(start, dict):
-                dt_str = start.get("dateTime", "")
-                if dt_str:
-                    try:
-                        start_dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
-                    except (ValueError, AttributeError):
-                        pass
-            elif isinstance(start, datetime):
-                start_dt = start
+            start_dt = _coerce_event_datetime(start)
 
             if start_dt:
                 mins_until = max(0, int((start_dt - now).total_seconds() / 60))
@@ -808,7 +948,7 @@ async def check_upcoming_events(
             location = event.get("location", "")
             if location:
                 line += f"\n📍 {location}"
-            html_link = event.get("htmlLink", "")
+            html_link = _event_link(event)
             if html_link:
                 line += f"\n🔗 {html_link}"
             lines.append(line)
