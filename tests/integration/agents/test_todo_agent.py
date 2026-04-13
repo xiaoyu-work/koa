@@ -26,12 +26,14 @@ TOOL_SELECTION_CASES = [
     ("List my pending tasks", ["query_tasks"]),
     ("Add a task: buy groceries", ["create_task"]),
     ("Create a todo to call the dentist by Friday", ["create_task"]),
+    ("Use Google by default for my todos", ["set_routing_preference"]),
     ("I finished the buying groceries task, mark it as done", ["update_task"]),
     ("Mark the dentist task as complete", ["update_task"]),
     ("Delete the groceries task", ["delete_task", "query_tasks"]),
     ("Remove the call dentist todo", ["delete_task", "query_tasks"]),
     ("Remind me to take medicine at 9pm", ["set_reminder"]),
     ("Set a reminder for tomorrow at 8am to check email", ["set_reminder"]),
+    ("Remember Mom's birthday on May 4", ["remember_important_date"]),
     ("Show my reminders", ["manage_reminders"]),
     ("Pause my morning reminder from the reminders list", ["manage_reminders"]),
     ("Delete my medicine reminder from the reminders", ["manage_reminders"]),
@@ -103,6 +105,29 @@ async def test_extracts_manage_reminders_action(conversation):
     args = conv.get_tool_args("manage_reminders")[0]
     action = args.get("action", "").lower()
     assert action in ("list", "show"), f"Expected action='list' or 'show', got '{action}'"
+
+
+async def test_extracts_routing_preference_provider(conversation):
+    """set_routing_preference should receive the requested provider."""
+    conv = await conversation()
+    await conv.send_until_tool_called("Use Google by default for my todos")
+    conv.assert_tool_called("set_routing_preference")
+
+    args = conv.get_tool_args("set_routing_preference")[0]
+    assert args.get("surface") == "todo"
+    assert args.get("provider") == "google"
+
+
+async def test_extracts_important_date_fields(conversation):
+    """remember_important_date should receive the title/date/category."""
+    conv = await conversation()
+    await conv.send_until_tool_called("Remember Mom's birthday on May 4")
+    conv.assert_tool_called("remember_important_date")
+
+    args = conv.get_tool_args("remember_important_date")[0]
+    assert "mom" in args.get("title", "").lower()
+    assert "05-04" in args.get("date", "") or "may" in args.get("date", "").lower()
+    assert args.get("category", "").lower() == "birthday"
 
 
 # ---------------------------------------------------------------------------
@@ -201,3 +226,25 @@ async def test_delete_task_reject_cancels(conversation):
     assert result2.status in (AgentStatus.CANCELLED, AgentStatus.COMPLETED), (
         f"Expected CANCELLED after rejection, got {result2.status}"
     )
+
+
+async def test_set_reminder_triggers_approval(conversation):
+    """set_reminder should pause for user approval before executing."""
+    conv = await conversation()
+    await conv.send_until_status(
+        "Remind me to take medicine at 9pm",
+        AgentStatus.WAITING_FOR_APPROVAL,
+    )
+    conv.assert_tool_called("set_reminder")
+    conv.assert_status(AgentStatus.WAITING_FOR_APPROVAL)
+
+
+async def test_remember_important_date_triggers_approval(conversation):
+    """remember_important_date should pause for user approval before executing."""
+    conv = await conversation()
+    await conv.send_until_status(
+        "Remember Mom's birthday on May 4",
+        AgentStatus.WAITING_FOR_APPROVAL,
+    )
+    conv.assert_tool_called("remember_important_date")
+    conv.assert_status(AgentStatus.WAITING_FOR_APPROVAL)

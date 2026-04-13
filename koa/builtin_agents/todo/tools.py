@@ -11,7 +11,13 @@ import re
 from datetime import datetime, timezone
 from typing import Annotated, Dict, List, Optional
 
+from koa.builtin_agents.shared.routing_preferences import (
+    resolve_surface_target,
+    wrap_routing_error,
+)
 from koa.models import AgentToolContext, ToolOutput
+from koa.providers.local_backend import LocalBackendClient
+from koa.providers.todo.local import LocalTodoProvider
 from koa.tool_decorator import tool
 
 logger = logging.getLogger(__name__)
@@ -29,18 +35,72 @@ async def _resolve_accounts(tenant_id: str):
     return await TodoAccountResolver.resolve_accounts(tenant_id, ["all"])
 
 
-async def _resolve_single_account(tenant_id: str, account_spec: str = "primary"):
-    """Resolve a single todo account."""
-    from koa.providers.todo.resolver import TodoAccountResolver
-
-    return await TodoAccountResolver.resolve_account(tenant_id, account_spec)
-
-
 def _get_provider(account):
     """Create a todo provider for the given account."""
     from koa.providers.todo.factory import TodoProviderFactory
 
     return TodoProviderFactory.create_provider(account)
+
+
+async def _resolve_todo_provider(
+    context: AgentToolContext,
+    target_provider: str | None = None,
+    target_account: str | None = None,
+):
+    from koa.providers.todo.factory import TodoProviderFactory
+    from koa.providers.todo.resolver import TodoAccountResolver
+
+    backend_client = LocalBackendClient.from_context(context)
+
+    try:
+        target = await resolve_surface_target(
+            tenant_id=context.tenant_id,
+            surface="todo",
+            backend_client=backend_client,
+            explicit_provider=target_provider,
+            explicit_account=target_account,
+        )
+    except Exception as e:
+        logger.error(f"Failed to resolve todo routing target: {e}", exc_info=True)
+        return None, None, wrap_routing_error("todo", target_provider or "local", "write_failed")
+
+    if target.provider == "local":
+        return (
+            LocalTodoProvider(context.tenant_id, backend_client),
+            {"provider": "local", "account_name": "local", "email": ""},
+            None,
+        )
+
+    if target.provider not in TodoProviderFactory.get_supported_providers():
+        return None, None, wrap_routing_error("todo", target.provider, "unsupported_provider")
+
+    account = await TodoAccountResolver.resolve_account_for_provider(
+        context.tenant_id,
+        target.provider,
+        target.account or "primary",
+    )
+    if not account:
+        return None, None, wrap_routing_error("todo", target.provider, "not_connected")
+
+    provider = _get_provider(account)
+    if not provider:
+        return None, None, wrap_routing_error("todo", target.provider, "unsupported_provider")
+
+    if not await provider.ensure_valid_token():
+        return None, None, wrap_routing_error("todo", target.provider, "auth_expired")
+
+    return provider, account, None
+
+
+def _annotate_tasks(tasks: List[dict], account: dict) -> List[dict]:
+    annotated = []
+    for task in tasks:
+        task_copy = dict(task)
+        task_copy["_provider"] = account.get("provider", "")
+        task_copy["_account_name"] = account.get("account_name", "")
+        task_copy["_account_email"] = account.get("email", "")
+        annotated.append(task_copy)
+    return annotated
 
 
 def _format_due_date(due_str: str) -> str:
@@ -60,6 +120,27 @@ def _format_due_date(due_str: str) -> str:
         return due_str
 
 
+def _normalize_important_date(date_str: str) -> Optional[str]:
+    """Normalize a durable date input to YYYY-MM-DD."""
+    if not date_str:
+        return None
+
+    try:
+        from dateutil import parser as date_parser
+
+        default = datetime.now().replace(
+            month=1,
+            day=1,
+            hour=0,
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
+        return date_parser.parse(date_str, fuzzy=True, default=default).date().isoformat()
+    except Exception:
+        return None
+
+
 # =============================================================================
 # query_tasks
 # =============================================================================
@@ -72,96 +153,65 @@ async def query_tasks(
         "Keywords to search for specific tasks. Omit or leave empty to list all pending tasks.",
     ] = None,
     show_completed: Annotated[bool, "Whether to include completed tasks (default false)."] = False,
+    target_provider: Annotated[
+        Optional[str], "Optional explicit provider like local, google, or todoist."
+    ] = None,
+    target_account: Annotated[
+        Optional[str], "Optional explicit account label like primary or work."
+    ] = None,
     *,
     context: AgentToolContext,
 ) -> str:
-    """List or search the user's todo tasks across all connected providers (Todoist, Google Tasks, Microsoft To Do)."""
+    """List or search the user's todo tasks in the resolved destination."""
     try:
-        accounts = await _resolve_accounts(context.tenant_id)
+        provider, account, error = await _resolve_todo_provider(
+            context,
+            target_provider=target_provider,
+            target_account=target_account,
+        )
+        if error:
+            return error
 
-        if not accounts:
-            return "No todo accounts found. Please connect one first."
-
-        all_tasks = []
-        failed_accounts = []
-
-        # Skip meta keywords that mean "list all"
         meta_keywords = {"todo", "todos", "tasks", "task", "my tasks", "all", "list", "pending"}
         effective_query = search_query
         if effective_query and effective_query.lower() in meta_keywords:
             effective_query = None
 
-        for account in accounts:
-            provider = _get_provider(account)
-            if not provider:
-                failed_accounts.append(
-                    account.get("email") or account.get("account_name", "unknown")
-                )
-                continue
+        if effective_query:
+            result = await provider.search_tasks(query=effective_query)
+        else:
+            result = await provider.list_tasks(completed=show_completed)
 
-            if not await provider.ensure_valid_token():
-                failed_accounts.append(
-                    account.get("email") or account.get("account_name", "unknown")
-                )
-                continue
+        if not result.get("success"):
+            return wrap_routing_error("todo", account.get("provider", "todo"), "read_failed")
 
-            try:
-                if effective_query:
-                    result = await provider.search_tasks(query=effective_query)
-                else:
-                    result = await provider.list_tasks(completed=show_completed)
-
-                if result.get("success"):
-                    tasks = result.get("data", [])
-                    for task in tasks:
-                        task["_provider"] = account.get("provider", "")
-                        task["_account_name"] = account.get("account_name", "")
-                        task["_account_email"] = account.get("email", "")
-                    all_tasks.extend(tasks)
-
-            except Exception as e:
-                logger.error(f"Failed to query {account.get('account_name')}: {e}", exc_info=True)
-                failed_accounts.append(
-                    account.get("email") or account.get("account_name", "unknown")
-                )
+        all_tasks = _annotate_tasks(result.get("data", []), account)
 
         # Sort by due date (None dates last)
         all_tasks.sort(key=lambda t: t.get("due") or "9999-12-31")
 
         # Format output
-        if not all_tasks and not failed_accounts:
+        if not all_tasks:
             return "You're all caught up - no tasks found!"
 
         parts = []
-        multi_provider = len(accounts) > 1
-
-        if not all_tasks:
-            parts.append("No tasks found.")
-        else:
-            parts.append(f"Found {len(all_tasks)} task(s):\n")
-            for i, task in enumerate(all_tasks, 1):
-                title = task.get("title", "Untitled")
-                due = task.get("due")
-                priority = task.get("priority")
-                completed = task.get("completed", False)
-                due_str = _format_due_date(due) if due else ""
-                priority_str = ""
-                if priority and priority.lower() not in ("none", "normal", "medium"):
-                    priority_str = f" [{priority}]"
-                check = "[x]" if completed else "[ ]"
-                if multi_provider:
-                    provider_name = task.get("_account_name", task.get("_provider", ""))
-                    line = f"{i}. {check} [{provider_name}] {title}"
-                else:
-                    line = f"{i}. {check} {title}"
-                if due_str:
-                    line += f" - due {due_str}"
-                if priority_str:
-                    line += priority_str
-                parts.append(line)
-
-        for failed in failed_accounts:
-            parts.append(f"\nCouldn't access {failed}. Please reconnect in settings.")
+        parts.append(f"Found {len(all_tasks)} task(s):\n")
+        for i, task in enumerate(all_tasks, 1):
+            title = task.get("title", "Untitled")
+            due = task.get("due")
+            priority = task.get("priority")
+            completed = task.get("completed", False)
+            due_str = _format_due_date(due) if due else ""
+            priority_str = ""
+            if priority and priority.lower() not in ("none", "normal", "medium"):
+                priority_str = f" [{priority}]"
+            check = "[x]" if completed else "[ ]"
+            line = f"{i}. {check} {title}"
+            if due_str:
+                line += f" - due {due_str}"
+            if priority_str:
+                line += priority_str
+            parts.append(line)
 
         text_result = "\n".join(parts)
 
@@ -209,13 +259,14 @@ async def _preview_create_task(args: dict, context) -> str:
     title = args.get("title", "")
     due = args.get("due", "")
     priority = args.get("priority", "")
-    parts = [f"Create task: {title}"]
-    if due:
-        parts.append(f"Due: {due}")
-    if priority:
-        parts.append(f"Priority: {priority}")
-    parts.append("\nCreate this task?")
-    return "\n".join(parts)
+    card = {
+        "card_type": "task_draft",
+        "title": title,
+        "dueDate": due or "",
+        "priority": priority or "",
+        "options": ["approve", "edit", "decline"],
+    }
+    return "📝 **Task draft**\n\n<!-- inline_card:" + json.dumps(card, ensure_ascii=False) + " -->"
 
 
 @tool(needs_approval=True, get_preview=_preview_create_task)
@@ -226,26 +277,29 @@ async def create_task(
         Optional[str], "Priority level: low, medium, high, or urgent (optional)."
     ] = None,
     account: Annotated[
-        str, "Todo account name if the user specifies one (optional, defaults to primary)."
-    ] = "primary",
+        Optional[str], "Todo account name if the user specifies one (optional)."
+    ] = None,
+    target_provider: Annotated[
+        Optional[str], "Optional explicit provider like local, google, or todoist."
+    ] = None,
+    target_account: Annotated[
+        Optional[str], "Optional explicit account label like primary or work."
+    ] = None,
     *,
     context: AgentToolContext,
 ) -> str:
-    """Create a new todo task on the user's connected provider."""
+    """Create a new todo task in the resolved destination."""
     if not title:
         return "Error: task title is required."
 
     try:
-        account_obj = await _resolve_single_account(context.tenant_id, account)
-        if not account_obj:
-            return "I couldn't find your todo account. Please connect one in settings."
-
-        provider = _get_provider(account_obj)
-        if not provider:
-            return "Sorry, I can't create tasks with that provider yet."
-
-        if not await provider.ensure_valid_token():
-            return "I lost access to your todo account. Please reconnect it in settings."
+        provider, account_obj, error = await _resolve_todo_provider(
+            context,
+            target_provider=target_provider,
+            target_account=target_account or account,
+        )
+        if error:
+            return error
 
         result = await provider.create_task(title=title, due=due, priority=priority)
 
@@ -294,16 +348,14 @@ async def create_task(
                     except Exception as e:
                         logger.debug(f"Task reminder scheduling failed: {e}")
 
-            account_name = account_obj.get("account_name", account_obj.get("provider", ""))
             due_str = f" (due {due})" if due else ""
-            return f"Added to {account_name}: {title}{due_str}"
+            return f"Done! I added '{title}' to your tasks{due_str}."
         else:
-            error_msg = result.get("error", "Unknown error")
-            return f"Couldn't create the task: {error_msg}"
+            return wrap_routing_error("todo", account_obj.get("provider", "todo"), "write_failed")
 
     except Exception as e:
         logger.error(f"Failed to create task: {e}", exc_info=True)
-        return "Something went wrong creating your task. Want to try again?"
+        return wrap_routing_error("todo", target_provider or "local", "write_failed")
 
 
 # =============================================================================
@@ -326,6 +378,12 @@ async def update_task(
         Optional[List[int]],
         "1-based indices of tasks to complete (use after seeing search results with multiple matches).",
     ] = None,
+    target_provider: Annotated[
+        Optional[str], "Optional explicit provider like local, google, or todoist."
+    ] = None,
+    target_account: Annotated[
+        Optional[str], "Optional explicit account label like primary or work."
+    ] = None,
     *,
     context: AgentToolContext,
 ) -> str:
@@ -334,32 +392,19 @@ async def update_task(
         return "Error: search_query is required to find the task to complete."
 
     try:
-        accounts = await _resolve_accounts(context.tenant_id)
-        if not accounts:
-            return "No todo accounts found. Please connect one first."
+        provider, account_obj, error = await _resolve_todo_provider(
+            context,
+            target_provider=target_provider,
+            target_account=target_account,
+        )
+        if error:
+            return error
 
-        all_tasks = []
-        for account_obj in accounts:
-            provider = _get_provider(account_obj)
-            if not provider or not await provider.ensure_valid_token():
-                continue
-            try:
-                result = await provider.search_tasks(query=search_query)
-                if result.get("success"):
-                    tasks = result.get("data", [])
-                    for task in tasks:
-                        task["_provider"] = account_obj.get("provider", "")
-                        task["_account_name"] = account_obj.get("account_name", "")
-                        task["_account_email"] = account_obj.get("email", "")
-                    all_tasks.extend(tasks)
-            except Exception as e:
-                logger.error(
-                    f"Failed to search {account_obj.get('account_name')}: {e}", exc_info=True
-                )
+        result = await provider.search_tasks(query=search_query)
+        if not result.get("success"):
+            return wrap_routing_error("todo", account_obj.get("provider", "todo"), "write_failed")
 
-        # Fallback: list all tasks and filter with LLM
-        if not all_tasks and context.llm_client:
-            all_tasks = await _fallback_search(accounts, search_query, context.llm_client)
+        all_tasks = _annotate_tasks(result.get("data", []), account_obj)
 
         if not all_tasks:
             return f"I couldn't find any tasks matching '{search_query}'."
@@ -394,32 +439,19 @@ async def update_task(
         completed_count = 0
         failed_count = 0
 
-        tasks_by_account: Dict[tuple, list] = {}
         for task in tasks_to_complete:
-            key = (task.get("_provider", ""), task.get("_account_email", ""))
-            tasks_by_account.setdefault(key, []).append(task)
-
-        for (provider_name, email), tasks in tasks_by_account.items():
-            account_obj = await _resolve_single_account(context.tenant_id, email or "primary")
-            if not account_obj:
-                failed_count += len(tasks)
-                continue
-            provider = _get_provider(account_obj)
-            if not provider or not await provider.ensure_valid_token():
-                failed_count += len(tasks)
-                continue
-            for task in tasks:
-                try:
-                    result = await provider.complete_task(
-                        task_id=task.get("id", ""), list_id=task.get("list_id")
-                    )
-                    if result.get("success"):
-                        completed_count += 1
-                    else:
-                        failed_count += 1
-                except Exception as e:
-                    logger.error(f"Failed to complete task: {e}")
+            try:
+                result = await provider.complete_task(
+                    task_id=task.get("id", ""),
+                    list_id=task.get("list_id"),
+                )
+                if result.get("success"):
+                    completed_count += 1
+                else:
                     failed_count += 1
+            except Exception as e:
+                logger.error(f"Failed to complete task: {e}")
+                failed_count += 1
 
         if completed_count > 0 and failed_count == 0:
             if completed_count == 1:
@@ -429,11 +461,11 @@ async def update_task(
         elif completed_count > 0:
             return f"Completed {completed_count} task(s), but {failed_count} failed."
         else:
-            return "I had trouble completing those tasks. Want me to try again?"
+            return wrap_routing_error("todo", account_obj.get("provider", "todo"), "write_failed")
 
     except Exception as e:
         logger.error(f"Failed to complete tasks: {e}", exc_info=True)
-        return "Something went wrong. Want me to try again?"
+        return wrap_routing_error("todo", target_provider or "local", "write_failed")
 
 
 # =============================================================================
@@ -456,6 +488,12 @@ async def delete_task(
         Optional[List[int]],
         "1-based indices of tasks to delete (use after seeing search results with multiple matches).",
     ] = None,
+    target_provider: Annotated[
+        Optional[str], "Optional explicit provider like local, google, or todoist."
+    ] = None,
+    target_account: Annotated[
+        Optional[str], "Optional explicit account label like primary or work."
+    ] = None,
     *,
     context: AgentToolContext,
 ) -> str:
@@ -464,31 +502,19 @@ async def delete_task(
         return "Error: search_query is required to find the task to delete."
 
     try:
-        accounts = await _resolve_accounts(context.tenant_id)
-        if not accounts:
-            return "No todo accounts found. Please connect one first."
+        provider, account_obj, error = await _resolve_todo_provider(
+            context,
+            target_provider=target_provider,
+            target_account=target_account,
+        )
+        if error:
+            return error
 
-        all_tasks = []
-        for account_obj in accounts:
-            provider = _get_provider(account_obj)
-            if not provider or not await provider.ensure_valid_token():
-                continue
-            try:
-                result = await provider.search_tasks(query=search_query)
-                if result.get("success"):
-                    tasks = result.get("data", [])
-                    for task in tasks:
-                        task["_provider"] = account_obj.get("provider", "")
-                        task["_account_name"] = account_obj.get("account_name", "")
-                        task["_account_email"] = account_obj.get("email", "")
-                    all_tasks.extend(tasks)
-            except Exception as e:
-                logger.error(
-                    f"Failed to search {account_obj.get('account_name')}: {e}", exc_info=True
-                )
+        result = await provider.search_tasks(query=search_query)
+        if not result.get("success"):
+            return wrap_routing_error("todo", account_obj.get("provider", "todo"), "write_failed")
 
-        if not all_tasks and context.llm_client:
-            all_tasks = await _fallback_search(accounts, search_query, context.llm_client)
+        all_tasks = _annotate_tasks(result.get("data", []), account_obj)
 
         if not all_tasks:
             return f"I couldn't find any tasks matching '{search_query}'."
@@ -523,43 +549,30 @@ async def delete_task(
         deleted_count = 0
         failed_count = 0
 
-        tasks_by_account: Dict[tuple, list] = {}
         for task in tasks_to_delete:
-            key = (task.get("_provider", ""), task.get("_account_email", ""))
-            tasks_by_account.setdefault(key, []).append(task)
-
-        for (provider_name, email), tasks in tasks_by_account.items():
-            account_obj = await _resolve_single_account(context.tenant_id, email or "primary")
-            if not account_obj:
-                failed_count += len(tasks)
-                continue
-            provider = _get_provider(account_obj)
-            if not provider or not await provider.ensure_valid_token():
-                failed_count += len(tasks)
-                continue
-            for task in tasks:
-                try:
-                    result = await provider.delete_task(
-                        task_id=task.get("id", ""), list_id=task.get("list_id")
-                    )
-                    if result.get("success"):
-                        deleted_count += 1
-                    else:
-                        failed_count += 1
-                except Exception as e:
-                    logger.error(f"Failed to delete task: {e}")
+            try:
+                result = await provider.delete_task(
+                    task_id=task.get("id", ""),
+                    list_id=task.get("list_id"),
+                )
+                if result.get("success"):
+                    deleted_count += 1
+                else:
                     failed_count += 1
+            except Exception as e:
+                logger.error(f"Failed to delete task: {e}")
+                failed_count += 1
 
         if deleted_count > 0 and failed_count == 0:
             return f"Done! Deleted {deleted_count} task(s)."
         elif deleted_count > 0:
             return f"Deleted {deleted_count} task(s), but {failed_count} failed."
         else:
-            return "I had trouble deleting those tasks. Want me to try again?"
+            return wrap_routing_error("todo", account_obj.get("provider", "todo"), "write_failed")
 
     except Exception as e:
         logger.error(f"Failed to delete tasks: {e}", exc_info=True)
-        return "Something went wrong. Want me to try again?"
+        return wrap_routing_error("todo", target_provider or "local", "write_failed")
 
 
 # =============================================================================
@@ -567,7 +580,32 @@ async def delete_task(
 # =============================================================================
 
 
-@tool
+async def _preview_set_reminder(args: dict, context) -> str:
+    card = {
+        "card_type": "reminder_draft",
+        "title": args.get("reminder_message", ""),
+        "when": args.get("human_readable_time") or args.get("schedule_datetime", ""),
+        "options": ["approve", "edit", "decline"],
+    }
+    return "⏰ **Reminder draft**\n\n<!-- inline_card:" + json.dumps(card, ensure_ascii=False) + " -->"
+
+
+async def _preview_important_date(args: dict, context) -> str:
+    card = {
+        "card_type": "reminder_draft",
+        "title": args.get("title", ""),
+        "when": args.get("date", ""),
+        "detail": args.get("category", "custom"),
+        "options": ["approve", "edit", "decline"],
+    }
+    return (
+        "🎂 **Important date draft**\n\n<!-- inline_card:"
+        + json.dumps(card, ensure_ascii=False)
+        + " -->"
+    )
+
+
+@tool(needs_approval=True, get_preview=_preview_set_reminder)
 async def set_reminder(
     schedule_datetime: Annotated[
         str, "ISO 8601 datetime when the reminder should fire (e.g., 2024-01-15T14:30:00)."
@@ -592,7 +630,7 @@ async def set_reminder(
     # Get cron service from context_hints
     cron_service = context.context_hints.get("cron_service") if context.context_hints else None
     if not cron_service:
-        return "Sorry, I can't create reminders right now. Please try again later."
+        return wrap_routing_error("reminder", "local", "write_failed")
 
     from koa.triggers.cron.models import (
         AtSchedule,
@@ -631,7 +669,7 @@ async def set_reminder(
             schedule = AtSchedule(at=local_dt.isoformat())
     except Exception as e:
         logger.error(f"Failed to parse schedule_datetime: {e}")
-        return "I couldn't process that time. Could you try again?"
+        return wrap_routing_error("reminder", "local", "write_failed")
 
     try:
         job = await cron_service.add(
@@ -654,7 +692,42 @@ async def set_reminder(
 
     except Exception as e:
         logger.error(f"Failed to create reminder: {e}", exc_info=True)
-        return "Sorry, I couldn't set up that reminder. Please try again."
+        return wrap_routing_error("reminder", "local", "write_failed")
+
+
+@tool(needs_approval=True, get_preview=_preview_important_date)
+async def remember_important_date(
+    title: Annotated[str, "Important date title, e.g. Mom's birthday"],
+    date: Annotated[str, "Date like 2026-05-04 or May 4"],
+    category: Annotated[str, "birthday, anniversary, holiday, custom"] = "custom",
+    notes: Annotated[Optional[str], "Optional note"] = None,
+    *,
+    context: AgentToolContext,
+) -> str:
+    """Save a durable important date like a birthday or anniversary to local storage."""
+    backend_client = LocalBackendClient.from_context(context)
+    normalized_date = _normalize_important_date(date)
+    if not normalized_date:
+        return "Error: date must be a real date like 2026-05-04 or May 4."
+
+    try:
+        result = await backend_client.create_important_date(
+            context.tenant_id,
+            {
+                "title": title,
+                "date": normalized_date,
+                "category": category,
+                "notes": notes,
+                "recurring": True,
+            },
+        )
+    except Exception as e:
+        logger.error(f"Failed to create important date: {e}", exc_info=True)
+        return wrap_routing_error("reminder", "local", "write_failed")
+
+    if result.get("created"):
+        return f"Saved {title} for {normalized_date}."
+    return wrap_routing_error("reminder", "local", "write_failed")
 
 
 # =============================================================================
@@ -1077,23 +1150,15 @@ Return a JSON array of matching indices (0-based), like: [0, 3, 5]"""
 async def check_overdue_tasks(*, context: AgentToolContext) -> str:
     """Check for overdue and today-due tasks. Used by proactive reminders."""
     try:
-        accounts = await _resolve_accounts(context.tenant_id)
-        if not accounts:
-            return "No todo accounts found. Please connect one first."
+        provider, account, error = await _resolve_todo_provider(context)
+        if error:
+            return error
 
-        all_tasks = []
-        for account in accounts:
-            provider = _get_provider(account)
-            if not provider:
-                continue
-            if not await provider.ensure_valid_token():
-                continue
-            try:
-                result = await provider.list_tasks(completed=False)
-                if result.get("success"):
-                    all_tasks.extend(result.get("data", []))
-            except Exception as e:
-                logger.debug(f"check_overdue_tasks: failed for {account.get('account_name')}: {e}")
+        result = await provider.list_tasks(completed=False)
+        if not result.get("success"):
+            return wrap_routing_error("todo", account.get("provider", "todo"), "read_failed")
+
+        all_tasks = result.get("data", [])
 
         if not all_tasks:
             return "No overdue or due tasks. You're all caught up!"

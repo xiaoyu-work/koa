@@ -13,6 +13,11 @@ from koa.providers.email.resolver import AccountResolver
 logger = logging.getLogger(__name__)
 
 _TODO_SERVICES = TODO_SERVICES
+_PROVIDER_TO_SERVICE = {
+    "todoist": "todoist",
+    "google": "google_tasks",
+    "microsoft": "microsoft_todo",
+}
 
 
 class TodoAccountResolver:
@@ -32,6 +37,20 @@ class TodoAccountResolver:
         """Resolve a single todo account across all todo services."""
         resolver = AccountResolver()
         return await resolver._resolve_account_all_services(tenant_id, account_spec, _TODO_SERVICES)
+
+    @staticmethod
+    async def resolve_account_for_provider(
+        tenant_id: str,
+        provider: str,
+        account_spec: Optional[str] = None,
+    ) -> Optional[dict]:
+        """Resolve a single todo account for a specific provider."""
+        service = _PROVIDER_TO_SERVICE.get((provider or "").lower())
+        if not service:
+            return None
+
+        resolver = AccountResolver()
+        return await resolver._resolve_account_for_service(tenant_id, service, account_spec)
 
     @staticmethod
     async def resolve_accounts(
