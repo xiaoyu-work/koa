@@ -278,8 +278,22 @@ class TestCalendarToolRouting:
                 _context(),
             )
 
-        assert "couldn't finish that calendar action" in result.lower()
-        assert "save it locally" in result.lower()
+        assert "couldn't retrieve your calendar data" in result.lower()
+        assert "save it locally" not in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_check_upcoming_events_wraps_preference_lookup_failures(self):
+        backend_client = AsyncMock()
+        backend_client.get_routing_preference.side_effect = RuntimeError("backend down")
+
+        with patch(
+            "koa.builtin_agents.calendar.tools.LocalBackendClient.from_context",
+            return_value=backend_client,
+        ):
+            result = await check_upcoming_events.executor({}, _context())
+
+        assert "couldn't retrieve your calendar data" in result.lower()
+        assert "save it locally" not in result.lower()
 
     @pytest.mark.asyncio
     async def test_create_event_wraps_preference_lookup_failures(self):

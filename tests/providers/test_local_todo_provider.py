@@ -187,3 +187,56 @@ class TestLocalTodoProvider:
         provider = LocalTodoProvider(tenant_id="user-1", backend_client=DummyBackend())
 
         assert await provider.ensure_valid_token() is True
+
+
+class FailingBackend:
+    async def search_local_todos(self, tenant_id, query=None, list_id=None, completed=None):
+        raise RuntimeError("backend down")
+
+    async def create_local_todo(self, tenant_id, payload):
+        raise RuntimeError("backend down")
+
+    async def update_local_todo(self, tenant_id, todo_id, payload):
+        raise RuntimeError("backend down")
+
+    async def delete_local_todo(self, tenant_id, todo_id):
+        raise RuntimeError("backend down")
+
+
+class TestLocalTodoProviderErrorPaths:
+    @pytest.mark.asyncio
+    async def test_list_tasks_returns_failure_when_backend_raises(self):
+        provider = LocalTodoProvider(tenant_id="user-1", backend_client=FailingBackend())
+
+        result = await provider.list_tasks()
+
+        assert result["success"] is False
+        assert "backend down" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_create_task_returns_failure_when_backend_raises(self):
+        provider = LocalTodoProvider(tenant_id="user-1", backend_client=FailingBackend())
+
+        result = await provider.create_task(title="Buy milk")
+
+        assert result["success"] is False
+        assert "backend down" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_complete_task_returns_failure_when_backend_raises(self):
+        provider = LocalTodoProvider(tenant_id="user-1", backend_client=FailingBackend())
+
+        result = await provider.complete_task("todo-1")
+
+        assert result["success"] is False
+        assert "backend down" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_delete_task_returns_failure_when_backend_raises(self):
+        provider = LocalTodoProvider(tenant_id="user-1", backend_client=FailingBackend())
+
+        result = await provider.delete_task("todo-1")
+
+        assert result["success"] is False
+        assert "backend down" in result["error"]
+

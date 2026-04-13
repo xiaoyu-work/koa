@@ -32,6 +32,8 @@ async def _resolve_calendar_provider(
     context: AgentToolContext,
     target_provider: str | None = None,
     target_account: str | None = None,
+    *,
+    operation: str = "write",
 ):
     from koa.providers.calendar.factory import CalendarProviderFactory
     from koa.providers.calendar.resolver import CalendarAccountResolver
@@ -47,7 +49,8 @@ async def _resolve_calendar_provider(
         )
     except Exception as e:
         logger.error(f"Failed to resolve calendar routing target: {e}", exc_info=True)
-        return None, None, wrap_routing_error("calendar", target_provider or "local", "write_failed")
+        error_reason = "read_failed" if operation == "read" else "write_failed"
+        return None, None, wrap_routing_error("calendar", target_provider or "local", error_reason)
 
     if target.provider == "local":
         return (
@@ -223,6 +226,7 @@ async def query_events(
         context,
         target_provider,
         target_account,
+        operation="read",
     )
     if error:
         return error
@@ -890,7 +894,7 @@ async def check_upcoming_events(
     context: AgentToolContext,
 ) -> str:
     """Check for calendar events starting soon. Used by proactive reminders."""
-    provider, account, error = await _resolve_calendar_provider(context)
+    provider, account, error = await _resolve_calendar_provider(context, operation="read")
     if error:
         return error
 
