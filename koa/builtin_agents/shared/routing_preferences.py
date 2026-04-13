@@ -67,6 +67,11 @@ def wrap_routing_error(surface: str, provider: str, reason: str) -> str:
             f"I couldn't use {provider} for this {surface} because the connection expired. "
             f"Please reconnect it in settings and try again."
         )
+    if reason == "read_failed":
+        return (
+            f"I couldn't retrieve your {surface} data right now. "
+            f"Please try again in a moment."
+        )
     return (
         f"I couldn't finish that {surface} action right now. "
         f"Please try again, or tell me to save it locally."

@@ -7,6 +7,7 @@ from koa.builtin_agents.calendar.agent import CalendarAgent
 from koa.builtin_agents.calendar.tools import (
     _resolve_calendar_provider,
     _preview_delete_event,
+    check_upcoming_events,
     create_event,
     delete_event,
     query_events,
@@ -362,6 +363,40 @@ class TestCalendarToolRouting:
 
         assert "couldn't finish that calendar action" in result.lower()
         assert "save it locally" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_query_events_read_failure_does_not_suggest_save_locally(self):
+        provider = FailingCalendarProvider()
+
+        with patch(
+            "koa.builtin_agents.calendar.tools._resolve_calendar_provider",
+            new=AsyncMock(return_value=(provider, {"provider": "local"}, None)),
+            create=True,
+        ):
+            result = await query_events.executor(
+                {
+                    "time_range": "today",
+                    "target_provider": "local",
+                },
+                _context(),
+            )
+
+        assert "save it locally" not in result.lower()
+        assert "couldn't retrieve your calendar data" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_check_upcoming_events_read_failure_does_not_suggest_save_locally(self):
+        provider = FailingCalendarProvider()
+
+        with patch(
+            "koa.builtin_agents.calendar.tools._resolve_calendar_provider",
+            new=AsyncMock(return_value=(provider, {"provider": "local"}, None)),
+            create=True,
+        ):
+            result = await check_upcoming_events.executor({}, _context())
+
+        assert "save it locally" not in result.lower()
+        assert "couldn't retrieve your calendar data" in result.lower()
 
 
 class TestCalendarAgent:

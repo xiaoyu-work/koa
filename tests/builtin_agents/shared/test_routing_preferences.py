@@ -168,3 +168,9 @@ class TestWrapRoutingError:
         result = wrap_routing_error("reminder", "local", "write_failed")
         assert "couldn't finish that reminder action" in result.lower()
         assert "save it locally" in result.lower()
+
+    def test_read_failed_error_does_not_suggest_save_locally(self):
+        result = wrap_routing_error("calendar", "google", "read_failed")
+        assert "couldn't retrieve your calendar data" in result.lower()
+        assert "save it locally" not in result.lower()
+        assert "try again" in result.lower()

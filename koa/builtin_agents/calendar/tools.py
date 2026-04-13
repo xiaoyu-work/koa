@@ -239,7 +239,7 @@ async def query_events(
         )
 
         if not result.get("success"):
-            return wrap_routing_error("calendar", account.get("provider", "calendar"), "write_failed")
+            return wrap_routing_error("calendar", account.get("provider", "calendar"), "read_failed")
 
         events = result.get("data", [])
         events.sort(key=_event_sort_key)
@@ -906,7 +906,7 @@ async def check_upcoming_events(
         )
 
         if not result.get("success"):
-            return wrap_routing_error("calendar", account.get("provider", "calendar"), "write_failed")
+            return wrap_routing_error("calendar", account.get("provider", "calendar"), "read_failed")
 
         events = result.get("data", [])
         if not events:
