@@ -164,6 +164,11 @@ class TestWrapRoutingError:
         assert "connection expired" in result.lower()
         assert "reconnect it in settings" in result.lower()
 
+    def test_unsupported_provider_error_suggests_supported_alternative(self):
+        result = wrap_routing_error("calendar", "myspace", "unsupported_provider")
+        assert "don't support myspace" in result.lower()
+        assert "use local instead" in result.lower()
+
     def test_default_error_offers_local_fallback(self):
         result = wrap_routing_error("reminder", "local", "write_failed")
         assert "couldn't finish that reminder action" in result.lower()

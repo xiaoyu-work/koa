@@ -55,6 +55,27 @@ class TestLocalBackendClient:
         }
 
     @pytest.mark.asyncio
+    async def test_get_routing_preference_returns_none_on_404(self):
+        response = MagicMock()
+        response.status_code = 404
+        response.raise_for_status = MagicMock(side_effect=AssertionError("should not raise on 404"))
+
+        async_client = AsyncMock()
+        async_client.get.return_value = response
+        async_cm = AsyncMock()
+        async_cm.__aenter__.return_value = async_client
+
+        with patch(
+            "koa.providers.local_backend.httpx.AsyncClient",
+            return_value=async_cm,
+        ):
+            client = LocalBackendClient("https://koiai.example", "svc-key")
+            result = await client.get_routing_preference("user-1", "calendar")
+
+        assert result is None
+        response.raise_for_status.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_set_routing_preference_posts_expected_payload(self):
         response = MagicMock()
         response.json.return_value = {

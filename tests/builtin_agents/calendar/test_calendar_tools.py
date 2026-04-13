@@ -259,8 +259,8 @@ class TestCalendarToolRouting:
                 _context(),
             )
 
-        assert "couldn't finish that calendar action" in result.lower()
-        assert "save it locally" in result.lower()
+        assert "couldn't retrieve your calendar data" in result.lower()
+        assert "save it locally" not in result.lower()
 
     @pytest.mark.asyncio
     async def test_query_events_wraps_preference_lookup_failures(self):
@@ -273,6 +273,26 @@ class TestCalendarToolRouting:
         ):
             result = await query_events.executor(
                 {
+                    "time_range": "today",
+                },
+                _context(),
+            )
+
+        assert "couldn't retrieve your calendar data" in result.lower()
+        assert "save it locally" not in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_preview_delete_event_wraps_preference_lookup_failures(self):
+        backend_client = AsyncMock()
+        backend_client.get_routing_preference.side_effect = RuntimeError("backend down")
+
+        with patch(
+            "koa.builtin_agents.calendar.tools.LocalBackendClient.from_context",
+            return_value=backend_client,
+        ):
+            result = await _preview_delete_event(
+                {
+                    "search_query": "team sync",
                     "time_range": "today",
                 },
                 _context(),

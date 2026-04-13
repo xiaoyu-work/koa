@@ -67,6 +67,11 @@ def wrap_routing_error(surface: str, provider: str, reason: str) -> str:
             f"I couldn't use {provider} for this {surface} because the connection expired. "
             f"Please reconnect it in settings and try again."
         )
+    if reason == "unsupported_provider":
+        return (
+            f"I don't support {provider} for {surface} yet. "
+            f"Tell me to use local instead, or connect a supported account in Settings."
+        )
     if reason == "read_failed":
         return (
             f"I couldn't retrieve your {surface} data right now. "

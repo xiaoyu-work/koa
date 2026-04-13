@@ -22,6 +22,8 @@ class LocalBackendClient:
                 params={"tenant_id": tenant_id},
                 headers=self._headers,
             )
+            if resp.status_code == 404:
+                return None
             resp.raise_for_status()
             return resp.json().get("preference")
 

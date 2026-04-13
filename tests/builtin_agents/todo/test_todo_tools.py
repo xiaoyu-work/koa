@@ -132,6 +132,11 @@ class TestTodoToolSchema:
     def test_create_task_description_matches_routed_behavior(self):
         assert create_task.description == "Create a new todo task in the resolved destination."
 
+    def test_create_task_marks_account_as_compatibility_alias(self):
+        description = create_task.parameters["properties"]["account"]["description"]
+        assert "deprecated" in description.lower()
+        assert "target_account" in description
+
 
 class TestTodoToolRouting:
     @pytest.mark.asyncio

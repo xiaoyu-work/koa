@@ -273,7 +273,7 @@ async def create_task(
         Optional[str], "Priority level: low, medium, high, or urgent (optional)."
     ] = None,
     account: Annotated[
-        Optional[str], "Todo account name if the user specifies one (optional)."
+        Optional[str], "Deprecated compatibility alias for target_account when the user specifies one."
     ] = None,
     target_provider: Annotated[
         Optional[str], "Optional explicit provider like local, google, or todoist."

@@ -769,6 +769,7 @@ async def _preview_delete_event(args: dict, context: AgentToolContext) -> str:
         context,
         target_provider,
         target_account,
+        operation="read",
     )
     if error:
         return error
@@ -781,7 +782,7 @@ async def _preview_delete_event(args: dict, context: AgentToolContext) -> str:
         max_results=50,
     )
     if not result.get("success"):
-        return wrap_routing_error("calendar", account.get("provider", "calendar"), "write_failed")
+        return wrap_routing_error("calendar", account.get("provider", "calendar"), "read_failed")
 
     if not result.get("events"):
         return "Couldn't find any events matching that criteria."
