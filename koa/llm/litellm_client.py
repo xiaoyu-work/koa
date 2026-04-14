@@ -91,6 +91,7 @@ class LiteLLMClient(BaseLLMClient):
         self,
         config: Optional[LLMConfig] = None,
         provider_name: str = "openai",
+        api_version: Optional[str] = None,
         **kwargs,
     ):
         """
@@ -99,6 +100,7 @@ class LiteLLMClient(BaseLLMClient):
         Args:
             config: LLMConfig instance.
             provider_name: Provider name (openai, anthropic, azure, gemini, ollama, dashscope).
+            api_version: API version override (e.g. for Azure deployments).
             **kwargs: Overrides forwarded to BaseLLMClient / LLMConfig.
         """
         if config is None:
@@ -126,6 +128,8 @@ class LiteLLMClient(BaseLLMClient):
             self._base_kwargs["api_base"] = self.config.base_url
         if api_key:
             self._base_kwargs["api_key"] = api_key
+        if api_version:
+            self._base_kwargs["api_version"] = api_version
 
         logger.info(
             f"LiteLLMClient initialized: provider={self.provider}, "

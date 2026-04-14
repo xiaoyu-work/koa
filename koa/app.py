@@ -125,7 +125,11 @@ class Koa:
         from .llm.litellm_client import LiteLLMClient
 
         llm_config = LLMConfig(model=model, api_key=api_key, base_url=llm_cfg.get("base_url"))
-        self._llm_client = LiteLLMClient(config=llm_config, provider_name=provider)
+        self._llm_client = LiteLLMClient(
+            config=llm_config,
+            provider_name=provider,
+            api_version=llm_cfg.get("api_version"),
+        )
         logger.info(f"LLM client: provider={provider}, model={model}")
 
         # 2. Database
