@@ -339,9 +339,15 @@ class ReactLoopMixin:
 
                 if error_kind == LLMErrorKind.AUTH:
                     # Auth errors are not recoverable at model level
+                    from .error_classifier import error_code_for_kind
+
                     yield AgentEvent(
                         type=EventType.ERROR,
-                        data={"error": str(e), "error_type": type(e).__name__},
+                        data={
+                            "code": error_code_for_kind(error_kind),
+                            "error": str(e),
+                            "error_type": type(e).__name__,
+                        },
                     )
                     return
 

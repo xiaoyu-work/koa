@@ -653,9 +653,12 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
                         yield event
                 except _ReactLoopLLMError as retry_err:
                     logger.error(f"[Orchestrator] Fallback model also failed: {retry_err.original}")
+                    from .error_classifier import error_code_for_kind
+
                     yield AgentEvent(
                         type=EventType.ERROR,
                         data={
+                            "code": error_code_for_kind(retry_err.error_kind),
                             "error": str(retry_err.original),
                             "error_type": type(retry_err.original).__name__,
                         },
@@ -673,9 +676,12 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
                 logger.error(
                     f"[Orchestrator] ReAct loop failed, no fallback available: {loop_err.original}"
                 )
+                from .error_classifier import error_code_for_kind
+
                 yield AgentEvent(
                     type=EventType.ERROR,
                     data={
+                        "code": error_code_for_kind(loop_err.error_kind),
                         "error": str(loop_err.original),
                         "error_type": type(loop_err.original).__name__,
                     },

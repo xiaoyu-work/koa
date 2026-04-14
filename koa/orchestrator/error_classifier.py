@@ -22,6 +22,25 @@ class LLMErrorKind(Enum):
     UNKNOWN = "unknown"
 
 
+# Maps LLMErrorKind to user-facing error codes that the frontend
+# can resolve via its errorMessages mapping.
+_ERROR_KIND_TO_CODE = {
+    LLMErrorKind.BAD_REQUEST.value: "agent_failed",
+    LLMErrorKind.RATE_LIMIT.value: "service_unavailable",
+    LLMErrorKind.AUTH.value: "config_error",
+    LLMErrorKind.TIMEOUT.value: "service_unavailable",
+    LLMErrorKind.SERVICE_UNAVAILABLE.value: "service_unavailable",
+    LLMErrorKind.CONTEXT_OVERFLOW.value: "agent_failed",
+    LLMErrorKind.TRANSIENT.value: "service_unavailable",
+    LLMErrorKind.UNKNOWN.value: "internal_error",
+}
+
+
+def error_code_for_kind(kind: "LLMErrorKind") -> str:
+    """Return a frontend-friendly error code for the given LLMErrorKind."""
+    return _ERROR_KIND_TO_CODE.get(kind.value, "internal_error")
+
+
 # Keep a single flag so the import check runs once.
 _LITELLM_AVAILABLE: Optional[bool] = None
 
