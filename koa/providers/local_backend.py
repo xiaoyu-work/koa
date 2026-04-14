@@ -1,8 +1,32 @@
 from __future__ import annotations
 
+import os
+from urllib.parse import urlparse
+
 import httpx
 
 from koa.models import AgentToolContext
+
+
+def _get_backend_url() -> str:
+    """Resolve the koi-backend URL from config callbacks.notify_url or env."""
+    # 1. Try KOIAI_BACKEND_URL env var (explicit override)
+    url = os.getenv("KOIAI_BACKEND_URL", "")
+    if url:
+        return url.rstrip("/")
+
+    # 2. Try callbacks.notify_url from loaded config (strip path to get base URL)
+    try:
+        from koa.server.app import _app
+        if _app and _app.config:
+            notify_url = (_app.config.get("callbacks") or {}).get("notify_url", "")
+            if notify_url:
+                parsed = urlparse(notify_url)
+                return f"{parsed.scheme}://{parsed.netloc}"
+    except Exception:
+        pass
+
+    return ""
 
 
 class LocalBackendClient:
@@ -13,7 +37,10 @@ class LocalBackendClient:
     @classmethod
     def from_context(cls, context: AgentToolContext) -> "LocalBackendClient":
         meta = context.metadata or {}
-        return cls(meta.get("koiai_url", ""), meta.get("service_key", ""))
+        # Prefer config-based URL, fall back to metadata for backward compat
+        url = _get_backend_url() or meta.get("koiai_url", "")
+        service_key = meta.get("service_key", "")
+        return cls(url, service_key)
 
     async def get_routing_preference(self, tenant_id: str, surface: str) -> dict | None:
         async with httpx.AsyncClient(timeout=10.0) as client:
