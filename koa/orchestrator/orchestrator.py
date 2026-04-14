@@ -462,208 +462,240 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
         The final event is always EXECUTION_END carrying an ``AgentResult``
         in ``event.data`` so that ``handle_message`` can return it directly.
         """
-        if not self._initialized:
-            await self.initialize()
-
-        metadata = metadata or {}
-
-        # ── Request tracing ──
-        request_id = self._audit.start_request(
-            tenant_id=tenant_id,
-            message=message,
-        )
-
-        # Step 0: Clean up stale/completed agents to prevent cross-request state leakage
-        await self._cleanup_stale_agents(tenant_id)
-
-        # Step 1: Prepare context
-        context = await self.prepare_context(tenant_id, message, metadata)
-        context["request_id"] = request_id
-
-        # Store images in context so agent tools can access them (e.g. receipt scanning)
-        if images:
-            context["user_images"] = images
-
-        # Step 2: Check if should process
-        if not await self.should_process(message, context):
-            result = await self.reject_message(message, context)
-            yield AgentEvent(
-                type=EventType.MESSAGE_CHUNK,
-                data={"chunk": result.raw_message or ""},
-            )
-            yield AgentEvent(type=EventType.EXECUTION_END, data=result)
-            return
-
-        # Step 3: Check pending agents (WAITING_FOR_INPUT / WAITING_FOR_APPROVAL)
-        agent_result = await self._check_pending_agents(tenant_id, message, context)
-        if agent_result is not None:
-            # Agent still waiting or completed -> return result directly.
-            # The user's message was a response to the pending agent (e.g. an
-            # approval like "yes"/"ok"), NOT a new task.  Feeding it into the ReAct
-            # loop would cause the orchestrator to misinterpret the approval
-            # word as a brand-new request and spawn unnecessary follow-up agents.
-            agent_result = await self.post_process(agent_result, context)
-            yield AgentEvent(
-                type=EventType.MESSAGE_START,
-                data={"agent_type": agent_result.agent_type},
-            )
-            yield AgentEvent(
-                type=EventType.MESSAGE_CHUNK,
-                data={"chunk": agent_result.raw_message or ""},
-            )
-            yield AgentEvent(type=EventType.MESSAGE_END, data={})
-            yield AgentEvent(type=EventType.EXECUTION_END, data=agent_result)
-            return
-
-        # Step 3b: Speculative execution — kick off likely tools before LLM decides
-        # For image requests, the LLM almost always calls google_search. Starting
-        # it now lets us reuse the result later, saving 1-3 seconds of latency.
-        speculative_tasks: Dict[str, asyncio.Task] = {}
-        if images and message.strip():
-            speculative_tasks = self._start_speculative_tasks(
-                message,
-                tenant_id,
-                metadata,
-            )
-            if speculative_tasks:
-                context["_speculative_tasks"] = speculative_tasks
-
-        # Step 4: Intent Analysis — classify domains and detect multi-intent
-        intent = await self._analyze_intent(message, context)
-        self._audit.log_phase(
-            "intent_analysis",
-            {
-                "intent_type": intent.intent_type,
-                "domains": intent.domains,
-                "sub_tasks": len(intent.sub_tasks) if intent.sub_tasks else 0,
-            },
-        )
-
-        # Step 4b: Multi-intent → DAG execution
-        if intent.intent_type == "multi" and intent.sub_tasks:
-            final_response = ""
-            dag_exec_data: Dict[str, Any] = {}
-            async for event in self._stream_dag(intent, tenant_id, context, metadata):
-                if event.type == EventType.EXECUTION_END:
-                    dag_exec_data = event.data
-                    final_response = dag_exec_data.get("final_response", "")
-                yield event
-            # Post-process
-            pending_approvals = dag_exec_data.get("pending_approvals", [])
-            if pending_approvals:
-                status = AgentStatus.WAITING_FOR_APPROVAL
-            else:
-                status = AgentStatus.COMPLETED
-            result = AgentResult(
-                agent_type=self.__class__.__name__,
-                status=status,
-                raw_message=final_response,
-            )
-            tool_calls = dag_exec_data.get("tool_calls", [])
-            context["tool_calls"] = tool_calls
-            await self._save_tool_call_history(tenant_id, tool_calls)
-            result = await self.post_process(result, context)
-            yield AgentEvent(type=EventType.EXECUTION_END, data=result)
-            return
-
-        # Step 5 & 6: Build tool schemas and LLM messages in parallel
-        tool_schemas_task = self._build_tool_schemas(tenant_id, domains=intent.domains)
-        messages_task = self._build_llm_messages(context, message, needs_memory=intent.needs_memory)
-        tool_schemas, messages = await asyncio.gather(tool_schemas_task, messages_task)
-
-        # Step 5b: Inject notify_user tool for conditional cron delivery
-        # Use a local copy of builtin_tools to avoid mutating the instance list
-        request_tools = list(self.builtin_tools)
-        if metadata.get("cron_conditional_delivery"):
-            notify_tool, notify_schema = self._build_notify_user_tool(context)
-            request_tools.append(notify_tool)
-            tool_schemas.append(notify_schema)
-
-        logger.info(f"[Tools] {len(tool_schemas)} tools available for ReAct")
-        self._audit.log_phase(
-            "tool_loading",
-            {
-                "tool_count": len(tool_schemas),
-                "domains": intent.domains,
-            },
-        )
-
-        # Convert images to media format for LLM
-        media = None
-        if images:
-            media = [
-                {
-                    "type": "image",
-                    "data": img["data"],
-                    "media_type": img.get("media_type", "image/jpeg"),
-                }
-                for img in images
-            ]
-
-        # Step 7: Run ReAct loop with model-level fallback
-        final_response = ""
-        exec_data: Dict[str, Any] = {}
-
-        from .react_loop import _ReactLoopLLMError
+        from .graceful_response import generate_graceful_error
 
         try:
-            async for event in self._react_loop_events(
-                messages,
-                tool_schemas,
-                tenant_id,
-                context=context,
-                user_message=message,
-                media=media,
-                metadata=metadata,
-                request_tools=request_tools,
-            ):
-                if event.type == EventType.EXECUTION_END:
-                    exec_data = event.data
-                    final_response = exec_data.get("final_response", "")
-                yield event
-        except _ReactLoopLLMError as loop_err:
-            # Model-level fallback: retry the entire ReAct loop with a
-            # different provider when the primary model fails after all
-            # per-call retries are exhausted.
-            fallback_client = self._resolve_model_fallback(loop_err)
-            if fallback_client is not None:
-                logger.warning(
-                    f"[Orchestrator] ReAct loop failed (turn={loop_err.turn}, "
-                    f"kind={loop_err.error_kind.value}), retrying with fallback model"
+            if not self._initialized:
+                await self.initialize()
+
+            metadata = metadata or {}
+
+            # ── Request tracing ──
+            request_id = self._audit.start_request(
+                tenant_id=tenant_id,
+                message=message,
+            )
+
+            # Step 0: Clean up stale/completed agents to prevent cross-request state leakage
+            await self._cleanup_stale_agents(tenant_id)
+
+            # Step 1: Prepare context
+            context = await self.prepare_context(tenant_id, message, metadata)
+            context["request_id"] = request_id
+
+            # Store images in context so agent tools can access them (e.g. receipt scanning)
+            if images:
+                context["user_images"] = images
+
+            # Step 2: Check if should process
+            if not await self.should_process(message, context):
+                result = await self.reject_message(message, context)
+                yield AgentEvent(
+                    type=EventType.MESSAGE_CHUNK,
+                    data={"chunk": result.raw_message or ""},
                 )
-                # Rebuild messages to get a clean context for retry
-                retry_messages = await self._build_llm_messages(
-                    context, message, needs_memory=intent.needs_memory
+                yield AgentEvent(type=EventType.EXECUTION_END, data=result)
+                return
+
+            # Step 3: Check pending agents (WAITING_FOR_INPUT / WAITING_FOR_APPROVAL)
+            agent_result = await self._check_pending_agents(tenant_id, message, context)
+            if agent_result is not None:
+                # Agent still waiting or completed -> return result directly.
+                # The user's message was a response to the pending agent (e.g. an
+                # approval like "yes"/"ok"), NOT a new task.  Feeding it into the ReAct
+                # loop would cause the orchestrator to misinterpret the approval
+                # word as a brand-new request and spawn unnecessary follow-up agents.
+                agent_result = await self.post_process(agent_result, context)
+                yield AgentEvent(
+                    type=EventType.MESSAGE_START,
+                    data={"agent_type": agent_result.agent_type},
                 )
-                try:
-                    async for event in self._react_loop_events(
-                        retry_messages,
-                        tool_schemas,
-                        tenant_id,
-                        context=context,
-                        user_message=message,
-                        media=media,
-                        metadata=metadata,
-                        request_tools=request_tools,
-                        _llm_client_override=fallback_client,
-                    ):
-                        if event.type == EventType.EXECUTION_END:
-                            exec_data = event.data
-                            final_response = exec_data.get("final_response", "")
-                        yield event
-                except _ReactLoopLLMError as retry_err:
-                    logger.error(f"[Orchestrator] Fallback model also failed: {retry_err.original}")
+                yield AgentEvent(
+                    type=EventType.MESSAGE_CHUNK,
+                    data={"chunk": agent_result.raw_message or ""},
+                )
+                yield AgentEvent(type=EventType.MESSAGE_END, data={})
+                yield AgentEvent(type=EventType.EXECUTION_END, data=agent_result)
+                return
+
+            # Step 3b: Speculative execution — kick off likely tools before LLM decides
+            # For image requests, the LLM almost always calls google_search. Starting
+            # it now lets us reuse the result later, saving 1-3 seconds of latency.
+            speculative_tasks: Dict[str, asyncio.Task] = {}
+            if images and message.strip():
+                speculative_tasks = self._start_speculative_tasks(
+                    message,
+                    tenant_id,
+                    metadata,
+                )
+                if speculative_tasks:
+                    context["_speculative_tasks"] = speculative_tasks
+
+            # Step 4: Intent Analysis — classify domains and detect multi-intent
+            intent = await self._analyze_intent(message, context)
+            self._audit.log_phase(
+                "intent_analysis",
+                {
+                    "intent_type": intent.intent_type,
+                    "domains": intent.domains,
+                    "sub_tasks": len(intent.sub_tasks) if intent.sub_tasks else 0,
+                },
+            )
+
+            # Step 4b: Multi-intent → DAG execution
+            if intent.intent_type == "multi" and intent.sub_tasks:
+                final_response = ""
+                dag_exec_data: Dict[str, Any] = {}
+                async for event in self._stream_dag(intent, tenant_id, context, metadata):
+                    if event.type == EventType.EXECUTION_END:
+                        dag_exec_data = event.data
+                        final_response = dag_exec_data.get("final_response", "")
+                    yield event
+                # Post-process
+                pending_approvals = dag_exec_data.get("pending_approvals", [])
+                if pending_approvals:
+                    status = AgentStatus.WAITING_FOR_APPROVAL
+                else:
+                    status = AgentStatus.COMPLETED
+                result = AgentResult(
+                    agent_type=self.__class__.__name__,
+                    status=status,
+                    raw_message=final_response,
+                )
+                tool_calls = dag_exec_data.get("tool_calls", [])
+                context["tool_calls"] = tool_calls
+                await self._save_tool_call_history(tenant_id, tool_calls)
+                result = await self.post_process(result, context)
+                yield AgentEvent(type=EventType.EXECUTION_END, data=result)
+                return
+
+            # Step 5 & 6: Build tool schemas and LLM messages in parallel
+            tool_schemas_task = self._build_tool_schemas(tenant_id, domains=intent.domains)
+            messages_task = self._build_llm_messages(context, message, needs_memory=intent.needs_memory)
+            tool_schemas, messages = await asyncio.gather(tool_schemas_task, messages_task)
+
+            # Step 5b: Inject notify_user tool for conditional cron delivery
+            # Use a local copy of builtin_tools to avoid mutating the instance list
+            request_tools = list(self.builtin_tools)
+            if metadata.get("cron_conditional_delivery"):
+                notify_tool, notify_schema = self._build_notify_user_tool(context)
+                request_tools.append(notify_tool)
+                tool_schemas.append(notify_schema)
+
+            logger.info(f"[Tools] {len(tool_schemas)} tools available for ReAct")
+            self._audit.log_phase(
+                "tool_loading",
+                {
+                    "tool_count": len(tool_schemas),
+                    "domains": intent.domains,
+                },
+            )
+
+            # Convert images to media format for LLM
+            media = None
+            if images:
+                media = [
+                    {
+                        "type": "image",
+                        "data": img["data"],
+                        "media_type": img.get("media_type", "image/jpeg"),
+                    }
+                    for img in images
+                ]
+
+            # Step 7: Run ReAct loop with model-level fallback
+            final_response = ""
+            exec_data: Dict[str, Any] = {}
+
+            from .react_loop import _ReactLoopLLMError
+
+            try:
+                async for event in self._react_loop_events(
+                    messages,
+                    tool_schemas,
+                    tenant_id,
+                    context=context,
+                    user_message=message,
+                    media=media,
+                    metadata=metadata,
+                    request_tools=request_tools,
+                ):
+                    if event.type == EventType.EXECUTION_END:
+                        exec_data = event.data
+                        final_response = exec_data.get("final_response", "")
+                    yield event
+            except _ReactLoopLLMError as loop_err:
+                # Model-level fallback: retry the entire ReAct loop with a
+                # different provider when the primary model fails after all
+                # per-call retries are exhausted.
+                fallback_client = self._resolve_model_fallback(loop_err)
+                if fallback_client is not None:
+                    logger.warning(
+                        f"[Orchestrator] ReAct loop failed (turn={loop_err.turn}, "
+                        f"kind={loop_err.error_kind.value}), retrying with fallback model"
+                    )
+                    # Rebuild messages to get a clean context for retry
+                    retry_messages = await self._build_llm_messages(
+                        context, message, needs_memory=intent.needs_memory
+                    )
+                    try:
+                        async for event in self._react_loop_events(
+                            retry_messages,
+                            tool_schemas,
+                            tenant_id,
+                            context=context,
+                            user_message=message,
+                            media=media,
+                            metadata=metadata,
+                            request_tools=request_tools,
+                            _llm_client_override=fallback_client,
+                        ):
+                            if event.type == EventType.EXECUTION_END:
+                                exec_data = event.data
+                                final_response = exec_data.get("final_response", "")
+                            yield event
+                    except _ReactLoopLLMError as retry_err:
+                        logger.error(f"[Orchestrator] Fallback model also failed: {retry_err.original}")
+                        from .error_classifier import error_code_for_kind
+
+                        yield AgentEvent(
+                            type=EventType.ERROR,
+                            data={
+                                "code": error_code_for_kind(retry_err.error_kind),
+                                "error": str(retry_err.original),
+                                "error_type": type(retry_err.original).__name__,
+                            },
+                        )
+                        final_response = await generate_graceful_error(
+                            error=retry_err.original,
+                            llm_client=getattr(self, "llm_client", None),
+                        )
+                        exec_data = {
+                            "final_response": final_response,
+                            "turns": 0,
+                            "token_usage": {},
+                            "duration_ms": 0,
+                            "tool_calls_count": 0,
+                            "tool_calls": [],
+                        }
+                else:
+                    logger.error(
+                        f"[Orchestrator] ReAct loop failed, no fallback available: {loop_err.original}"
+                    )
                     from .error_classifier import error_code_for_kind
 
                     yield AgentEvent(
                         type=EventType.ERROR,
                         data={
-                            "code": error_code_for_kind(retry_err.error_kind),
-                            "error": str(retry_err.original),
-                            "error_type": type(retry_err.original).__name__,
+                            "code": error_code_for_kind(loop_err.error_kind),
+                            "error": str(loop_err.original),
+                            "error_type": type(loop_err.original).__name__,
                         },
                     )
-                    final_response = "Sorry, I'm having trouble processing your request right now. Please try again later."
+                    final_response = await generate_graceful_error(
+                        error=loop_err.original,
+                        llm_client=getattr(self, "llm_client", None),
+                    )
                     exec_data = {
                         "final_response": final_response,
                         "turns": 0,
@@ -672,88 +704,92 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
                         "tool_calls_count": 0,
                         "tool_calls": [],
                     }
+
+            # Step 8: Map loop results -> AgentResult
+            pending_approvals = exec_data.get("pending_approvals", [])
+            result_status = exec_data.get("result_status")
+
+            if pending_approvals:
+                status = AgentStatus.WAITING_FOR_APPROVAL
+            elif result_status == "WAITING_FOR_INPUT":
+                status = AgentStatus.WAITING_FOR_INPUT
             else:
-                logger.error(
-                    f"[Orchestrator] ReAct loop failed, no fallback available: {loop_err.original}"
-                )
-                from .error_classifier import error_code_for_kind
+                status = AgentStatus.COMPLETED
 
-                yield AgentEvent(
-                    type=EventType.ERROR,
-                    data={
-                        "code": error_code_for_kind(loop_err.error_kind),
-                        "error": str(loop_err.original),
-                        "error_type": type(loop_err.original).__name__,
-                    },
-                )
-                final_response = "Sorry, I'm having trouble processing your request right now. Please try again later."
-                exec_data = {
-                    "final_response": final_response,
-                    "turns": 0,
-                    "token_usage": {},
-                    "duration_ms": 0,
-                    "tool_calls_count": 0,
-                    "tool_calls": [],
-                }
+            result_metadata = {
+                "react_turns": exec_data.get("turns", 0),
+                "token_usage": exec_data.get("token_usage", {}),
+                "duration_ms": exec_data.get("duration_ms", 0),
+                "tool_calls_count": exec_data.get("tool_calls_count", 0),
+                "total_tool_count": len(tool_schemas),
+            }
 
-        # Step 8: Map loop results -> AgentResult
-        pending_approvals = exec_data.get("pending_approvals", [])
-        result_status = exec_data.get("result_status")
+            # Carry conditional notification from notify_user tool
+            if context.get("cron_notification"):
+                result_metadata["cron_notification"] = context["cron_notification"]
 
-        if pending_approvals:
-            status = AgentStatus.WAITING_FOR_APPROVAL
-        elif result_status == "WAITING_FOR_INPUT":
-            status = AgentStatus.WAITING_FOR_INPUT
-        else:
-            status = AgentStatus.COMPLETED
+            result = AgentResult(
+                agent_type=self.__class__.__name__,
+                status=status,
+                raw_message=final_response,
+                metadata=result_metadata,
+            )
 
-        result_metadata = {
-            "react_turns": exec_data.get("turns", 0),
-            "token_usage": exec_data.get("token_usage", {}),
-            "duration_ms": exec_data.get("duration_ms", 0),
-            "tool_calls_count": exec_data.get("tool_calls_count", 0),
-            "total_tool_count": len(tool_schemas),
-        }
+            if pending_approvals:
+                result.metadata["pending_approvals"] = [
+                    {
+                        "agent_name": a.agent_name,
+                        "action_summary": a.action_summary,
+                        "details": a.details,
+                        "options": a.options,
+                    }
+                    for a in pending_approvals
+                ]
 
-        # Carry conditional notification from notify_user tool
-        if context.get("cron_notification"):
-            result_metadata["cron_notification"] = context["cron_notification"]
+            # Expose tool call records to post-process hooks
+            tool_calls = exec_data.get("tool_calls", [])
+            context["tool_calls"] = tool_calls
 
-        result = AgentResult(
-            agent_type=self.__class__.__name__,
-            status=status,
-            raw_message=final_response,
-            metadata=result_metadata,
-        )
+            # Persist tool call history
+            await self._save_tool_call_history(tenant_id, tool_calls)
 
-        if pending_approvals:
-            result.metadata["pending_approvals"] = [
-                {
-                    "agent_name": a.agent_name,
-                    "action_summary": a.action_summary,
-                    "details": a.details,
-                    "options": a.options,
-                }
-                for a in pending_approvals
-            ]
-
-        # Expose tool call records to post-process hooks
-        tool_calls = exec_data.get("tool_calls", [])
-        context["tool_calls"] = tool_calls
-
-        # Persist tool call history
-        await self._save_tool_call_history(tenant_id, tool_calls)
-
-        # Step 9: Post-process
-        self._audit.log_phase(
-            "post_process", {"has_proposals": bool(result.metadata.get("true_memory_proposals"))}
-        )
-        result = await self.post_process(result, context)
-        self._audit.end_request(
-            status=result.status.value if hasattr(result.status, "value") else str(result.status),
-            token_usage=result.metadata.get("token_usage"),
-        )
-        yield AgentEvent(type=EventType.EXECUTION_END, data=result)
+            # Step 9: Post-process
+            self._audit.log_phase(
+                "post_process", {"has_proposals": bool(result.metadata.get("true_memory_proposals"))}
+            )
+            result = await self.post_process(result, context)
+            self._audit.end_request(
+                status=result.status.value if hasattr(result.status, "value") else str(result.status),
+                token_usage=result.metadata.get("token_usage"),
+            )
+            yield AgentEvent(type=EventType.EXECUTION_END, data=result)
+        except Exception as e:
+            logger.error(f"[Orchestrator] Unhandled error in _execute_message: {e}", exc_info=True)
+            fallback_msg = await generate_graceful_error(
+                error=e,
+                llm_client=getattr(self, "llm_client", None),
+            )
+            yield AgentEvent(
+                type=EventType.ERROR,
+                data={
+                    "code": "internal_error",
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                },
+            )
+            yield AgentEvent(
+                type=EventType.MESSAGE_CHUNK,
+                data={"chunk": fallback_msg},
+            )
+            yield AgentEvent(type=EventType.MESSAGE_END, data={})
+            yield AgentEvent(
+                type=EventType.EXECUTION_END,
+                data=AgentResult(
+                    agent_type=self.__class__.__name__,
+                    status=AgentStatus.ERROR,
+                    raw_message=fallback_msg,
+                ),
+            )
 
     # ==========================================================================
     # SPECULATIVE EXECUTION
