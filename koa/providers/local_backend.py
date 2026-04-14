@@ -37,9 +37,8 @@ class LocalBackendClient:
     @classmethod
     def from_context(cls, context: AgentToolContext) -> "LocalBackendClient":
         meta = context.metadata or {}
-        # Prefer config-based URL, fall back to metadata for backward compat
         url = _get_backend_url() or meta.get("koiai_url", "")
-        service_key = meta.get("service_key", "")
+        service_key = os.getenv("KOIAI_SERVICE_KEY", "") or meta.get("service_key", "")
         return cls(url, service_key)
 
     async def get_routing_preference(self, tenant_id: str, surface: str) -> dict | None:
