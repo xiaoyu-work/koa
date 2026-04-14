@@ -2,6 +2,8 @@
 
 **Your proactive AI chief of staff** — triages email, manages calendar, tracks expenses & packages, controls smart home, plans trips, monitors subscriptions. Reaches you via AI glasses before you even think to ask.
 
+🌐 **Try it live at [withkoi.ai](https://withkoi.ai)**
+
 ### What Koa Does
 
 | | Feature | Description |
