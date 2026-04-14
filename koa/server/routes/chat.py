@@ -10,7 +10,7 @@ import httpx
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from koa.streaming.models import EventType
+from koa.streaming.models import EventType, AgentEvent
 
 from ..app import require_app, verify_api_key
 from ..models import ChatRequest, ChatResponse
@@ -55,18 +55,28 @@ async def chat(req: ChatRequest):
     metadata = dict(req.metadata or {})
     if req.conversation_history is not None:
         metadata["conversation_history"] = req.conversation_history
-    result = await app.handle_message(
-        tenant_id=req.tenant_id,
-        message=req.message,
-        images=images,
-        metadata=metadata,
-    )
-    return ChatResponse(
-        response=result.raw_message or "",
-        status=result.status.value if result.status else "completed",
-        true_memory_proposals=(result.metadata or {}).get("true_memory_proposals", []),
-        token_usage=(result.metadata or {}).get("token_usage", {}),
-    )
+    try:
+        result = await app.handle_message(
+            tenant_id=req.tenant_id,
+            message=req.message,
+            images=images,
+            metadata=metadata,
+        )
+        return ChatResponse(
+            response=result.raw_message or "",
+            status=result.status.value if result.status else "completed",
+            true_memory_proposals=(result.metadata or {}).get("true_memory_proposals", []),
+            token_usage=(result.metadata or {}).get("token_usage", {}),
+        )
+    except Exception as e:
+        logger.error(f"Chat endpoint error: {e}", exc_info=True)
+        from koa.orchestrator.graceful_response import get_fallback_message
+        return ChatResponse(
+            response=get_fallback_message(),
+            status="error",
+            true_memory_proposals=[],
+            token_usage={},
+        )
 
 
 @router.post("/stream", dependencies=[Depends(verify_api_key)])
@@ -96,7 +106,21 @@ async def stream(req: ChatRequest):
                     execution_end_data_holder.append(event.data)
                 await queue.put(event)
         except Exception as e:
-            logger.error(f"Orchestrator error: {e}")
+            logger.error(f"Orchestrator error: {e}", exc_info=True)
+            from koa.orchestrator.graceful_response import get_fallback_message
+            fallback_msg = get_fallback_message()
+            await queue.put(AgentEvent(
+                type=EventType.ERROR,
+                data={
+                    "code": "internal_error",
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                },
+            ))
+            await queue.put(AgentEvent(
+                type=EventType.MESSAGE_CHUNK,
+                data={"chunk": fallback_msg},
+            ))
         finally:
             await queue.put(_SENTINEL)
             # Fire callback after orchestrator completes
