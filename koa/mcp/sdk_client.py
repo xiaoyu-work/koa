@@ -7,7 +7,9 @@ context-manager-based transports alive across connect/disconnect lifecycle.
 Requires: pip install mcp
 """
 
+import asyncio
 import logging
+import os
 from contextlib import AsyncExitStack
 from typing import Any, Dict, List, Optional
 
@@ -20,6 +22,26 @@ from .models import (
 )
 
 logger = logging.getLogger(__name__)
+
+#: Default per-call MCP timeout (seconds).  Servers that hang after a
+#: successful ``initialize`` are a common production failure mode: without
+#: a hard timeout a single misbehaving server can wedge the whole agent.
+_DEFAULT_MCP_TIMEOUT = float(os.environ.get("KOA_MCP_CALL_TIMEOUT", "30"))
+
+#: Response size cap in characters. Protects against runaway tool output.
+_DEFAULT_MCP_RESPONSE_CAP = int(os.environ.get("KOA_MCP_RESPONSE_CAP", "1048576"))
+
+
+class MCPTimeoutError(TimeoutError):
+    """Raised when an MCP call exceeds its timeout."""
+
+
+def _call_timeout(config: MCPServerConfig) -> float:
+    """Resolve the effective timeout for one MCP RPC."""
+    t = getattr(config, "timeout", None)
+    if t and t > 0:
+        return float(t)
+    return _DEFAULT_MCP_TIMEOUT
 
 
 class MCPSDKClient(MCPClient):
@@ -126,7 +148,14 @@ class MCPSDKClient(MCPClient):
     # ── Capability discovery ─────────────────────────────────────────
 
     async def _fetch_tools(self) -> List[MCPTool]:
-        result = await self._session.list_tools()
+        try:
+            result = await asyncio.wait_for(
+                self._session.list_tools(), timeout=_call_timeout(self.config)
+            )
+        except asyncio.TimeoutError as exc:
+            raise MCPTimeoutError(
+                f"MCP list_tools timed out for server {self.config.name!r}"
+            ) from exc
         return [
             MCPTool(
                 name=tool.name,
@@ -139,7 +168,14 @@ class MCPSDKClient(MCPClient):
 
     async def _fetch_resources(self) -> List[MCPResource]:
         try:
-            result = await self._session.list_resources()
+            result = await asyncio.wait_for(
+                self._session.list_resources(), timeout=_call_timeout(self.config)
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "MCP list_resources timed out for server %s", self.config.name
+            )
+            return []
         except Exception:
             # Server may not support resources
             return []
@@ -156,7 +192,14 @@ class MCPSDKClient(MCPClient):
 
     async def _fetch_prompts(self) -> List[MCPPrompt]:
         try:
-            result = await self._session.list_prompts()
+            result = await asyncio.wait_for(
+                self._session.list_prompts(), timeout=_call_timeout(self.config)
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "MCP list_prompts timed out for server %s", self.config.name
+            )
+            return []
         except Exception:
             # Server may not support prompts
             return []
@@ -180,7 +223,16 @@ class MCPSDKClient(MCPClient):
     # ── Tool execution ───────────────────────────────────────────────
 
     async def _execute_tool(self, name: str, arguments: Dict[str, Any]) -> Any:
-        result = await self._session.call_tool(name, arguments)
+        try:
+            result = await asyncio.wait_for(
+                self._session.call_tool(name, arguments),
+                timeout=_call_timeout(self.config),
+            )
+        except asyncio.TimeoutError as exc:
+            raise MCPTimeoutError(
+                f"MCP tool {name!r} on server {self.config.name!r} exceeded "
+                f"{_call_timeout(self.config):.1f}s timeout"
+            ) from exc
 
         # Extract text from content blocks
         parts = []
@@ -191,6 +243,17 @@ class MCPSDKClient(MCPClient):
                 parts.append(f"[binary: {getattr(block, 'mimeType', 'unknown')}]")
 
         text = "\n".join(parts) if parts else ""
+
+        # Cap response size to protect downstream prompt budgets.
+        if len(text) > _DEFAULT_MCP_RESPONSE_CAP:
+            logger.warning(
+                "MCP tool %s on %s returned %d chars; truncating to %d",
+                name,
+                self.config.name,
+                len(text),
+                _DEFAULT_MCP_RESPONSE_CAP,
+            )
+            text = text[:_DEFAULT_MCP_RESPONSE_CAP] + "\n...[truncated]"
 
         if result.isError:
             raise RuntimeError(text or "MCP tool returned an error")

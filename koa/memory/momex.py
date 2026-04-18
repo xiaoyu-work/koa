@@ -152,12 +152,52 @@ class MomexMemory:
         tenant_id: str,
         messages: List[Dict[str, Any]],
         infer: bool = True,
+        *,
+        moderator: Any = None,
     ) -> None:
         """Add messages for long-term knowledge extraction.
 
         Momex handles entity extraction, contradiction detection,
         and index updates when infer=True.
+
+        When ``moderator`` is provided (``koa.memory.governance.ContentModerator``),
+        each message's textual content is checked and messages that fail
+        moderation are silently dropped.  This is the primary defense against
+        memory-poisoning attacks: malicious content in a single user turn
+        cannot corrupt the long-term store.
         """
+        # Moderate before persisting.  We do this at the wrapper layer rather
+        # than relying on the orchestrator's call-site so every caller of
+        # MomexMemory.add benefits.
+        if moderator is not None and messages:
+            filtered: List[Dict[str, Any]] = []
+            for msg in messages:
+                content = msg.get("content")
+                if isinstance(content, str):
+                    text = content
+                elif isinstance(content, list):
+                    text = " ".join(
+                        str(p.get("text") or "")
+                        for p in content
+                        if isinstance(p, dict) and p.get("type") in (None, "text")
+                    )
+                else:
+                    text = ""
+                try:
+                    verdict = await moderator.check(text)
+                except Exception as exc:
+                    logger.warning("Moderator raised; failing open: %s", exc)
+                    verdict = None
+                if verdict is not None and not getattr(verdict, "allowed", True):
+                    logger.info(
+                        "[MomexMemory] Dropped message from memory write: %s",
+                        getattr(verdict, "reason", ""),
+                    )
+                    continue
+                filtered.append(msg)
+            messages = filtered
+            if not messages:
+                return
         try:
             memory = self._get_memory(tenant_id)
             await memory.add(messages=messages, infer=infer)
@@ -165,3 +205,63 @@ class MomexMemory:
             import traceback
 
             logger.warning(f"Failed to add memories for {tenant_id}: {e}\n{traceback.format_exc()}")
+
+    async def delete_for_tenant(self, tenant_id: str) -> int:
+        """Delete every memory for a tenant (GDPR Article 17 "right to erasure").
+
+        Returns the number of rows affected.  Raises ``NotImplementedError``
+        if the underlying momex backend does not expose a delete-all API;
+        in that case callers must perform the deletion at the database layer.
+        """
+        try:
+            memory = self._get_memory(tenant_id)
+        except Exception as exc:
+            logger.warning("delete_for_tenant: unable to load memory: %s", exc)
+            return 0
+        # momex.Memory may expose delete_all / reset.  Probe both.
+        for method_name in ("delete_all", "reset", "clear"):
+            method = getattr(memory, method_name, None)
+            if callable(method):
+                try:
+                    result = method()
+                    if hasattr(result, "__await__"):
+                        result = await result
+                    # Forget the cached Memory instance so a fresh one is
+                    # created for subsequent writes.
+                    self._memories.pop(tenant_id, None)
+                    return int(result) if isinstance(result, int) else -1
+                except Exception as exc:
+                    logger.warning(
+                        "delete_for_tenant via %s failed: %s", method_name, exc
+                    )
+                    break
+        raise NotImplementedError(
+            "Underlying momex backend does not support delete-all. "
+            "Perform the deletion at the database layer "
+            "(e.g. DELETE FROM momex_memories WHERE collection = ?)."
+        )
+
+    async def forget_older_than(self, tenant_id: str, older_than_days: float) -> int:
+        """Prune memories older than ``older_than_days`` days.
+
+        Raises ``NotImplementedError`` if the backend cannot express TTL
+        deletion natively.
+        """
+        try:
+            memory = self._get_memory(tenant_id)
+        except Exception as exc:
+            logger.warning("forget_older_than: unable to load memory: %s", exc)
+            return 0
+        method = getattr(memory, "prune_older_than", None)
+        if callable(method):
+            try:
+                result = method(older_than_days)
+                if hasattr(result, "__await__"):
+                    result = await result
+                return int(result) if isinstance(result, int) else -1
+            except Exception as exc:
+                logger.warning("forget_older_than failed: %s", exc)
+                raise
+        raise NotImplementedError(
+            "Underlying momex backend does not support age-based pruning."
+        )

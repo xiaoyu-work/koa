@@ -2,8 +2,10 @@
 
 Provides a structured execution pipeline for tool calls:
 1. Pre-execution hooks (auth validation, parameter normalization)
-2. Tool execution (with timeout)
-3. Post-execution hooks (result truncation, audit logging)
+2. Idempotency check (when a store is configured and the tool is idempotent
+   or the caller supplied an idempotency key)
+3. Tool execution (with timeout)
+4. Post-execution hooks (result truncation, audit logging)
 """
 
 import asyncio
@@ -13,6 +15,9 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
 from ..models import AgentTool, AgentToolContext
+from ..observability.context import get_idempotency_key
+from ..observability.metrics import counter
+from ..tenant_gate.idempotency import make_idempotency_key
 
 logger = logging.getLogger(__name__)
 
@@ -48,11 +53,26 @@ class ToolPipeline:
 
     Hooks are run in registration order. Before-hooks can block execution
     or modify arguments. After-hooks can transform results.
+
+    Args:
+        idempotency_store: Optional :class:`koa.tenant_gate.IdempotencyStore`.
+            When provided, tool calls that either (a) carry a caller-supplied
+            idempotency key (``koa.observability.context.idempotency_key_var``)
+            or (b) declare ``idempotent=True`` on the AgentTool are deduped
+            against the store.  Duplicate calls return the cached result
+            without re-executing.
+        idempotency_ttl: TTL (seconds) for idempotency records.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        idempotency_store: Optional[Any] = None,
+        idempotency_ttl: float = 3600.0,
+    ) -> None:
         self._before_hooks: List[BeforeHook] = []
         self._after_hooks: List[AfterHook] = []
+        self._idem_store = idempotency_store
+        self._idem_ttl = idempotency_ttl
 
     def add_before_hook(self, hook: BeforeHook) -> None:
         self._before_hooks.append(hook)
@@ -71,6 +91,41 @@ class ToolPipeline:
         tool_name = tool.name
         start = time.monotonic()
 
+        # Phase 0: Idempotency lookup.  We compute the key before running
+        # before-hooks so cached results skip credential checks too (the
+        # cached result was produced under equivalent conditions earlier).
+        idem_key = None
+        caller_key = get_idempotency_key()
+        tool_is_idempotent = bool(getattr(tool, "idempotent", False))
+        if self._idem_store is not None and (caller_key or tool_is_idempotent):
+            idem_key = make_idempotency_key(
+                tenant_id=context.tenant_id,
+                session_id=getattr(context, "session_id", None)
+                or (context.metadata or {}).get("session_id"),
+                tool_name=tool_name,
+                arguments=args,
+                caller_key=caller_key,
+            )
+            is_new, existing = await self._idem_store.begin(idem_key, self._idem_ttl)
+            if not is_new and existing is not None and existing.status == "completed":
+                counter("koa_tool_idempotency_hit_total", {"tool": tool_name[:32]}, 1)
+                return ToolExecutionResult(
+                    tool_name=tool_name,
+                    result=existing.result,
+                    duration_ms=int((time.monotonic() - start) * 1000),
+                    success=True,
+                )
+            if not is_new and existing is not None and existing.status == "in_flight":
+                counter("koa_tool_idempotency_conflict_total", {"tool": tool_name[:32]}, 1)
+                return ToolExecutionResult(
+                    tool_name=tool_name,
+                    result=f"Duplicate in-flight request for {tool_name!r}; "
+                    f"please wait for the original to complete.",
+                    duration_ms=int((time.monotonic() - start) * 1000),
+                    success=False,
+                    error="idempotency_in_flight",
+                )
+
         # Phase 1: Before hooks
         effective_args = dict(args)
         for hook in self._before_hooks:
@@ -78,6 +133,8 @@ class ToolPipeline:
                 hook_result = await hook(tool, effective_args, context)
                 if isinstance(hook_result, BeforeHookResult):
                     if not hook_result.proceed:
+                        if idem_key is not None and self._idem_store is not None:
+                            await self._idem_store.fail(idem_key)
                         return ToolExecutionResult(
                             tool_name=tool_name,
                             result=hook_result.error_message or "Blocked by pre-execution check",
@@ -99,6 +156,8 @@ class ToolPipeline:
             duration_ms = int((time.monotonic() - start) * 1000)
         except asyncio.TimeoutError:
             duration_ms = int((time.monotonic() - start) * 1000)
+            if idem_key is not None and self._idem_store is not None:
+                await self._idem_store.fail(idem_key)
             return ToolExecutionResult(
                 tool_name=tool_name,
                 result=f"Tool '{tool_name}' timed out after {timeout}s",
@@ -108,6 +167,8 @@ class ToolPipeline:
             )
         except Exception as e:
             duration_ms = int((time.monotonic() - start) * 1000)
+            if idem_key is not None and self._idem_store is not None:
+                await self._idem_store.fail(idem_key)
             return ToolExecutionResult(
                 tool_name=tool_name,
                 result=e,
@@ -122,6 +183,13 @@ class ToolPipeline:
                 result = await hook(tool, result, context)
             except Exception as e:
                 logger.warning(f"[ToolPipeline] After-hook failed for {tool_name}: {e}")
+
+        # Phase 4: Record idempotency result
+        if idem_key is not None and self._idem_store is not None:
+            try:
+                await self._idem_store.complete(idem_key, result)
+            except Exception as exc:
+                logger.debug("idempotency complete() failed: %s", exc)
 
         return ToolExecutionResult(
             tool_name=tool_name,

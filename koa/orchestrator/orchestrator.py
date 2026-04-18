@@ -192,6 +192,9 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
         memory_governance: Optional[MemoryGovernance] = None,
         session_memory: Optional[SessionMemoryManager] = None,
         execution_policy: Optional[ExecutionPolicyEngine] = None,
+        tenant_gate: Optional[Any] = None,
+        idempotency_store: Optional[Any] = None,
+        task_registry: Optional[Any] = None,
     ):
         """
         Initialize Orchestrator.
@@ -268,11 +271,23 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
         self.session_memory = session_memory or SessionMemoryManager()
         self._execution_policy = execution_policy or ExecutionPolicyEngine()
 
+        # Production-readiness hooks (P0/P1):
+        #   - tenant_gate: per-tenant rate/concurrency/budget admission control
+        #   - idempotency_store: tool-call dedup for retry-safe side effects
+        #   - task_registry: tracks fire-and-forget asyncio.Tasks for graceful
+        #     shutdown and crash-visibility.  When unset, a local registry is
+        #     created and cancelled by ``shutdown()``.
+        self.tenant_gate = tenant_gate
+        self.idempotency_store = idempotency_store
+        from ..observability import TaskRegistry as _TR
+
+        self.task_registry = task_registry or _TR(self.__class__.__name__)
+
         # Audit logging
         self._audit = AuditLogger()
 
         # Tool execution pipeline with before/after hooks
-        self._tool_pipeline = ToolPipeline()
+        self._tool_pipeline = ToolPipeline(idempotency_store=self.idempotency_store)
         self._tool_pipeline.add_before_hook(credential_check_hook)
         self._tool_pipeline.add_after_hook(result_audit_hook)
 
@@ -338,7 +353,18 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
         logger.info("Orchestrator initialized")
 
     async def shutdown(self) -> None:
-        """Shutdown the orchestrator gracefully."""
+        """Shutdown the orchestrator gracefully.
+
+        Cancels tracked background tasks before tearing down the agent pool
+        and registry so no in-flight coroutines are GC'd with unhandled
+        exceptions.
+        """
+        # Cancel fire-and-forget tasks first (speculative search, memory
+        # extraction, etc.) so their shutdown doesn't race the pool close.
+        try:
+            await self.task_registry.cancel_all(timeout=5.0)
+        except Exception as exc:
+            logger.warning("task_registry.cancel_all failed: %s", exc)
         if self.trigger_engine:
             await self.trigger_engine.stop()
         await self.agent_pool.close()
@@ -461,6 +487,90 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
 
         The final event is always EXECUTION_END carrying an ``AgentResult``
         in ``event.data`` so that ``handle_message`` can return it directly.
+
+        Admission control:
+            The optional :class:`~koa.tenant_gate.TenantGate` (injected via
+            ``tenant_gate=`` in ``__init__``) enforces per-tenant rate limit,
+            concurrency, and budget.  When the gate rejects, a single ERROR
+            event is emitted followed by EXECUTION_END carrying a FAILED
+            ``AgentResult`` — no LLM calls are made and no tools run.
+        """
+        from ..observability import bind_request_context, new_request_id, trace_span
+        from .graceful_response import generate_graceful_error
+
+        metadata = metadata or {}
+        caller_idempotency_key = (
+            (metadata or {}).get("idempotency_key")
+            or (metadata or {}).get("X-Idempotency-Key")
+        )
+        # Bind request/tenant ContextVars so concurrent requests on the
+        # same orchestrator instance don't corrupt each other's tracing.
+        rid = new_request_id()
+        with bind_request_context(
+            request_id=rid,
+            tenant_id=tenant_id,
+            idempotency_key=caller_idempotency_key,
+        ):
+            with trace_span(
+                "orchestrator.execute_message",
+                tenant_id=tenant_id,
+                has_images=bool(images),
+            ):
+                # Admission control — fail-closed if gate is configured.
+                gate = getattr(self, "tenant_gate", None)
+                if gate is not None:
+                    from ..tenant_gate import GateRejected
+
+                    try:
+                        async with gate.acquire(tenant_id) as ticket:
+                            async for ev in self._execute_message_inner(
+                                tenant_id, message, images, metadata, rid, ticket
+                            ):
+                                yield ev
+                        return
+                    except GateRejected as gr:
+                        logger.warning(
+                            "[Orchestrator] Gate rejected tenant=%s reason=%s",
+                            tenant_id,
+                            gr.reason,
+                        )
+                        yield AgentEvent(
+                            type=EventType.ERROR,
+                            data={
+                                "code": gr.reason,
+                                "error": str(gr),
+                                "retry_after": gr.retry_after,
+                            },
+                        )
+                        rejected = AgentResult(
+                            agent_type=self.__class__.__name__,
+                            status=AgentStatus.FAILED,
+                            raw_message=f"Request rejected: {gr.reason}. "
+                            f"Please retry in {gr.retry_after:.0f}s.",
+                            metadata={"gate_rejected": True, "reason": gr.reason},
+                        )
+                        yield AgentEvent(type=EventType.EXECUTION_END, data=rejected)
+                        return
+                # No gate configured — run inner pipeline directly.
+                async for ev in self._execute_message_inner(
+                    tenant_id, message, images, metadata, rid, None
+                ):
+                    yield ev
+
+    async def _execute_message_inner(
+        self,
+        tenant_id: str,
+        message: str,
+        images: Optional[List[Dict[str, Any]]],
+        metadata: Dict[str, Any],
+        request_id: str,
+        ticket: Optional[Any],
+    ) -> AsyncIterator[AgentEvent]:
+        """Inner pipeline body; split out so the gate context manager wraps only this.
+
+        ``ticket`` is a :class:`koa.tenant_gate.GateTicket` or ``None`` — when
+        present, token/cost usage is recorded back to it so per-tenant budgets
+        are enforced.
         """
         from .graceful_response import generate_graceful_error
 
@@ -471,9 +581,12 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
             metadata = metadata or {}
 
             # ── Request tracing ──
+            # start_request inherits the bound request_id ContextVar, so the
+            # same id is used for the audit log.
             request_id = self._audit.start_request(
                 tenant_id=tenant_id,
                 message=message,
+                request_id=request_id,
             )
 
             # Step 0: Clean up stale/completed agents to prevent cross-request state leakage
@@ -851,8 +964,12 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
                 logger.info(f"[Speculative] image search failed (non-fatal): {e}")
                 return None
 
-        tasks["google_search:web"] = asyncio.create_task(_run_web_search())
-        tasks["google_search:image"] = asyncio.create_task(_run_image_search())
+        tasks["google_search:web"] = self.task_registry.create_task(
+            _run_web_search(), name="speculative:google_search:web"
+        )
+        tasks["google_search:image"] = self.task_registry.create_task(
+            _run_image_search(), name="speculative:google_search:image"
+        )
 
         logger.info(f"[Speculative] Started {len(tasks)} speculative tasks for image request")
         return tasks
@@ -1999,15 +2116,32 @@ class Orchestrator(ReactLoopMixin, ToolManagerMixin, LLMManagerMixin):
             # response is not blocked by embedding / LLM extraction.
             async def _bg_momex_add():
                 try:
-                    await self.momex.add(
-                        tenant_id=tenant_id,
-                        messages=messages,
-                        infer=True,
-                    )
+                    moderator = getattr(self.memory_governance, "_moderator", None)
+                    kwargs: Dict[str, Any] = {
+                        "tenant_id": tenant_id,
+                        "messages": messages,
+                        "infer": True,
+                    }
+                    # Only pass moderator when the target accepts it — this
+                    # keeps 3rd-party / test doubles that implement the basic
+                    # `add(tenant_id, messages, infer)` shape working.
+                    if moderator is not None:
+                        try:
+                            import inspect
+
+                            sig = inspect.signature(self.momex.add)
+                            if "moderator" in sig.parameters or any(
+                                p.kind == inspect.Parameter.VAR_KEYWORD
+                                for p in sig.parameters.values()
+                            ):
+                                kwargs["moderator"] = moderator
+                        except (TypeError, ValueError):
+                            pass
+                    await self.momex.add(**kwargs)
                 except Exception as e:
                     logger.warning(f"Background momex.add failed: {e}")
 
-            asyncio.create_task(_bg_momex_add())
+            self.task_registry.create_task(_bg_momex_add(), name="momex_add")
 
         # True Memory proposal extraction — runs synchronously so proposals
         # are available in result.metadata before the response is returned.

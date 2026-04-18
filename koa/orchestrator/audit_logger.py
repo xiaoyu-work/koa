@@ -5,37 +5,56 @@ Produces JSON log entries via Python's standard logging module under
 the ``koa.audit`` logger name.  Each entry includes a timestamp,
 event_type, optional tenant_id, and event-specific fields.
 
-When a request_id is set via ``start_request()``, all subsequent log
-entries automatically include it — enabling end-to-end tracing of a
-single user request across intent analysis, routing, tool execution,
-memory extraction, and response delivery.
+Request correlation is driven by the ``koa.observability.context``
+ContextVars (``request_id_var`` / ``tenant_id_var``).  This means every
+``AuditLogger`` call automatically inherits the current request id even
+when many requests share a single ``AuditLogger`` instance (which is the
+case for the orchestrator — see ``Orchestrator._audit``).
 
 Usage::
 
-    audit = AuditLogger()
-    audit.start_request(tenant_id="user-123", message="check my email")
-    audit.log_phase("intent_analysis", {"domains": ["communication"]})
-    audit.log_tool_execution(...)
-    audit.end_request(status="completed", token_usage={...})
+    from koa.observability import bind_request_context
+
+    with bind_request_context(tenant_id="user-123"):
+        audit.start_request(tenant_id="user-123", message="check my email")
+        audit.log_phase("intent_analysis", {"domains": ["communication"]})
+        audit.end_request(status="completed", token_usage={...})
 """
 
 import json
 import logging
 import time
-import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+
+from ..observability.context import (
+    get_request_id,
+    get_tenant_id,
+    new_request_id,
+    request_id_var,
+)
 
 _audit_logger = logging.getLogger("koa.audit")
 
 
 class AuditLogger:
-    """Structured audit logger with per-request tracing."""
+    """Structured audit logger with per-request tracing.
+
+    The current ``request_id`` is read from :data:`koa.observability.context.request_id_var`
+    so concurrent requests on the same instance do not overwrite each other.
+    ``start_request`` will set the ContextVar if it is unset; callers that use
+    :func:`koa.observability.bind_request_context` can simply rely on the
+    already-bound value.
+    """
 
     def __init__(self, tenant_id: Optional[str] = None) -> None:
         self._default_tenant_id = tenant_id
-        self._request_id: Optional[str] = None
-        self._request_start: Optional[float] = None
+        # Per-request start timestamps keyed by request_id so multiple
+        # concurrent requests on the same logger instance don't collide.
+        self._starts: Dict[str, float] = {}
+        # Optional token set when start_request() binds the ContextVar itself
+        # (i.e. the caller did not already set it).  Reset in end_request().
+        self._ctx_tokens: Dict[str, Any] = {}
 
     # ------------------------------------------------------------------
     # Request tracing
@@ -47,9 +66,17 @@ class AuditLogger:
         message: str,
         request_id: Optional[str] = None,
     ) -> str:
-        """Begin tracing a new request. Returns the request_id."""
-        self._request_id = request_id or uuid.uuid4().hex[:12]
-        self._request_start = time.monotonic()
+        """Begin tracing a new request. Returns the request_id.
+
+        If ``request_id_var`` is unset, binds it here (and stores the reset
+        token for :meth:`end_request`).  If already set by an outer
+        ``bind_request_context`` block, uses the bound value.
+        """
+        rid = request_id or get_request_id() or new_request_id()
+        if get_request_id() != rid:
+            token = request_id_var.set(rid)
+            self._ctx_tokens[rid] = token
+        self._starts[rid] = time.monotonic()
         self._default_tenant_id = tenant_id
         self._emit(
             "request_start",
@@ -58,7 +85,7 @@ class AuditLogger:
                 "message_preview": message[:120] if message else "",
             },
         )
-        return self._request_id
+        return rid
 
     def end_request(
         self,
@@ -67,16 +94,22 @@ class AuditLogger:
         error: Optional[str] = None,
     ) -> None:
         """End tracing the current request."""
+        rid = get_request_id()
         fields: Dict[str, Any] = {"status": status}
-        if self._request_start is not None:
-            fields["total_ms"] = int((time.monotonic() - self._request_start) * 1000)
+        start = self._starts.pop(rid, None) if rid else None
+        if start is not None:
+            fields["total_ms"] = int((time.monotonic() - start) * 1000)
         if token_usage:
             fields["token_usage"] = token_usage
         if error:
             fields["error"] = error
         self._emit("request_end", fields)
-        self._request_id = None
-        self._request_start = None
+        if rid and rid in self._ctx_tokens:
+            try:
+                request_id_var.reset(self._ctx_tokens.pop(rid))
+            except ValueError:
+                # Token from a different context — ignore.
+                pass
 
     def log_phase(
         self,
@@ -93,15 +126,18 @@ class AuditLogger:
             "tenant_id": self._tid(tenant_id),
             "phase": phase,
         }
-        if self._request_start is not None:
-            fields["elapsed_ms"] = int((time.monotonic() - self._request_start) * 1000)
+        rid = get_request_id()
+        start = self._starts.get(rid) if rid else None
+        if start is not None:
+            fields["elapsed_ms"] = int((time.monotonic() - start) * 1000)
         if details:
             fields.update(details)
         self._emit("phase", fields)
 
     @property
     def request_id(self) -> Optional[str]:
-        return self._request_id
+        """Current request id from the ContextVar."""
+        return get_request_id()
 
     # ------------------------------------------------------------------
     # helpers
@@ -112,13 +148,14 @@ class AuditLogger:
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "event_type": event_type,
         }
-        if self._request_id:
-            entry["request_id"] = self._request_id
+        rid = get_request_id()
+        if rid:
+            entry["request_id"] = rid
         entry.update(fields)
         _audit_logger.info(json.dumps(entry, default=str))
 
     def _tid(self, tenant_id: Optional[str] = None) -> str:
-        return tenant_id or self._default_tenant_id or ""
+        return tenant_id or get_tenant_id() or self._default_tenant_id or ""
 
     # ------------------------------------------------------------------
     # public API (existing)

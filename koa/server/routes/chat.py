@@ -140,7 +140,8 @@ async def stream(req: ChatRequest):
                 )
 
     async def event_generator():
-        asyncio.create_task(_run_orchestrator())
+        # Named so it shows up in async diagnostics / thread dumps.
+        asyncio.create_task(_run_orchestrator(), name=f"chat_stream:{req.tenant_id}")
         try:
             while True:
                 event = await queue.get()

@@ -1535,6 +1535,42 @@ Return JSON only."""
             else:
                 args = {}
 
+            # Validate tool arguments against declared JSON schema (P0-5).
+            # The tool_manager / agent-tool layer defines `input_schema`; we
+            # lazily instantiate a validator so hot-path cost is ~zero when
+            # tools omit schemas.
+            validation_error: Optional[str] = None
+            try:
+                from koa.llm.tool_validator import ToolSchemaValidator
+
+                if not hasattr(self, "_tool_validator") or self._tool_validator is None:
+                    self._tool_validator = ToolSchemaValidator.from_agent_tools(self.tools)
+                vr = self._tool_validator.validate(tc.name, args)
+                if not vr.ok:
+                    details = vr.details or {}
+                    msg = details.get("message") or vr.reason
+                    path = details.get("path")
+                    validation_error = f"{msg}" + (f" at {path}" if path else "")
+            except Exception as exc:
+                logger.debug("Tool-arg validator init failed, skipping: %s", exc)
+
+            if validation_error is not None:
+                error_text = (
+                    f"Error: Invalid arguments for tool '{tc.name}': "
+                    f"{validation_error}. Please retry with arguments matching the schema."
+                )
+                self._tool_trace.append(
+                    {"tool": tc.name, "status": "invalid_args", "summary": error_text[:240]}
+                )
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": error_text,
+                    }
+                )
+                continue
+
             policy_decision = self._evaluate_tool_policy(tool, args)
             if policy_decision is not None and not policy_decision.allowed:
                 error_text = f"Permission denied for tool '{tc.name}': {policy_decision.reason}"

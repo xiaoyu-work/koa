@@ -489,9 +489,14 @@ class AgentPoolManager:
         async def backup_loop():
             while True:
                 await asyncio.sleep(self.config.auto_backup_interval_seconds)
-                await self._backup_all()
+                try:
+                    await self._backup_all()
+                except asyncio.CancelledError:
+                    raise
+                except Exception as e:
+                    logger.error("Auto-backup iteration failed: %s", e, exc_info=True)
 
-        self._backup_task = asyncio.create_task(backup_loop())
+        self._backup_task = asyncio.create_task(backup_loop(), name="agent_pool_backup")
         logger.info("Started auto-backup task")
 
     async def start_cleanup_loop(self) -> None:
@@ -507,7 +512,7 @@ class AgentPoolManager:
                 except Exception as e:
                     logger.error(f"Error in cleanup loop: {e}")
 
-        self._cleanup_task = asyncio.create_task(cleanup_loop())
+        self._cleanup_task = asyncio.create_task(cleanup_loop(), name="agent_pool_cleanup")
         logger.info("Started WAITING agent cleanup loop")
 
     async def stop_auto_backup(self) -> None:

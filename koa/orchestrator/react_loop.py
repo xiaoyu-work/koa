@@ -14,6 +14,7 @@ from collections import namedtuple
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 from ..constants import GENERATE_PLAN_SCHEMA
+from ..llm.tool_validator import ToolSchemaValidator
 from ..models import ToolOutput
 from ..streaming.models import AgentEvent, EventType
 from .agent_tool import AgentToolResult
@@ -514,6 +515,77 @@ class ReactLoopMixin:
 
                 # complete_task was called alongside other tools -- add its result
                 tool_calls = remaining_tool_calls if remaining_tool_calls else tool_calls
+
+                # ----------------------------------------------------------
+                # Validate tool calls against the schema sent to the LLM.
+                # Reject hallucinated tool names and schema-mismatched args.
+                # Rejected calls become error tool_results so the model can
+                # self-correct on the next turn instead of crashing the loop.
+                # ----------------------------------------------------------
+                validator = ToolSchemaValidator.from_openai_tools(tool_schemas)
+                validated_tool_calls = []
+                for tc in tool_calls:
+                    # complete_task is synthetic; always allow.
+                    if tc.name == COMPLETE_TASK_TOOL_NAME:
+                        validated_tool_calls.append(tc)
+                        continue
+                    try:
+                        args_for_validation = (
+                            tc.arguments
+                            if isinstance(tc.arguments, dict)
+                            else json.loads(tc.arguments or "{}")
+                        )
+                    except (json.JSONDecodeError, TypeError):
+                        args_for_validation = None
+                    if args_for_validation is None:
+                        reason = "arguments_not_json"
+                        details: Dict[str, Any] = {"name": tc.name}
+                    else:
+                        vr = validator.validate(tc.name, args_for_validation)
+                        if vr.ok:
+                            validated_tool_calls.append(tc)
+                            continue
+                        reason = vr.reason
+                        details = vr.details or {}
+                    logger.warning(
+                        "[ReAct] Rejecting tool call %r: %s %s",
+                        tc.name,
+                        reason,
+                        details,
+                    )
+                    self._audit.log_tool_execution(
+                        tool_name=tc.name,
+                        args_summary={"rejected_reason": reason},
+                        success=False,
+                        duration_ms=0,
+                        error=f"schema_validation:{reason}",
+                        tenant_id=tenant_id,
+                    )
+                    messages.append(
+                        self._build_tool_result_message(
+                            tc.id,
+                            f"Error: tool call rejected by schema validation "
+                            f"({reason}). details={json.dumps(details, default=str)[:256]}. "
+                            f"Allowed tools: {', '.join(validator.known_names[:20])}",
+                            is_error=True,
+                        )
+                    )
+                    all_tool_records.append(
+                        ToolCallRecord(
+                            name=tc.name,
+                            args_summary={"rejected_reason": reason},
+                            duration_ms=0,
+                            success=False,
+                            result_status="REJECTED",
+                            result_chars=0,
+                        )
+                    )
+
+                if not validated_tool_calls:
+                    # All calls rejected — continue the loop so the model
+                    # can retry with valid tools.  Guarded by max_turns.
+                    continue
+                tool_calls = validated_tool_calls
 
                 tool_names = [tc.name for tc in tool_calls]
                 logger.info(f"[ReAct] turn={turn} calling: {', '.join(tool_names)}")
